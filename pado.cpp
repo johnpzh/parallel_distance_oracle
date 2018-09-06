@@ -17,7 +17,7 @@ using namespace PADO;
 void test()
 {
 	freopen("output.txt", "w", stdout); // test
-	const char filename[] = "input.txt";
+	const char filename[] = "input.dat";
 	Graph G(filename);
 //	G.print();
 	vector<idi> rank = {
