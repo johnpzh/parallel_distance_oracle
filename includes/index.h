@@ -83,6 +83,7 @@ void IndexType::print()
 	}
 }
 
+// Not really use this class Label
 class Label {
 private:
 	vector<IndexType> index;

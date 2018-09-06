@@ -9,7 +9,6 @@
 #define INCLUDES_PADO_H_
 
 #include <vector>
-//#include <map>
 #include <unordered_map>
 #include <limits.h>
 #include "globals.h"
@@ -17,7 +16,6 @@
 #include "index.h"
 
 using std::vector;
-//using std::map;
 using std::unordered_map;
 
 namespace PADO {
@@ -46,7 +44,6 @@ void VertexCentricPLL::construct(const Graph &G, const vector<idi> &rank)
 	L.resize(G.get_num_v());
 	// Initialization to (v, 0) for every v
 	idi num_v = G.get_num_v();
-//	idi num_e = G.get_num_e();
 	for (idi v = 0; v < num_v; ++v) {
 		L[v].add_label_seq(v, 0);
 	}
