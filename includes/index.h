@@ -47,12 +47,12 @@ public:
 		return vertices[i];
 	}
 
-	idi get_label_ith_d(idi i) const
+	weighti get_label_ith_d(idi i) const
 	{
 		return distances[i];
 	}
 
-	idi get_last_label_d() const
+	weighti get_last_label_d() const
 	{
 		return distances[size - 1];
 	}

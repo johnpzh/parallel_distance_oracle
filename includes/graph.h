@@ -34,13 +34,14 @@ private:
 	idi *out_edges = nullptr;
 	idi *out_degrees = nullptr;
 
-	void construct(const char *filename);
+//	void construct(const char *filename);
 	void construct(const vector< pair<idi, idi> > &edgeList);
 
 public:
 	// Constructor
 	Graph() = default;
 	explicit Graph(const char *filename);
+	explicit Graph(vector< pair<idi, idi> > &edgeList);
 	~Graph()
 	{
 		free(vertices);
@@ -66,14 +67,11 @@ public:
 	void print();
 }; // class Graph
 
+// construcgt the graph from the edge list file
 Graph::Graph(const char *filename)
 {
-	construct(filename);
-}
+//	construct(filename);
 
-// construcgt the graph from the edge list file
-void Graph::construct(const char *filename)
-{
 	ifstream ifin(filename);
 	if (ifin.bad()) {
 		fprintf(stderr, "Error: cannot open file %s.\n", filename);
@@ -84,7 +82,7 @@ void Graph::construct(const char *filename)
 	idi tail;
 	vector < pair<idi, idi> > edgeList;
 	while (getline(ifin, line)) {
-		if (line[0] == '#') {
+		if (line[0] == '#' || line[0] == '%') {
 			continue;
 		}
 		istringstream lin(line);
@@ -94,8 +92,15 @@ void Graph::construct(const char *filename)
 	construct(edgeList);
 	edgeList.clear();
 }
+
 // construct the graph from edgeList
+Graph::Graph(vector< pair<idi, idi> > &edgeList)
+{
+	construct(edgeList);
+}
+
 void Graph::construct(const vector< pair<idi, idi> > &edgeList)
+//Graph::Graph(vector< pair<idi, idi> > &edgeList)
 {
 	num_e = 2 * edgeList.size(); // Undirected Graph
 	for (const auto &edge: edgeList) {

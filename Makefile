@@ -1,3 +1,5 @@
+CXX = /usr/local/bin/g++-8
+
 CXXFLAGS =	-O0 -g -Wall -fmessage-length=0 -std=c++14
 
 OBJS =		pado.o
