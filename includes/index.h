@@ -11,16 +11,77 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <vector>
+#include <map>
 #include "globals.h"
 
 using std::vector;
+using std::map;
 
 namespace PADO {
 
+//// IndexType using map
+//class IndexType {
+//private:
+//
+//	idi size = 0;
+//	map<idi, weighti> labels;
+//
+//public:
+//	IndexType() = default;
+////	explicit IndexType(idi size);
+//
+//	void add_label_seq(idi v, idi d)
+//	{
+//		++size;
+//		labels[v] = d;
+//	}
+//	void add_label_par(idi v, idi d)
+//	{
+//		//TODO:
+//	}
+//
+//	weighti get_dist(idi v) const
+//	{
+////		return labels[v];
+//		return labels.find(v)->second;
+//	}
+//	auto get_label_begin() const
+//	{
+//		return labels.begin();
+//	}
+//	auto get_label_end() const
+//	{
+//		return labels.end();
+//	}
+//
+//	idi get_size() const
+//	{
+//		return size;
+//	}
+//
+//	bool is_v_in_label(idi v) const
+//	{
+//		if (labels.end() == labels.find(v)) {
+//			return false;
+//		} else {
+//			return true;
+//		}
+//	}
+//
+//	void print();
+//
+//}; // class IndexType
+//
+//void IndexType::print()
+//{
+//	for (const auto &l : labels) {
+//		printf("(%llu, %d)\n", l.first, l.second);
+//	}
+//}
+
+// IndexType using vector
 class IndexType {
 private:
-	//	idi *vertices = nullptr;
-	//	weighti *distances = nullptr;
 	vector<idi> vertices;
 	vector<weighti> distances;
 	idi size = 0;
@@ -30,15 +91,14 @@ public:
 	IndexType() = default;
 //	explicit IndexType(idi size);
 
-	void add_label_seq(idi v, idi d)
+	void add_label_seq(idi v, weighti d)
 	{
 		++size;
 		vertices.push_back(v);
 		distances.push_back(d);
 	}
-	void add_label_par(idi v, idi d)
+	void add_label_par(idi v, weighti d)
 	{
-//		idi
 		//TODO:
 	}
 
@@ -83,37 +143,37 @@ void IndexType::print()
 	}
 }
 
-// Not really use this class Label
-class Label {
-private:
-	vector<IndexType> index;
-
-public:
-	Label() = default;
-	Label(idi n);
-
-	void construct(idi n);
-	void ith_add_label_seq(idi i, idi v, idi d)
-	{
-		IndexType &index_i = index[i];
-		index_i.add_label_seq(v, d);
-	}
-	void ith_add_label_par(idi i, idi v, idi d);
-
-	idi ith_get_last_label_d(idi i)
-	{
-		return index[i].get_last_label_d();
-	}
-}; // class Label
-
-Label::Label(idi n)
-{
-	construct(n);
-}
-void Label::construct(idi n)
-{
-	index.resize(n);
-}
+//// Not really use this class Label
+//class Label {
+//private:
+//	vector<IndexType> index;
+//
+//public:
+//	Label() = default;
+//	Label(idi n);
+//
+//	void construct(idi n);
+//	void ith_add_label_seq(idi i, idi v, idi d)
+//	{
+//		IndexType &index_i = index[i];
+//		index_i.add_label_seq(v, d);
+//	}
+//	void ith_add_label_par(idi i, idi v, idi d);
+//
+//	idi ith_get_last_label_d(idi i)
+//	{
+//		return index[i].get_last_label_d();
+//	}
+//}; // class Label
+//
+//Label::Label(idi n)
+//{
+//	construct(n);
+//}
+//void Label::construct(idi n)
+//{
+//	index.resize(n);
+//}
 }; // namespace PADO
 
 

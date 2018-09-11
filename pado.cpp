@@ -15,11 +15,11 @@
 
 using namespace PADO;
 
-void test()
+void pado()
 {
 //	freopen("output.txt", "w", stdout); // test
-//	const char filename[] = "input.dat";
-	const char filename[] = "/Users/johnz/pppp/datasets/dblp/dblp";
+	const char filename[] = "input.dat";
+//	const char filename[] = "/Users/johnz/pppp/datasets/dblp/dblp";
 	printf("Reading...\n");//test
 	Graph G(filename);
 //	G.print();
@@ -57,6 +57,29 @@ void test()
 	timer.print_runtime();
 }
 
+void test_bit()
+{
+	BitArray B(128, 1099511627776 + 4294967296 + 65536 + 2 + 1);
+//	void (* fun) (inti loc) = nullptr;
+	auto fun = [] (inti loc) {
+		printf("loc: %u\n", loc);
+	};
+	puts("=======");
+	B.process_every_bit(fun);
+//	B.unset_bit(32);
+//	puts("=======");
+//	B.process_every_bit(fun);
+	B.set_bit(64);
+	B.set_bit(127);
+	B.set_bit(8);
+	puts("=======");
+	B.process_every_bit(fun);
+	B.unset_bit(64);
+	B.unset_bit(0);
+	puts("=======");
+	B.process_every_bit(fun);
+}
+
 int main(int argc, char *argv[]) {
 //	// By Johnpzh
 //	char separator = ' ';
@@ -91,7 +114,8 @@ int main(int argc, char *argv[]) {
 //		}
 //	}
 //	// End by Johnpzh
-	test();
+	test_bit();
+//	pado();
 	puts("Done!");
 	return EXIT_SUCCESS;
 }
