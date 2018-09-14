@@ -22,7 +22,7 @@ void pado()
 //	const char filename[] = "/Users/johnz/pppp/datasets/dblp/dblp";
 	printf("Reading...\n");//test
 	Graph G(filename);
-//	G.print();
+	G.print();
 //	vector<idi> rank = {
 //			14,
 //			10,
@@ -47,13 +47,15 @@ void pado()
 //	};
 
 	printf("Ranking...\n");//test
-	vector<idi> rank = VertexCentricPLL::make_rank(G);
-//	for (idi v = 0; v < rank.size(); ++v) {
-//		printf("vertices %llu: rank %llu\n", v, rank[v]);//test
-//	}
+	vector<idi> rank = G.make_rank();
+	for (idi v = 0; v < rank.size(); ++v) {
+		printf("vertices %llu: rank %llu\n", v, rank[v]);//test
+	}
+	G.id_transfer(rank);
+	G.print();
 	WallTimer timer("Labeling");
 	printf("Labeling...\n");//test
-	VertexCentricPLL(G, rank);
+//	VertexCentricPLL(G, rank);
 	timer.print_runtime();
 }
 
@@ -78,6 +80,16 @@ void test_bit()
 	B.unset_bit(0);
 	puts("=======");
 	B.process_every_bit(fun);
+
+	printf("loc %d set: %u\n", 64, B.is_bit_set(64));
+	printf("loc %d set: %u\n", 127, B.is_bit_set(127));
+	printf("loc %d set: %u\n", 8, B.is_bit_set(8));
+	printf("loc %d set: %u\n", 63, B.is_bit_set(63));
+	vector<inti> locs = B.get_all_locs_set(128);
+	for (const auto &l : locs) {
+		printf(" %u", l);
+	}
+	puts("");
 }
 
 int main(int argc, char *argv[]) {

@@ -13,6 +13,7 @@
 #include <string>
 #include <fstream>
 #include <sstream>
+#include <algorithm>
 #include "globals.h"
 
 using std::vector;
@@ -22,6 +23,8 @@ using std::ifstream;
 using std::istringstream;
 using std::make_pair;
 using std::pair;
+using std::sort;
+using std::stable_sort;
 using std::max;
 
 namespace PADO
@@ -35,13 +38,13 @@ private:
 	idi *out_degrees = nullptr;
 
 //	void construct(const char *filename);
-	void construct(const vector< pair<idi, idi> > &edgeList);
+	void construct(const vector< pair<idi, idi> > &edge_list);
 
 public:
 	// Constructor
 	Graph() = default;
 	explicit Graph(const char *filename);
-	explicit Graph(vector< pair<idi, idi> > &edgeList);
+	explicit Graph(vector< pair<idi, idi> > &edge_list);
 	~Graph()
 	{
 		free(vertices);
@@ -64,6 +67,11 @@ public:
 	{
 		return out_degrees[i];
 	}
+
+	// Rank according to degrees (right now)
+	vector<idi> make_rank();
+	// Remap vertex id according to its rank, 1 is the highest rank;
+	void id_transfer(const vector<idi> &rank);
 	void print();
 }; // class Graph
 
@@ -80,39 +88,38 @@ Graph::Graph(const char *filename)
 	string line;
 	idi head;
 	idi tail;
-	vector < pair<idi, idi> > edgeList;
+	vector < pair<idi, idi> > edge_list;
 	while (getline(ifin, line)) {
 		if (line[0] == '#' || line[0] == '%') {
 			continue;
 		}
 		istringstream lin(line);
 		lin >> head >> tail;
-		edgeList.push_back(make_pair(head, tail));
+		edge_list.push_back(make_pair(head, tail));
 	}
-	construct(edgeList);
-	edgeList.clear();
+	construct(edge_list);
+	edge_list.clear();
 }
 
-// construct the graph from edgeList
-Graph::Graph(vector< pair<idi, idi> > &edgeList)
+// construct the graph from edge_list
+Graph::Graph(vector< pair<idi, idi> > &edge_list)
 {
-	construct(edgeList);
+	construct(edge_list);
 }
 
-void Graph::construct(const vector< pair<idi, idi> > &edgeList)
-//Graph::Graph(vector< pair<idi, idi> > &edgeList)
+void Graph::construct(const vector< pair<idi, idi> > &edge_list)
 {
-	num_e = 2 * edgeList.size(); // Undirected Graph
-	for (const auto &edge: edgeList) {
+	num_e = 2 * edge_list.size(); // Undirected Graph
+	for (const auto &edge: edge_list) {
 		num_v = max(num_v, max(edge.first, edge.second) + 1);
 	}
 	vertices = (idi *) malloc(num_v * sizeof(idi));
 	out_edges = (idi *) malloc(num_e * sizeof(idi));
 	out_degrees = (idi *) malloc(num_v * sizeof(idi));
 
-	// Sort edgeList according to heads
+	// Sort edge_list according to heads
 	vector< vector<idi> > edge_tmp(num_v);
-	for (const auto &edge: edgeList) {
+	for (const auto &edge: edge_list) {
 		edge_tmp[edge.first].push_back(edge.second);
 		edge_tmp[edge.second].push_back(edge.first);
 	}
@@ -129,6 +136,48 @@ void Graph::construct(const vector< pair<idi, idi> > &edgeList)
 		loc += degree;
 	}
 	edge_tmp.clear();
+}
+
+// Rank according to degrees
+vector<idi> Graph::make_rank()
+{
+	vector< pair<idi, idi> > degree2id;
+	for (idi v = 0; v < num_v; ++v) {
+		degree2id.push_back(make_pair(out_degrees[v], v));
+	}
+	stable_sort(degree2id.rbegin(), degree2id.rend());
+	vector<idi> rank(num_v);
+	for (idi r = 0; r < num_v; ++r) {
+		rank[degree2id[r].second] = r;
+	}
+	return rank;
+}
+
+void Graph::id_transfer(const vector<idi> &rank)
+{
+	// The new edge list
+	vector< vector<idi> > edge_list(num_v);
+	for (idi v = 0; v < num_v; ++v) {
+		idi new_v = rank[v];
+		idi ei_start = vertices[v];
+		idi ei_bound = ei_start + out_degrees[v];
+		for (idi ei = ei_start; ei < ei_bound; ++ei) {
+			idi new_w = rank[out_edges[ei]];
+			edge_list[new_v].push_back(new_w);
+		}
+	}
+	idi loc = 0;
+	for (idi head = 0; head < num_v; ++head) {
+		vertices[head] = loc;
+		idi degree = edge_list[head].size();
+		out_degrees[head] = degree;
+		for (idi ei = 0; ei < degree; ++ei) {
+			idi tail = edge_list[head][ei];
+			out_edges[loc + ei] = tail;
+		}
+		loc += degree;
+	}
+	edge_list.clear();
 }
 
 // print every edge of the graph
