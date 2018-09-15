@@ -143,37 +143,7 @@ void IndexType::print()
 	}
 }
 
-//// Not really use this class Label
-//class Label {
-//private:
-//	vector<IndexType> index;
-//
-//public:
-//	Label() = default;
-//	Label(idi n);
-//
-//	void construct(idi n);
-//	void ith_add_label_seq(idi i, idi v, idi d)
-//	{
-//		IndexType &index_i = index[i];
-//		index_i.add_label_seq(v, d);
-//	}
-//	void ith_add_label_par(idi i, idi v, idi d);
-//
-//	idi ith_get_last_label_d(idi i)
-//	{
-//		return index[i].get_last_label_d();
-//	}
-//}; // class Label
-//
-//Label::Label(idi n)
-//{
-//	construct(n);
-//}
-//void Label::construct(idi n)
-//{
-//	index.resize(n);
-//}
+// End Class IndexType
 }; // namespace PADO
 
 

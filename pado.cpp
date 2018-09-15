@@ -18,11 +18,12 @@ using namespace PADO;
 void pado()
 {
 //	freopen("output.txt", "w", stdout); // test
-	const char filename[] = "input.dat";
+//	const char filename[] = "input.dat";
 //	const char filename[] = "/Users/johnz/pppp/datasets/dblp/dblp";
+	const char filename[] = "tools/edgelist.txt";
 	printf("Reading...\n");//test
 	Graph G(filename);
-	G.print();
+//	G.print();
 //	vector<idi> rank = {
 //			14,
 //			10,
@@ -48,14 +49,14 @@ void pado()
 
 	printf("Ranking...\n");//test
 	vector<idi> rank = G.make_rank();
-	for (idi v = 0; v < rank.size(); ++v) {
-		printf("vertices %llu: rank %llu\n", v, rank[v]);//test
-	}
-	G.id_transfer(rank);
-	G.print();
+//	for (idi v = 0; v < rank.size(); ++v) {
+//		printf("vertices %llu: rank %llu\n", v, rank[v]);//test
+//	}
+//	G.id_transfer(rank);
+//	G.print();
 	WallTimer timer("Labeling");
 	printf("Labeling...\n");//test
-//	VertexCentricPLL(G, rank);
+	VertexCentricPLL(G, rank);
 	timer.print_runtime();
 }
 
@@ -126,8 +127,8 @@ int main(int argc, char *argv[]) {
 //		}
 //	}
 //	// End by Johnpzh
-	test_bit();
-//	pado();
+//	test_bit();
+	pado();
 	puts("Done!");
 	return EXIT_SUCCESS;
 }
