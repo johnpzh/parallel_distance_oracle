@@ -97,10 +97,10 @@ public:
 		vertices.push_back(v);
 		distances.push_back(d);
 	}
-	void add_label_par(idi v, weighti d)
-	{
-		//TODO:
-	}
+//	void add_label_par(idi v, weighti d)
+//	{
+//		//TODO:
+//	}
 
 	idi get_label_ith_v(idi i) const
 	{

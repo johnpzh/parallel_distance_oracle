@@ -52,11 +52,12 @@ void pado()
 //	for (idi v = 0; v < rank.size(); ++v) {
 //		printf("vertices %llu: rank %llu\n", v, rank[v]);//test
 //	}
-//	G.id_transfer(rank);
+	vector<idi> rank2id = G.id_transfer(rank);
 //	G.print();
 	WallTimer timer("Labeling");
 	printf("Labeling...\n");//test
-	VertexCentricPLL(G, rank);
+//	VertexCentricPLL(G, rank);
+	VertexCentricPLL(G, rank2id);
 	timer.print_runtime();
 }
 
