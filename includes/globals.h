@@ -84,7 +84,7 @@ double WallTimer::get_runtime()
 void WallTimer::print_runtime()
 {
 	double runtime = get_runtime();
-	printf("%s: %f\n", item.c_str(), runtime);
+	printf("%s: %f\n", item.c_str(), runtime); fflush(stdout);
 }
 // End Class WallTimer
 

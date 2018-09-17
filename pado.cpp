@@ -19,8 +19,9 @@ void pado()
 {
 //	freopen("output.txt", "w", stdout); // test
 //	const char filename[] = "input.dat";
-//	const char filename[] = "/Users/johnz/pppp/datasets/dblp/dblp";
-	const char filename[] = "tools/edgelist.txt";
+	const char filename[] = "/Users/johnz/pppp/datasets/dblp/dblp";
+//	const char filename[] = "/Users/johnz/pppp/datasets/chicago/chicago";
+//	const char filename[] = "tools/edgelist.txt";
 	printf("Reading...\n");//test
 	Graph G(filename);
 //	G.print();
@@ -94,7 +95,7 @@ void test_bit()
 	puts("");
 }
 
-int main(int argc, char *argv[]) {
+int main() {
 //	// By Johnpzh
 //	char separator = ' ';
 //	//uint64_t kNum = 50;
