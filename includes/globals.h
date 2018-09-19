@@ -18,12 +18,14 @@
 using std::string;
 
 namespace PADO {
-typedef uint64_t idi; // unsinged long long
-typedef int weighti;
+//typedef uint64_t idi; // unsinged long long
+typedef uint32_t idi; // unsigned int
+//typedef int weighti;
+typedef uint8_t weighti;
 typedef uint8_t smalli;
 typedef uint32_t inti;
-//const int IDI_MAX = ULLONG_MAX; // Maxiumum of unsigned long long, not very portable (such as on Mac)
-const int WEIGHTI_MAX = INT_MAX;
+//const int WEIGHTI_MAX = INT_MAX;
+const uint8_t WEIGHTI_MAX = UCHAR_MAX;
 const int SMALLI_MAX = UCHAR_MAX;
 
 
