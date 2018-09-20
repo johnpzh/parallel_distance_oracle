@@ -30,7 +30,8 @@ using std::max;
 namespace PADO
 {
 class Graph final {
-private:
+//private:
+public:
 	idi num_v = 0;
 	idi num_e = 0;
 	idi *vertices = nullptr;
@@ -40,7 +41,7 @@ private:
 //	void construct(const char *filename);
 	void construct(const vector< pair<idi, idi> > &edge_list);
 
-public:
+//public:
 	// Constructor
 	Graph() = default;
 	explicit Graph(const char *filename);
@@ -169,6 +170,7 @@ vector<idi> Graph::id_transfer(const vector<idi> &rank)
 	idi loc = 0;
 	for (idi head = 0; head < num_v; ++head) {
 		vertices[head] = loc;
+		sort(edge_list[head].rbegin(), edge_list[head].rend());
 		idi degree = edge_list[head].size();
 		out_degrees[head] = degree;
 		for (idi ei = 0; ei < degree; ++ei) {

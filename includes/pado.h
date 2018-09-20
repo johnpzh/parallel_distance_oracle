@@ -26,11 +26,12 @@ using std::min;
 namespace PADO {
 
 class BitArray {
-private:
+//private:
+public:
 	uint64_t *bits = nullptr;
 	inti size = 0;
 
-public:
+//public:
 	BitArray(unsigned len);
 	BitArray(unsigned len, uint64_t num) : BitArray(len)
 	{
@@ -192,9 +193,9 @@ vector<inti> BitArray::get_all_locs_set(inti bound) const
 					inti offset = (c << 6) + (i_32 << 5) + (i_16 << 4) + (i_8 << 3);
 					for (inti i_1 = 0; i_1 < 8; ++i_1) {
 						inti index = i_1 + offset;
-						if (index >= bound) {
-							return locs;
-						}
+//						if (index >= bound) {
+//							return locs;
+//						}
 						if (*num_8 & (1 << i_1)) {
 							locs.push_back(index);
 						}
@@ -283,47 +284,40 @@ inti BitArray::is_bit_set(inti loc) const
 class VertexCentricPLL {
 private:
 	struct ShortIndex {
-		BitArray roots_indicator; // if evert root r in the short index
-		smalli *roots_distances = nullptr; // distance to root r
+//		BitArray roots_indicator; // if evert root r in the short index
+//		smalli *roots_distances = nullptr; // distance to root r
 		BitArray roots_candidates; // candidates for the current iteration
-//		smalli *candidates_dist = nullptr;
 		BitArray roots_last; // added roots from the last iteration
-//		smalli *last_dist = nullptr;
 
-		ShortIndex(inti size): roots_indicator(size), roots_candidates(size), roots_last(size)
+		ShortIndex(inti size):
+//						roots_indicator(size),
+						roots_candidates(size),
+						roots_last(size)
 		{
 //			puts("ShortIndex Constructor...");fflush(stdout);//test
-			roots_distances = (smalli *) malloc(size * sizeof(smalli));
-			memset(roots_distances, (uint8_t) -1, size * sizeof(smalli));
-//			candidates_dist = (smalli *) malloc(size * sizeof(smalli));
-//			memset(candidates_dist, (uint8_t) -1, size * sizeof(smalli));
-//			last_dist = (smalli *) malloc(size * sizeof(smalli));
-//			memset(last_dist, (uint8_t) -1, size * sizeof(smalli));
+//			roots_distances = (smalli *) malloc(size * sizeof(smalli));
+//			memset(roots_distances, (uint8_t) -1, size * sizeof(smalli));
 
 		}
 		ShortIndex(const ShortIndex &right) :
-								roots_indicator(right.roots_indicator),
+								//roots_indicator(right.roots_indicator),
 								roots_candidates(right.roots_candidates),
 								roots_last(right.roots_last)
 		{
 //			puts("ShortIndex Copy...");fflush(stdout);//test
-			inti size = right.roots_indicator.get_size();
-			roots_distances = (smalli *) malloc(size * sizeof(smalli));
-			memcpy(roots_distances, right.roots_distances, size * sizeof(smalli));
-//			candidates_dist = (smalli *) malloc(size * sizeof(smalli));
-//			memcpy(candidates_dist, right.candidates_dist, size * sizeof(smalli));
-//			last_dist = (smalli *) malloc(size * sizeof(smalli));
-//			memcpy(last_dist, right.last_dist, size * sizeof(smalli));
+//			inti size = right.roots_indicator.get_size();
+//			roots_distances = (smalli *) malloc(size * sizeof(smalli));
+//			memcpy(roots_distances, right.roots_distances, size * sizeof(smalli));
 		}
 		ShortIndex &operator=(const ShortIndex &right) = delete;
 		ShortIndex(ShortIndex &&right) :
-								roots_indicator(right.roots_indicator),
+//								roots_indicator(right.roots_indicator),
 								roots_candidates(right.roots_candidates),
 								roots_last(right.roots_last)
 		{
 //			puts("ShortIndex Move..."); fflush(stdout);//test
-			roots_distances = right.roots_distances;
-			right.roots_distances = nullptr;
+//			roots_distances = right.roots_distances;
+//			right.roots_distances = nullptr;
 //			candidates_dist = right.candidates_dist;
 //			right.candidates_dist = nullptr;
 //			last_dist = right.last_dist;
@@ -336,7 +330,7 @@ private:
 //			puts("roots_indicator...");fflush(stdout);//test
 //			roots_indicator.~BitArray();
 //			puts("roots_distances...");fflush(stdout);//test
-			free(roots_distances);
+//			free(roots_distances);
 //			puts("roots_candidates...");fflush(stdout);//test
 //			roots_candidates.~BitArray();
 //			puts("roots_last...");fflush(stdout);//test
@@ -349,11 +343,11 @@ private:
 //			roots_candidates.unset_all();
 //			roots_last.unset_all();
 //		}
-		void set_index(inti loc, smalli d)
-		{
-			roots_indicator.set_bit(loc);
-			roots_distances[loc] = d;
-		}
+//		void set_index(inti loc, smalli d)
+//		{
+//			roots_indicator.set_bit(loc);
+//			roots_distances[loc] = d;
+//		}
 //		void set_candidate(inti loc, smalli d)
 //		{
 //			roots_candidates.set_bit(loc);
@@ -404,7 +398,7 @@ private:
 		}
 	}
 
-	void switch_labels_to_old_id(const vector<idi> &rank2id);
+
 
 
 
@@ -426,7 +420,7 @@ public:
 //								const vector<IndexType> &index);
 //	static vector<idi> make_rank(const Graph &G);
 	void print();
-
+	void switch_labels_to_old_id(const vector<idi> &rank2id);
 
 }; // class VertexCentricPLL
 
@@ -435,7 +429,7 @@ VertexCentricPLL::VertexCentricPLL(const Graph &G, const vector<idi> &rank2id)
 	construct(G, rank2id);
 }
 
-// For index by vector, with batch and distance array, 09/09/2018
+// Reduce function call, 09/19/2018
 void VertexCentricPLL::root_batch(
 						const Graph &G,
 						idi root_start, // start id of roots
@@ -451,6 +445,7 @@ void VertexCentricPLL::root_batch(
 	vector<ShortIndex> short_index(num_v, bit_array_size);
 	vector<bool> is_active(num_v, false);
 //	vector<bool> is_visited(num_v, false);
+	vector<bool> has_candidate(num_v, false);
 
 	// Use a distance map to save time, 09/16/2018
 	vector< vector<smalli> > dist_matrix(roots_size);
@@ -461,8 +456,10 @@ void VertexCentricPLL::root_batch(
 		const IndexType &Lr = L[root_id];
 		idi size = Lr.get_size();
 		for (idi vi = 0; vi < size; ++vi) {
-			idi v = Lr.get_label_ith_v(vi);
-			dmr[v] = Lr.get_label_ith_d(vi);
+			idi v = Lr.vertices[vi];
+			dmr[v] = Lr.distances[vi];
+//			idi v = Lr.get_label_ith_v(vi);
+//			dmr[v] = Lr.get_label_ith_d(vi);
 		}
 		dmr[r] = 0;
 	}
@@ -471,8 +468,9 @@ void VertexCentricPLL::root_batch(
 	// Initialize roots' short_index
 	for (inti r_i = 0; r_i < roots_size; ++r_i) {
 		idi v = r_i + root_start;
-		short_index[v].set_index(r_i, 0);
+//		short_index[v].set_index(r_i, 0);
 		short_index[v].roots_last.set_bit(r_i);
+		L[v].add_label_seq(r_i, 0);
 		is_active[v] = true;
 //		is_visited[r_i] = true;
 	}
@@ -488,45 +486,177 @@ void VertexCentricPLL::root_batch(
 			if (!is_active[head]) {
 				continue;
 			}
+			is_active[head] = false;
+
+//			///////// inline function
+//			idi e_i_start = G.vertices[head];
+//			idi e_i_bound = e_i_start + G.out_degrees[head];
+//			inti count = roots_size / 64;
+//			for (inti c = 0; c < count; ++c) {
+//				uint64_t *num_64 = short_index[head].roots_last.bits + c;
+//				if (0 == *num_64) {
+//					continue;
+//				}
+//				for (inti i_32 = 0; i_32 < 2; ++i_32) {
+//					uint32_t *num_32 = (uint32_t *) num_64 + i_32;
+//					if (0 == *num_32) {
+//						continue;
+//					}
+//					for (inti i_16 = 0; i_16 < 2; ++i_16) {
+//						uint16_t *num_16 = (uint16_t *) num_32 + i_16;
+//						if (0 == *num_16) {
+//							continue;
+//						}
+//						for (inti i_8 = 0; i_8 < 2; ++i_8) {
+//							uint8_t *num_8 = (uint8_t *) num_16 + i_8;
+//							if (0 == *num_8) {
+//								continue;
+//							}
+//							inti offset = (c << 6) + (i_32 << 5) + (i_16 << 4) + (i_8 << 3);
+//							for (inti i_1 = 0; i_1 < 8; ++i_1) {
+//		//						if (index >= bound) {
+//		//							return locs;
+//		//						}
+//								if (*num_8 & (1 << i_1)) {
+//									inti index = i_1 + offset;
+//									idi x = index + root_start;
+////									for (idi e_i = 0; e_i < degree; ++e_i) {
+//									for (idi e_i = e_i_start; e_i < e_i_bound; ++e_i) {
+////										idi tail = G.ith_get_edge(head, e_i);
+//										idi tail = G.out_edges[e_i];
+//										if (x > tail) {
+//											break;
+//										}
+//										short_index[tail].roots_candidates.set_bit(index);
+//										has_candidate[tail] = true;
+//									}
+////									}
+//								}
+//							}
+//						}
+//					}
+//				}
+//			}
+//			short_index[head].roots_last.unset_all();
+//			///////// ENd inline function
 			ShortIndex &head_si = short_index[head];
-			idi degree = G.ith_get_out_degree(head);
+//			idi degree = G.ith_get_out_degree(head);
 			inti bound = get_bound(head, root_start, roots_size);
 			vector<inti> head_roots = head_si.roots_last.get_all_locs_set(bound);
-			for (idi e_i = 0; e_i < degree; ++e_i) {
-				idi tail = G.ith_get_edge(head, e_i);
+			head_si.roots_last.unset_all();
+			idi e_i_start = G.vertices[head];
+			idi e_i_bound = e_i_start + G.out_degrees[head];
+			for (idi e_i = e_i_start; e_i < e_i_bound; ++e_i) {
+//				idi tail = G.ith_get_edge(head, e_i);
+				idi tail = G.out_edges[e_i];
 //				if (!is_active_bak[tail] && is_visited[tail]) {
 //					continue;
 //				}
 				ShortIndex &tail_si = short_index[tail];
+
 				for (const inti &hi : head_roots) {
 					idi x = hi + root_start;
 					if (tail < x) {
 						break;
 					}
-					if (
+//					if (
 //						x < tail
 //						&& !L[tail].is_v_in_label(x)
-						!tail_si.roots_candidates.is_bit_set(hi)){
+//						!tail_si.roots_candidates.is_bit_set(hi)){
 						tail_si.roots_candidates.set_bit(hi);
-					}
+						has_candidate[tail] = true;
+//					}
 				}
 			}
-			head_si.roots_last.unset_all();
-			is_active[head] = false;
 		}
 
-		t_can.print_runtime();
+//		t_can.print_runtime();
 		time_can += t_can.get_runtime();
 		WallTimer t_add("Adding");
 
 		// Traverse Candidate then add to short index
 		for (idi v = 0; v < num_v; ++v) {
+			if(!has_candidate[v]) {
+				continue;
+			}
+			has_candidate[v] = false;
+
+			IndexType &Lv = L[v];
+			idi size_Lv = Lv.get_size();
+
+//			/////////////// inline function
+//			inti count = roots_size / 64;
+//			for (inti c = 0; c < count; ++c) {
+//				uint64_t *num_64 = short_index[v].roots_candidates.bits + c;
+//				if (0 == *num_64) {
+//					continue;
+//				}
+//				for (inti i_32 = 0; i_32 < 2; ++i_32) {
+//					uint32_t *num_32 = (uint32_t *) num_64 + i_32;
+//					if (0 == *num_32) {
+//						continue;
+//					}
+//					for (inti i_16 = 0; i_16 < 2; ++i_16) {
+//						uint16_t *num_16 = (uint16_t *) num_32 + i_16;
+//						if (0 == *num_16) {
+//							continue;
+//						}
+//						for (inti i_8 = 0; i_8 < 2; ++i_8) {
+//							uint8_t *num_8 = (uint8_t *) num_16 + i_8;
+//							if (0 == *num_8) {
+//								continue;
+//							}
+//							inti offset = (c << 6) + (i_32 << 5) + (i_16 << 4) + (i_8 << 3);
+//							for (inti i_1 = 0; i_1 < 8; ++i_1) {
+//								if (*num_8 & (1 << i_1)) {
+//									inti cand = i_1 + offset;
+//									weighti d_query = WEIGHTI_MAX;
+//									_mm_prefetch(&Lv.vertices[0], _MM_HINT_T0);
+//									_mm_prefetch(&Lv.distances[0], _MM_HINT_T0);
+//									_mm_prefetch(&dist_matrix[cand][0], _MM_HINT_T0);
+//									for (idi vi = 0; vi < size_Lv; ++vi) {
+//										idi v_l = Lv.vertices[vi];
+//										if (SMALLI_MAX == dist_matrix[cand][v_l]) {
+//											continue;
+//										}
+//										weighti q_d = Lv.distances[vi] + dist_matrix[cand][v_l];
+//										if (q_d < d_query) {
+//											d_query = q_d;
+//										}
+//									}
+//
+//									// End the new query
+//									if (iter < d_query) {
+//										short_index[v].roots_last.set_bit(cand);
+//										Lv.add_label_seq(cand + root_start, iter);
+//
+//										is_active[v] = true;
+//
+//										idi root_id = v - root_start;
+//										if (root_start <= v && root_id < roots_size) {
+//											dist_matrix[root_id][cand] = iter;
+//										}
+//
+//										if (stop) {
+//											stop = false;
+//										}
+//									}
+//								}
+//							}
+//						}
+//					}
+//				}
+//			}
+//			short_index[v].roots_candidates.unset_all();
+//			/////////////// End inline function
 			ShortIndex &v_si = short_index[v];
 			inti bound = get_bound(v, root_start, roots_size);
 			vector<inti> candidates = v_si.roots_candidates.get_all_locs_set(bound);
-			if (0 == candidates.size()) {
-				continue;
-			}
+			v_si.roots_candidates.unset_all();
+//			vector<inti> roots_v = v_si.roots_indicator.get_all_locs_set(bound);
+//			if (0 == candidates.size()) {
+//				continue;
+//			}
 			for (const inti &cand : candidates) {
 //				weighti d = query(
 //								v,
@@ -537,36 +667,47 @@ void VertexCentricPLL::root_batch(
 //								roots_size);
 				// The new query based on the distance matrix 09/16/2018
 				// Query based on the old Labels.
-				weighti d = WEIGHTI_MAX;
-				const IndexType &Lv = L[v];
-				idi size = Lv.get_size();
-				for (idi vi = 0; vi < size; ++vi) {
-					idi v_l = Lv.get_label_ith_v(vi);
+				weighti d_query = WEIGHTI_MAX;
+//				const IndexType &Lv = L[v];
+//				idi size = Lv.get_size();
+
+				_mm_prefetch(&Lv.vertices[0], _MM_HINT_T0);
+				_mm_prefetch(&Lv.distances[0], _MM_HINT_T0);
+				_mm_prefetch(&dist_matrix[cand][0], _MM_HINT_T0);
+				for (idi vi = 0; vi < size_Lv; ++vi) {
+					idi v_l = Lv.vertices[vi];
+//					idi v_l = Lv.get_label_ith_v(vi);
 					if (SMALLI_MAX == dist_matrix[cand][v_l]) {
 						continue;
 					}
-					weighti q_d = Lv.get_label_ith_d(vi) + dist_matrix[cand][v_l];
-					if (q_d < d) {
-						d = q_d;
+					weighti q_d = Lv.distances[vi] + dist_matrix[cand][v_l];
+//					weighti q_d = Lv.get_label_ith_d(vi) + dist_matrix[cand][v_l];
+					if (q_d < d_query) {
+						d_query = q_d;
 					}
 				}
 				// Query based on short index in this batch.
-//				const ShortIndex &SIv = short_index[v];
-				inti bound = get_bound(v, root_start, roots_size);
-				vector<inti> roots_v = v_si.roots_indicator.get_all_locs_set(bound);
-				for (const inti &rv : roots_v) {
-					if (SMALLI_MAX == dist_matrix[cand][rv]) {
-						continue;
-					}
-					weighti q_d = v_si.roots_distances[rv] + dist_matrix[cand][rv];
-					if (q_d < d) {
-						d = q_d;
-					}
-				}
+//				inti bound = get_bound(v, root_start, roots_size);
+//				vector<inti> roots_v = v_si.roots_indicator.get_all_locs_set(bound);
+
+//				_mm_prefetch(&v_si.roots_distances[0], _MM_HINT_T0);
+//				for (const inti &rv : roots_v) {
+//					if (SMALLI_MAX == dist_matrix[cand][rv]) {
+//						continue;
+//					}
+//					weighti q_d = v_si.roots_distances[rv] + dist_matrix[cand][rv];
+//					if (q_d < d_query) {
+//						d_query = q_d;
+//					}
+//				}
 				// End the new query
-				if (iter < d) {
-					v_si.set_index(cand, iter);
+				if (iter < d_query) {
+//					v_si.roots_indicator.set_bit(cand);
+//					v_si.roots_distances[cand] = iter;
+//					v_si.set_index(cand, iter);
 					v_si.roots_last.set_bit(cand);
+					Lv.add_label_seq(cand, iter);
+
 					is_active[v] = true;
 //					is_visited[v] = true;
 
@@ -580,37 +721,234 @@ void VertexCentricPLL::root_batch(
 					}
 				}
 			}
-			v_si.roots_candidates.unset_all();
 		}
 		++iter;
 
-		t_add.print_runtime();
+//		t_add.print_runtime();
 		time_add += t_add.get_runtime();
 	}
 	// add short_index to L
 	double time_update = 0;
-	WallTimer t_update("Updating");
-	for (idi v = 0; v < num_v; ++v) {
-		const ShortIndex &v_si = short_index[v];
-		IndexType &Lv = L[v];
-		inti bound = get_bound(v, root_start, roots_size);
-		vector<inti> indicators = v_si.roots_indicator.get_all_locs_set(bound);
-		if (0 == indicators.size()) {
-			continue;
-		}
-		for (const inti &i : indicators) {
-			idi u = i + root_start;
-			Lv.add_label_seq(u, v_si.roots_distances[i]);
-		}
-	}
-	t_update.print_runtime();
-	time_update += t_update.get_runtime();
+//	WallTimer t_update("Updating");
+//	for (idi v = 0; v < num_v; ++v) {
+//		const ShortIndex &v_si = short_index[v];
+//		IndexType &Lv = L[v];
+//		inti bound = get_bound(v, root_start, roots_size);
+//		vector<inti> indicators = v_si.roots_indicator.get_all_locs_set(bound);
+//		if (0 == indicators.size()) {
+//			continue;
+//		}
+//		for (const inti &i : indicators) {
+//			idi u = i + root_start;
+//			Lv.add_label_seq(u, v_si.roots_distances[i]);
+//		}
+//	}
+////	t_update.print_runtime();
+//	time_update += t_update.get_runtime();
 
-	double total_time = time_can + time_add + time_update;
-	printf("Candidating time: %f (%f%%)\n", time_can, time_can / total_time * 100);
-	printf("Adding time: %f (%f%%)\n", time_add, time_add / total_time * 100);
-	printf("Updating time: %f (%f%%)\n", time_update, time_update / total_time * 100);
+//	double total_time = time_can + time_add + time_update;
+//	printf("Candidating time: %f (%f%%)\n", time_can, time_can / total_time * 100);
+//	printf("Adding time: %f (%f%%)\n", time_add, time_add / total_time * 100);
+//	printf("Updating time: %f (%f%%)\n", time_update, time_update / total_time * 100);
 }
+
+
+// For index by vector, with batch and distance array, 09/09/2018
+//void VertexCentricPLL::root_batch(
+//						const Graph &G,
+//						idi root_start, // start id of roots
+//						inti roots_size, // how many roots in the batch
+//						inti bit_array_size, // the fix length for bit array, must be divided by 64
+//						vector<IndexType> &L)
+//{
+//	double time_can = 0;
+//	double time_add = 0;
+//
+//
+//	idi num_v = G.get_num_v();
+//	vector<ShortIndex> short_index(num_v, bit_array_size);
+//	vector<bool> is_active(num_v, false);
+////	vector<bool> is_visited(num_v, false);
+//	vector<bool> has_candidate(num_v, false);
+//
+//	// Use a distance map to save time, 09/16/2018
+//	vector< vector<smalli> > dist_matrix(roots_size);
+//	for (idi r = 0; r < roots_size; ++r) {
+//		vector<smalli> &dmr = dist_matrix[r];
+//		dmr.resize(num_v, SMALLI_MAX);
+//		idi root_id = r + root_start;
+//		const IndexType &Lr = L[root_id];
+//		idi size = Lr.get_size();
+//		for (idi vi = 0; vi < size; ++vi) {
+//			idi v = Lr.vertices[vi];
+//			dmr[v] = Lr.distances[vi];
+////			idi v = Lr.get_label_ith_v(vi);
+////			dmr[v] = Lr.get_label_ith_d(vi);
+//		}
+//		dmr[r] = 0;
+//	}
+//	// End distance map
+//
+//	// Initialize roots' short_index
+//	for (inti r_i = 0; r_i < roots_size; ++r_i) {
+//		idi v = r_i + root_start;
+//		short_index[v].set_index(r_i, 0);
+//		short_index[v].roots_last.set_bit(r_i);
+//		is_active[v] = true;
+////		is_visited[r_i] = true;
+//	}
+//	smalli iter = 1; // iterator, also the distance for current iteration
+//	bool stop = false;
+//	while (!stop) {
+////		printf("iter: %u\n", iter);//test
+//		WallTimer t_can("Candidating");
+//		stop = true;
+//		// Push to Candidate
+////		vector<bool> is_active_bak = is_active;
+//		for (idi head = 0; head < num_v; ++head) {
+//			if (!is_active[head]) {
+//				continue;
+//			}
+//			ShortIndex &head_si = short_index[head];
+//			idi degree = G.ith_get_out_degree(head);
+//			inti bound = get_bound(head, root_start, roots_size);
+//			vector<inti> head_roots = head_si.roots_last.get_all_locs_set(bound);
+//
+//			for (idi e_i = 0; e_i < degree; ++e_i) {
+//				idi tail = G.ith_get_edge(head, e_i);
+////				if (!is_active_bak[tail] && is_visited[tail]) {
+////					continue;
+////				}
+//				ShortIndex &tail_si = short_index[tail];
+//				for (const inti &hi : head_roots) {
+//					idi x = hi + root_start;
+//					if (tail < x) {
+//						break;
+//					}
+////					if (
+////						x < tail
+////						&& !L[tail].is_v_in_label(x)
+////						!tail_si.roots_candidates.is_bit_set(hi)){
+//						tail_si.roots_candidates.set_bit(hi);
+//						has_candidate[tail] = true;
+////					}
+//				}
+//			}
+//			head_si.roots_last.unset_all();
+//			is_active[head] = false;
+//		}
+//
+////		t_can.print_runtime();
+//		time_can += t_can.get_runtime();
+//		WallTimer t_add("Adding");
+//
+//		// Traverse Candidate then add to short index
+//		for (idi v = 0; v < num_v; ++v) {
+//			if(!has_candidate[v]) {
+//				continue;
+//			}
+//			has_candidate[v] = false;
+//
+//			ShortIndex &v_si = short_index[v];
+//			inti bound = get_bound(v, root_start, roots_size);
+//
+//			vector<inti> candidates = v_si.roots_candidates.get_all_locs_set(bound);
+////			if (0 == candidates.size()) {
+////				continue;
+////			}
+//			for (const inti &cand : candidates) {
+////				weighti d = query(
+////								v,
+////								r + root_start,
+////								L,
+////								short_index,
+////								root_start,
+////								roots_size);
+//				// The new query based on the distance matrix 09/16/2018
+//				// Query based on the old Labels.
+//				weighti d = WEIGHTI_MAX;
+//				const IndexType &Lv = L[v];
+//				idi size = Lv.get_size();
+//
+//				_mm_prefetch(&Lv.vertices[0], _MM_HINT_T0);
+//				_mm_prefetch(&Lv.distances[0], _MM_HINT_T0);
+//
+//				for (idi vi = 0; vi < size; ++vi) {
+//					idi v_l = Lv.vertices[vi];
+////					idi v_l = Lv.get_label_ith_v(vi);
+//					if (SMALLI_MAX == dist_matrix[cand][v_l]) {
+//						continue;
+//					}
+//					weighti q_d = Lv.distances[vi] + dist_matrix[cand][v_l];
+////					weighti q_d = Lv.get_label_ith_d(vi) + dist_matrix[cand][v_l];
+//					if (q_d < d) {
+//						d = q_d;
+//					}
+//				}
+//				// Query based on short index in this batch.
+////				const ShortIndex &SIv = short_index[v];
+//				inti bound = get_bound(v, root_start, roots_size);
+//				vector<inti> roots_v = v_si.roots_indicator.get_all_locs_set(bound);
+//
+//				_mm_prefetch(&v_si.roots_distances[0], _MM_HINT_T0);
+//
+//				for (const inti &rv : roots_v) {
+//					if (SMALLI_MAX == dist_matrix[cand][rv]) {
+//						continue;
+//					}
+//					weighti q_d = v_si.roots_distances[rv] + dist_matrix[cand][rv];
+//					if (q_d < d) {
+//						d = q_d;
+//					}
+//				}
+//				// End the new query
+//				if (iter < d) {
+//					v_si.set_index(cand, iter);
+//					v_si.roots_last.set_bit(cand);
+//					is_active[v] = true;
+////					is_visited[v] = true;
+//
+//					idi root_id = v - root_start;
+//					if (root_start <= v && root_id < roots_size) {
+//						dist_matrix[root_id][cand] = iter;
+//					}
+//
+//					if (stop) {
+//						stop = false;
+//					}
+//				}
+//			}
+//			v_si.roots_candidates.unset_all();
+//		}
+//		++iter;
+//
+////		t_add.print_runtime();
+//		time_add += t_add.get_runtime();
+//	}
+//	// add short_index to L
+//	double time_update = 0;
+//	WallTimer t_update("Updating");
+//	for (idi v = 0; v < num_v; ++v) {
+//		const ShortIndex &v_si = short_index[v];
+//		IndexType &Lv = L[v];
+//		inti bound = get_bound(v, root_start, roots_size);
+//		vector<inti> indicators = v_si.roots_indicator.get_all_locs_set(bound);
+//		if (0 == indicators.size()) {
+//			continue;
+//		}
+//		for (const inti &i : indicators) {
+//			idi u = i + root_start;
+//			Lv.add_label_seq(u, v_si.roots_distances[i]);
+//		}
+//	}
+////	t_update.print_runtime();
+//	time_update += t_update.get_runtime();
+//
+//	double total_time = time_can + time_add + time_update;
+//	printf("Candidating time: %f (%f%%)\n", time_can, time_can / total_time * 100);
+//	printf("Adding time: %f (%f%%)\n", time_add, time_add / total_time * 100);
+//	printf("Updating time: %f (%f%%)\n", time_update, time_update / total_time * 100);
+//}
 /////////////////////////////////////////////////////////////////////////////
 
 
@@ -978,12 +1316,12 @@ void VertexCentricPLL::construct(const Graph &G, const vector<idi> &rank2id)
 	// Initialization to (v, 0) for every v
 	idi num_v = G.get_num_v();
 	L.resize(num_v);
-	const inti bit_array_size = 512;
+	const inti bit_array_size = 256;
 //	vector<ShortIndex> short_index(num_v, roots_size);
 	idi remainer = num_v % bit_array_size;
 	idi b_i_bound = num_v - remainer;
 	for (idi b_i = 0; b_i < b_i_bound; b_i += bit_array_size) {
-		printf("b_i: %llu\n", b_i);//test
+//		printf("b_i: %llu\n", b_i);//test
 		root_batch(
 				G,
 				b_i,
@@ -992,7 +1330,7 @@ void VertexCentricPLL::construct(const Graph &G, const vector<idi> &rank2id)
 				L);
 	}
 	if (remainer != 0) {
-		printf("b_i: %llu\n", b_i_bound);//test
+//		printf("b_i: %llu\n", b_i_bound);//test
 		root_batch(
 				G,
 				b_i_bound,
@@ -1000,9 +1338,6 @@ void VertexCentricPLL::construct(const Graph &G, const vector<idi> &rank2id)
 				bit_array_size,
 				L);
 	}
-
-	switch_labels_to_old_id(rank2id);
-//	print();//test
 }
 
 void VertexCentricPLL::switch_labels_to_old_id(const vector<idi> &rank2id)
@@ -1023,68 +1358,68 @@ void VertexCentricPLL::switch_labels_to_old_id(const vector<idi> &rank2id)
 	L = new_L;
 }
 
-weighti VertexCentricPLL::query(
-							idi u,
-							idi v,
-							const vector<IndexType> &index,
-							const vector<ShortIndex> &short_index,
-							idi root_start,
-							inti roots_size)
-{
-	// Traverse the index
-	const IndexType &Lu = index[u];
-	const IndexType &Lv = index[v];
-	weighti dist = WEIGHTI_MAX;
-	idi lu_size = Lu.get_size();
-	idi lv_size = Lv.get_size();
-	idi iu = 0;
-	idi iv = 0;
-	while (iu < lu_size && iv < lv_size) {
-		idi u_e = Lu.get_label_ith_v(iu);
-		idi v_e = Lv.get_label_ith_v(iv);
-		if (u_e == v_e) {
-			weighti d = Lu.get_label_ith_d(iu) + Lv.get_label_ith_d(iv);
-			if (d < dist) {
-				dist = d;
-			}
-			++iu;
-			++iv;
-		} else if (u_e < v_e) {
-			++iu;
-		} else {
-			++iv;
-		}
-	}
-
-	// Traverse the short index.
-	const ShortIndex &Su = short_index[u];
-	const ShortIndex &Sv = short_index[v];
-	inti bound = get_bound(u, root_start, roots_size);
-	vector<inti> u_roots = Su.roots_indicator.get_all_locs_set(bound);
-	bound = get_bound(v, root_start, roots_size);
-	vector<inti> v_roots = Sv.roots_indicator.get_all_locs_set(bound);
-	inti iu_size = u_roots.size();
-	inti iv_size = v_roots.size();
-	inti i_u = 0;
-	inti i_v = 0;
-	while (i_u < iu_size && i_v < iv_size) {
-		idi u_e = u_roots[i_u];
-		idi v_e = v_roots[i_v];
-		if (u_e == v_e) {
-			weighti d = Su.roots_distances[u_e] + Sv.roots_distances[v_e];
-			if (d < dist) {
-				dist = d;
-			}
-			++i_u;
-			++i_v;
-		} else if (u_e < v_e) {
-			++i_u;
-		} else {
-			++i_v;
-		}
-	}
-	return dist;
-}
+//weighti VertexCentricPLL::query(
+//							idi u,
+//							idi v,
+//							const vector<IndexType> &index,
+//							const vector<ShortIndex> &short_index,
+//							idi root_start,
+//							inti roots_size)
+//{
+//	// Traverse the index
+//	const IndexType &Lu = index[u];
+//	const IndexType &Lv = index[v];
+//	weighti dist = WEIGHTI_MAX;
+//	idi lu_size = Lu.get_size();
+//	idi lv_size = Lv.get_size();
+//	idi iu = 0;
+//	idi iv = 0;
+//	while (iu < lu_size && iv < lv_size) {
+//		idi u_e = Lu.get_label_ith_v(iu);
+//		idi v_e = Lv.get_label_ith_v(iv);
+//		if (u_e == v_e) {
+//			weighti d = Lu.get_label_ith_d(iu) + Lv.get_label_ith_d(iv);
+//			if (d < dist) {
+//				dist = d;
+//			}
+//			++iu;
+//			++iv;
+//		} else if (u_e < v_e) {
+//			++iu;
+//		} else {
+//			++iv;
+//		}
+//	}
+//
+//	// Traverse the short index.
+//	const ShortIndex &Su = short_index[u];
+//	const ShortIndex &Sv = short_index[v];
+//	inti bound = get_bound(u, root_start, roots_size);
+//	vector<inti> u_roots = Su.roots_indicator.get_all_locs_set(bound);
+//	bound = get_bound(v, root_start, roots_size);
+//	vector<inti> v_roots = Sv.roots_indicator.get_all_locs_set(bound);
+//	inti iu_size = u_roots.size();
+//	inti iv_size = v_roots.size();
+//	inti i_u = 0;
+//	inti i_v = 0;
+//	while (i_u < iu_size && i_v < iv_size) {
+//		idi u_e = u_roots[i_u];
+//		idi v_e = v_roots[i_v];
+//		if (u_e == v_e) {
+//			weighti d = Su.roots_distances[u_e] + Sv.roots_distances[v_e];
+//			if (d < dist) {
+//				dist = d;
+//			}
+//			++i_u;
+//			++i_v;
+//		} else if (u_e < v_e) {
+//			++i_u;
+//		} else {
+//			++i_v;
+//		}
+//	}
+//	return dist;
+//}
 
 void VertexCentricPLL::print()
 {

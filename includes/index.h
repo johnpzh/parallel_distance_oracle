@@ -81,13 +81,14 @@ namespace PADO {
 
 // IndexType using vector
 class IndexType {
-private:
+public:
+//private:
 	vector<idi> vertices;
 	vector<weighti> distances;
 	idi size = 0;
 
 //	void construct(idi size);
-public:
+//public:
 	IndexType() = default;
 //	explicit IndexType(idi size);
 

@@ -58,8 +58,10 @@ void pado()
 	WallTimer timer("Labeling");
 	printf("Labeling...\n");//test
 //	VertexCentricPLL(G, rank);
-	VertexCentricPLL(G, rank2id);
+	VertexCentricPLL VCPLL(G, rank2id);
 	timer.print_runtime();
+	VCPLL.switch_labels_to_old_id(rank2id);
+//	VCPLL.print();//test
 }
 
 void test_bit()
