@@ -21,6 +21,7 @@ void pado()
 //	const char filename[] = "input.dat";
 	const char filename[] = "/Users/johnz/pppp/datasets/dblp/dblp";
 //	const char filename[] = "/Users/johnz/pppp/datasets/chicago/chicago";
+//	const char filename[] = "/Users/johnz/pppp/datasets/wikitalk/wikitalk";
 //	const char filename[] = "tools/edgelist.txt";
 	printf("Reading...\n");//test
 	Graph G(filename);
@@ -58,10 +59,20 @@ void pado()
 	WallTimer timer("Labeling");
 	printf("Labeling...\n");//test
 //	VertexCentricPLL(G, rank);
-	VertexCentricPLL VCPLL(G, rank2id);
+	VertexCentricPLL VCPLL(G);
 	timer.print_runtime();
 	VCPLL.switch_labels_to_old_id(rank2id);
 //	VCPLL.print();//test
+
+	// Test for query
+//	idi u, v;
+//	while (std::cin >> u >> v) {
+//		idi d = VCPLL.query(u,v);
+//		if (d == 255) {
+//			d = 2147483647;
+//		}
+//		printf("%llu\n", d);
+//	}
 }
 
 void test_bit()
@@ -90,11 +101,11 @@ void test_bit()
 	printf("loc %d set: %u\n", 127, B.is_bit_set(127));
 	printf("loc %d set: %u\n", 8, B.is_bit_set(8));
 	printf("loc %d set: %u\n", 63, B.is_bit_set(63));
-	vector<inti> locs = B.get_all_locs_set(128);
-	for (const auto &l : locs) {
-		printf(" %u", l);
-	}
-	puts("");
+//	vector<inti> locs = B.get_all_locs_set(128);
+//	for (const auto &l : locs) {
+//		printf(" %u", l);
+//	}
+//	puts("");
 }
 
 int main() {

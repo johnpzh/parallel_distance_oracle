@@ -59,7 +59,7 @@ public:
 
 	// Execute fun for every set bit in bits (bit array)
 	template<typename T> void process_every_bit(T fun); // fun is an expected function
-	void get_all_locs_set(vector<inti> &locs) const; // return the vector contains all locations which are set
+	vector<inti> get_all_locs_set(inti bound) const; // return the vector contains all locations which are set
 	inti is_bit_set(inti loc) const;
 	void set_bit(inti loc)
 	{
@@ -67,6 +67,8 @@ public:
 //			fprintf(stderr, "Error: BitArray::set_bit: loc %u is larger than size %u.\n", loc, size);
 //			return;
 //		}
+//		inti remain = loc % 64;
+//		inti count = loc / 64;
 //		*(bits + count) |= ((uint64_t) 1 << remain);
 		*(bits + (loc >> 6)) |= ((uint64_t) 1 << (loc & 0x3F));
 	}
@@ -76,6 +78,8 @@ public:
 //			fprintf(stderr, "Error: BitArray::unset_bit: loc %u is larger than size %u.\n", loc, size);
 //			return;
 //		}
+//		inti remain = loc % 64;
+//		inti count = loc / 64;
 //		*(bits + count) &= (~((uint64_t) 1 << remain));
 		*(bits + (loc >> 6)) &= (~((uint64_t) 1 << (loc & 0x3F)));
 	}
@@ -158,9 +162,9 @@ void BitArray::process_every_bit(T fun)
 	}
 }
 
-void BitArray::get_all_locs_set(vector<inti> &locs) const
+vector<inti> BitArray::get_all_locs_set(inti bound) const
 {
-//	vector<inti> locs;
+	vector<inti> locs;
 //	inti count = size / 64;
 	inti count = size >> 6;
 	for (inti c = 0; c < count; ++c) {
@@ -198,8 +202,41 @@ void BitArray::get_all_locs_set(vector<inti> &locs) const
 			}
 		}
 	}
-
-//	return locs;
+//	for (inti c = 0; c < count; ++c) {
+//		uint64_t *num_64 = bits + c;
+//		if (0 == *num_64) {
+//			continue;
+//		}
+//		for (inti i_32 = 0; i_32 < 8; i_32 += 4) {
+//			uint32_t *num_32 = (uint32_t *) ((uint8_t *) num_64 + i_32);
+//			if (0 == *num_32) {
+//				continue;
+//			}
+//			for (inti i_16 = 0; i_16 < 4; i_16 += 2) {
+//				uint16_t *num_16 = (uint16_t *) ((uint8_t *) num_32 + i_16);
+//				if (0 == *num_16) {
+//					continue;
+//				}
+//				for (inti i_8 = 0; i_8 < 2; i_8 += 1) {
+//					uint8_t *num_8 = (uint8_t *) ((uint8_t *) num_16 + i_8);
+//					if (0 == *num_8) {
+//						continue;
+//					}
+//					inti offset = (i_8 + i_16 + i_32) * 8 + c * 64;
+//					if (offset >= bound) {
+//						return locs;
+//					}
+//					for (inti i_1 = 0; i_1 < 8; ++i_1) {
+//						if (*num_8 & (1 << i_1)) {
+////							fun(i_1 + offset);
+//							locs.push_back(i_1 + offset);
+//						}
+//					}
+//				}
+//			}
+//		}
+//	}
+	return locs;
 }
 
 inti BitArray::is_bit_set(inti loc) const
@@ -248,13 +285,12 @@ private:
 //		BitArray roots_indicator; // if evert root r in the short index
 //		smalli *roots_distances = nullptr; // distance to root r
 		BitArray roots_candidates; // candidates for the current iteration
-//		BitArray roots_last; // added roots from the last iteration
-		vector<inti> roots_last;
+		BitArray roots_last; // added roots from the last iteration
 
 		ShortIndex(inti size):
 //						roots_indicator(size),
-						roots_candidates(size)//,
-//						roots_last(size)
+						roots_candidates(size),
+						roots_last(size)
 		{
 //			puts("ShortIndex Constructor...");fflush(stdout);//test
 //			roots_distances = (smalli *) malloc(size * sizeof(smalli));
@@ -323,7 +359,7 @@ private:
 	}; // struct ShortIndex
 
 	vector<IndexType> L;
-	void construct(const Graph &G);
+	void construct(const Graph &G, const vector<idi> &rank);
 	void root_batch(
 			const Graph &G,
 			idi root_start,
@@ -366,7 +402,7 @@ private:
 
 public:
 	VertexCentricPLL() = default;
-	VertexCentricPLL(const Graph &G);
+	VertexCentricPLL(const Graph &G, const vector<idi> &rank2id);
 
 	weighti query(
 			idi u,
@@ -389,9 +425,9 @@ public:
 
 }; // class VertexCentricPLL
 
-VertexCentricPLL::VertexCentricPLL(const Graph &G)
+VertexCentricPLL::VertexCentricPLL(const Graph &G, const vector<idi> &rank2id)
 {
-	construct(G);
+	construct(G, rank2id);
 }
 
 // Reduce function call, 09/19/2018
@@ -409,8 +445,8 @@ void VertexCentricPLL::root_batch(
 	idi num_v = G.get_num_v();
 	vector<ShortIndex> short_index(num_v, bit_array_size);
 	vector<bool> is_active(num_v, false);
+//	vector<bool> is_visited(num_v, false);
 	vector<bool> has_candidate(num_v, false);
-//	vector< vector<inti> > lasts(num_v);
 
 	// Use a distance map to save time, 09/16/2018
 	vector< vector<smalli> > dist_matrix(roots_size);
@@ -434,11 +470,10 @@ void VertexCentricPLL::root_batch(
 	for (inti r_i = 0; r_i < roots_size; ++r_i) {
 		idi v = r_i + root_start;
 //		short_index[v].set_index(r_i, 0);
-//		lasts[v].push_back(r_i);
-		short_index[v].roots_last.push_back(r_i);
-//		short_index[v].roots_last.set_bit(r_i);
+		short_index[v].roots_last.set_bit(r_i);
 		L[v].add_label_seq(v, 0);
 		is_active[v] = true;
+//		is_visited[r_i] = true;
 	}
 	smalli iter = 1; // iterator, also the distance for current iteration
 	bool stop = false;
@@ -453,26 +488,73 @@ void VertexCentricPLL::root_batch(
 				continue;
 			}
 			is_active[head] = false;
+
+//			///////// inline function
+//			idi e_i_start = G.vertices[head];
+//			idi e_i_bound = e_i_start + G.out_degrees[head];
+//			inti count = roots_size / 64;
+//			for (inti c = 0; c < count; ++c) {
+//				uint64_t *num_64 = short_index[head].roots_last.bits + c;
+//				if (0 == *num_64) {
+//					continue;
+//				}
+//				for (inti i_32 = 0; i_32 < 2; ++i_32) {
+//					uint32_t *num_32 = (uint32_t *) num_64 + i_32;
+//					if (0 == *num_32) {
+//						continue;
+//					}
+//					for (inti i_16 = 0; i_16 < 2; ++i_16) {
+//						uint16_t *num_16 = (uint16_t *) num_32 + i_16;
+//						if (0 == *num_16) {
+//							continue;
+//						}
+//						for (inti i_8 = 0; i_8 < 2; ++i_8) {
+//							uint8_t *num_8 = (uint8_t *) num_16 + i_8;
+//							if (0 == *num_8) {
+//								continue;
+//							}
+//							inti offset = (c << 6) + (i_32 << 5) + (i_16 << 4) + (i_8 << 3);
+//							for (inti i_1 = 0; i_1 < 8; ++i_1) {
+//		//						if (index >= bound) {
+//		//							return locs;
+//		//						}
+//								if (*num_8 & (1 << i_1)) {
+//									inti index = i_1 + offset;
+//									idi x = index + root_start;
+////									for (idi e_i = 0; e_i < degree; ++e_i) {
+//									for (idi e_i = e_i_start; e_i < e_i_bound; ++e_i) {
+////										idi tail = G.ith_get_edge(head, e_i);
+//										idi tail = G.out_edges[e_i];
+//										if (x > tail) {
+//											break;
+//										}
+//										short_index[tail].roots_candidates.set_bit(index);
+//										has_candidate[tail] = true;
+//									}
+////									}
+//								}
+//							}
+//						}
+//					}
+//				}
+//			}
+//			short_index[head].roots_last.unset_all();
+//			///////// ENd inline function
 			ShortIndex &head_si = short_index[head];
 //			idi degree = G.ith_get_out_degree(head);
-//			inti bound = get_bound(head, root_start, roots_size);
-//			vector<inti> head_roots = head_si.roots_last.get_all_locs_set(bound);
-//			vector<inti> &head_roots = lasts[head];
-			vector<inti> &head_roots = head_si.roots_last;
-//			vector<inti> head_roots;
-//			head_si.roots_last.get_all_locs_set(head_roots);
-//			head_si.roots_last.unset_all();
+			inti bound = get_bound(head, root_start, roots_size);
+			vector<inti> head_roots = head_si.roots_last.get_all_locs_set(bound);
+			head_si.roots_last.unset_all();
 			idi e_i_start = G.vertices[head];
 			idi e_i_bound = e_i_start + G.out_degrees[head];
-
-//			_mm_prefetch(&head_roots[0], _MM_HINT_T0);
 			for (idi e_i = e_i_start; e_i < e_i_bound; ++e_i) {
 //				idi tail = G.ith_get_edge(head, e_i);
 				idi tail = G.out_edges[e_i];
-				if (tail < head_roots[0]) {
-					break;
-				}
+//				if (!is_active_bak[tail] && is_visited[tail]) {
+//					continue;
+//				}
 				ShortIndex &tail_si = short_index[tail];
+
 				for (const inti &hi : head_roots) {
 					idi x = hi + root_start;
 					if (tail < x) {
@@ -483,13 +565,10 @@ void VertexCentricPLL::root_batch(
 //						&& !L[tail].is_v_in_label(x)
 //						!tail_si.roots_candidates.is_bit_set(hi)){
 						tail_si.roots_candidates.set_bit(hi);
-//						if (!has_candidate[tail]) {
-							has_candidate[tail] = true;
-//						}
+						has_candidate[tail] = true;
 //					}
 				}
 			}
-			head_roots.clear();
 		}
 
 //		t_can.print_runtime();
@@ -498,30 +577,87 @@ void VertexCentricPLL::root_batch(
 
 		// Traverse Candidate then add to short index
 		for (idi v = 0; v < num_v; ++v) {
-			if (!has_candidate[v]) {
+			if(!has_candidate[v]) {
 				continue;
 			}
 			has_candidate[v] = false;
-//			vector<inti> candidates;
-//			short_index[v].roots_candidates.get_all_locs_set(candidates);
-//			if (0 == candidates.size()) {
-//				continue;
-//			}
 
 			IndexType &Lv = L[v];
 			idi size_Lv = Lv.get_size();
+
+//			/////////////// inline function
+//			inti count = roots_size / 64;
+//			for (inti c = 0; c < count; ++c) {
+//				uint64_t *num_64 = short_index[v].roots_candidates.bits + c;
+//				if (0 == *num_64) {
+//					continue;
+//				}
+//				for (inti i_32 = 0; i_32 < 2; ++i_32) {
+//					uint32_t *num_32 = (uint32_t *) num_64 + i_32;
+//					if (0 == *num_32) {
+//						continue;
+//					}
+//					for (inti i_16 = 0; i_16 < 2; ++i_16) {
+//						uint16_t *num_16 = (uint16_t *) num_32 + i_16;
+//						if (0 == *num_16) {
+//							continue;
+//						}
+//						for (inti i_8 = 0; i_8 < 2; ++i_8) {
+//							uint8_t *num_8 = (uint8_t *) num_16 + i_8;
+//							if (0 == *num_8) {
+//								continue;
+//							}
+//							inti offset = (c << 6) + (i_32 << 5) + (i_16 << 4) + (i_8 << 3);
+//							for (inti i_1 = 0; i_1 < 8; ++i_1) {
+//								if (*num_8 & (1 << i_1)) {
+//									inti cand = i_1 + offset;
+//									weighti d_query = WEIGHTI_MAX;
+//									_mm_prefetch(&Lv.vertices[0], _MM_HINT_T0);
+//									_mm_prefetch(&Lv.distances[0], _MM_HINT_T0);
+//									_mm_prefetch(&dist_matrix[cand][0], _MM_HINT_T0);
+//									for (idi vi = 0; vi < size_Lv; ++vi) {
+//										idi v_l = Lv.vertices[vi];
+//										if (SMALLI_MAX == dist_matrix[cand][v_l]) {
+//											continue;
+//										}
+//										weighti q_d = Lv.distances[vi] + dist_matrix[cand][v_l];
+//										if (q_d < d_query) {
+//											d_query = q_d;
+//										}
+//									}
+//
+//									// End the new query
+//									if (iter < d_query) {
+//										short_index[v].roots_last.set_bit(cand);
+//										Lv.add_label_seq(cand + root_start, iter);
+//
+//										is_active[v] = true;
+//
+//										idi root_id = v - root_start;
+//										if (root_start <= v && root_id < roots_size) {
+//											dist_matrix[root_id][cand] = iter;
+//										}
+//
+//										if (stop) {
+//											stop = false;
+//										}
+//									}
+//								}
+//							}
+//						}
+//					}
+//				}
+//			}
+//			short_index[v].roots_candidates.unset_all();
+//			/////////////// End inline function
 			ShortIndex &v_si = short_index[v];
-//			inti bound = get_bound(v, root_start, roots_size);
-//			vector<inti> candidates = v_si.roots_candidates.get_all_locs_set(bound);
-			vector<inti> candidates;
-			v_si.roots_candidates.get_all_locs_set(candidates);
+			inti bound = get_bound(v, root_start, roots_size);
+			vector<inti> candidates = v_si.roots_candidates.get_all_locs_set(bound);
 			v_si.roots_candidates.unset_all();
 //			vector<inti> roots_v = v_si.roots_indicator.get_all_locs_set(bound);
 //			if (0 == candidates.size()) {
 //				continue;
 //			}
-//			vector<inti> &v_last = lasts[v];
-//			v_last.clear();
 			for (const inti &cand : candidates) {
 //				weighti d = query(
 //								v,
@@ -533,6 +669,8 @@ void VertexCentricPLL::root_batch(
 				// The new query based on the distance matrix 09/16/2018
 				// Query based on the old Labels.
 				weighti d_query = WEIGHTI_MAX;
+//				const IndexType &Lv = L[v];
+//				idi size = Lv.get_size();
 
 				_mm_prefetch(&Lv.vertices[0], _MM_HINT_T0);
 				_mm_prefetch(&Lv.distances[0], _MM_HINT_T0);
@@ -568,19 +706,20 @@ void VertexCentricPLL::root_batch(
 //					v_si.roots_indicator.set_bit(cand);
 //					v_si.roots_distances[cand] = iter;
 //					v_si.set_index(cand, iter);
-//					v_si.roots_last.set_bit(cand);
-//					v_last.push_back(cand);
-					v_si.roots_last.push_back(cand);
+					v_si.roots_last.set_bit(cand);
 					Lv.add_label_seq(cand, iter);
 
 					is_active[v] = true;
+//					is_visited[v] = true;
 
 					idi root_id = v - root_start;
 					if (root_start <= v && root_id < roots_size) {
 						dist_matrix[root_id][cand] = iter;
 					}
 
-					stop = false;
+					if (stop) {
+						stop = false;
+					}
 				}
 			}
 		}
@@ -1173,7 +1312,7 @@ void VertexCentricPLL::root_batch(
 //	printf("Updating time: %f (%f%%)\n", time_update, time_update / total_time * 100);
 //}
 
-void VertexCentricPLL::construct(const Graph &G)
+void VertexCentricPLL::construct(const Graph &G, const vector<idi> &rank2id)
 {
 	// Initialization to (v, 0) for every v
 	idi num_v = G.get_num_v();
