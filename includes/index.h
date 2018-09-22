@@ -140,7 +140,7 @@ public:
 void IndexType::print()
 {
 	for (idi i = 0; i < size; ++i) {
-		printf("(%llu, %d)\n", vertices[i], distances[i]);
+		printf("(%u, %d)\n", vertices[i], distances[i]);
 	}
 }
 

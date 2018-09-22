@@ -19,10 +19,10 @@ void pado()
 {
 //	freopen("output.txt", "w", stdout); // test
 //	const char filename[] = "input.dat";
-	const char filename[] = "/Users/johnz/pppp/datasets/dblp/dblp";
+//	const char filename[] = "/Users/johnz/pppp/datasets/dblp/dblp";
 //	const char filename[] = "/Users/johnz/pppp/datasets/chicago/chicago";
 //	const char filename[] = "/Users/johnz/pppp/datasets/wikitalk/wikitalk";
-//	const char filename[] = "tools/edgelist.txt";
+	const char filename[] = "tools/edgelist.txt";
 	printf("Reading...\n");//test
 	Graph G(filename);
 //	G.print();
@@ -52,7 +52,7 @@ void pado()
 	printf("Ranking...\n");//test
 	vector<idi> rank = G.make_rank();
 //	for (idi v = 0; v < rank.size(); ++v) {
-//		printf("vertices %llu: rank %llu\n", v, rank[v]);//test
+//		printf("vertices %u: rank %u\n", v, rank[v]);//test
 //	}
 	vector<idi> rank2id = G.id_transfer(rank);
 //	G.print();
@@ -62,7 +62,7 @@ void pado()
 	VertexCentricPLL VCPLL(G);
 	timer.print_runtime();
 	VCPLL.switch_labels_to_old_id(rank2id);
-//	VCPLL.print();//test
+	VCPLL.print();//test
 
 	// Test for query
 //	idi u, v;

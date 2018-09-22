@@ -190,13 +190,13 @@ vector<idi> Graph::id_transfer(const vector<idi> &rank)
 // print every edge of the graph
 void Graph::print()
 {
-	printf("num_v: %llu, num_e: %llu\n", num_v, num_e / 2);
+	printf("num_v: %u, num_e: %u\n", num_v, num_e / 2);
 	for (idi head = 0; head < num_v; ++head) {
 		idi start_e = vertices[head];
 		idi bound_e = start_e + out_degrees[head];
 		for (idi e = start_e; e < bound_e; ++e) {
 			idi tail = out_edges[e];
-			printf("%llu %llu\n", head, tail);
+			printf("%u %u\n", head, tail);
 		}
 	}
 }
