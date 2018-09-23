@@ -20,10 +20,18 @@ def adj_matrix_to_edgelist(filename):
 					fout.write(str(i) + " " + str(j) + "\n")
 			i += 1
 
+def query_input():
+	with open("output.query.edgelist.txt", "w") as fout:
+		low = 0
+		up = 69
+		count = 200
+		for i in range(count):
+			fout.write("{} {}\n".format(random.randint(low, up), random.randint(low, up)))
 
 if __name__ == '__main__':
-	if len(sys.argv) < 2:
-		print("Usage: python3 graph.py <arg>")
-		exit()
+	# if len(sys.argv) < 2:
+	# 	print("Usage: python3 graph.py <arg>")
+	# 	exit()
 	# create_graph(int(sys.argv[1]))
-	adj_matrix_to_edgelist(sys.argv[1])
+	# adj_matrix_to_edgelist(sys.argv[1])
+	query_input()
