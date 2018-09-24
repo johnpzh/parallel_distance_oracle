@@ -1,6 +1,6 @@
 CXX = /usr/local/bin/g++-8
 
-CXXFLAGS =	-O3 -g -Wall -Wextra -fmessage-length=0 -std=c++14
+CXXFLAGS =	-O3 -Wall -Wextra -fmessage-length=0 -std=c++14
 
 OBJS =		pado.o
 
