@@ -501,7 +501,7 @@ void VertexCentricPLL::root_batch(
 
 			IndexType &Lv = L[v];
 			idi size_Lv = Lv.get_size();
-//			inti batch_size_Lv = Lv.batch_lens.size(); // FIXME
+			inti batch_size_Lv = Lv.batch_lens.size(); // FIXME
 			ShortIndex &v_si = short_index[v];
 			vector<inti> candidates;
 			v_si.roots_candidates.get_all_locs_set(candidates);
@@ -526,37 +526,37 @@ void VertexCentricPLL::root_batch(
 				_mm_prefetch(&Lv.distances[0], _MM_HINT_T0);
 				_mm_prefetch(&dist_matrix[cand][0], _MM_HINT_T0);
 //				_mm_prefetch(&dist_buffer[get_loc(cand, 0, roots_start)], _MM_HINT_T0);
-//				for (inti batch_i = 1; batch_i < batch_size_Lv; ++batch_i) {
-//					for (idi vi = Lv.batch_lens[batch_i - 1]; vi < Lv.batch_lens[batch_i]; ++vi) {
-//						weighti d_l = Lv.distances[vi];
-//						++check_count;
-//						if (d_l > iter) {
-//							break;
-//						}
-//						idi v_l = Lv.vertices[vi];
-//						++check_count;
-//						if (v_l > cand_real_id) {
-//							continue;
-//						}
-//						uint32_t q_d = d_l + dist_matrix[cand][v_l];
-//						++check_count;
-//						if (q_d < d_query) {
-//							d_query = q_d;
-//						}
-//					}
-//				} // FIXME
-//				for (idi vi = Lv.batch_lens[batch_size_Lv - 1]; vi < size_Lv; ++vi) {
-//					idi v_l = Lv.vertices[vi];
-//					++check_count;
-//					if (v_l > cand_real_id) {
-//						continue;
-//					}
-//					uint32_t q_d = Lv.distances[vi] + dist_matrix[cand][v_l];
-//					++check_count;
-//					if (q_d < d_query) {
-//						d_query = q_d;
-//					}
-//				} // FIXME
+				for (inti batch_i = 1; batch_i < batch_size_Lv; ++batch_i) {
+					for (idi vi = Lv.batch_lens[batch_i - 1]; vi < Lv.batch_lens[batch_i]; ++vi) {
+						weighti d_l = Lv.distances[vi];
+						++check_count;
+						if (d_l > iter) {
+							break;
+						}
+						idi v_l = Lv.vertices[vi];
+						++check_count;
+						if (v_l > cand_real_id) {
+							continue;
+						}
+						uint32_t q_d = d_l + dist_matrix[cand][v_l];
+						++check_count;
+						if (q_d < d_query) {
+							d_query = q_d;
+						}
+					}
+				} // FIXME
+				for (idi vi = Lv.batch_lens[batch_size_Lv - 1]; vi < size_Lv; ++vi) {
+					idi v_l = Lv.vertices[vi];
+					++check_count;
+					if (v_l > cand_real_id) {
+						continue;
+					}
+					uint32_t q_d = Lv.distances[vi] + dist_matrix[cand][v_l];
+					++check_count;
+					if (q_d < d_query) {
+						d_query = q_d;
+					}
+				} // FIXME
 				for (idi vi = 0; vi < size_Lv; ++vi) {
 					idi v_l = Lv.vertices[vi];
 					++check_count;
@@ -627,11 +627,9 @@ void VertexCentricPLL::root_batch(
 		time_add += t_add.get_runtime();
 	}
 
-//	for (idi v = roots_start; v < num_v; ++v) {
-//		IndexType &Lv = L[v];
-//		inti this_batch = Lv.batch_lens.size();
-//		Lv.batch_lens.push_back(Lv.vertices.size());
-//	} // FIXME
+	for (idi v = roots_start; v < num_v; ++v) {
+		L[v].batch_lens.push_back(L[v].vertices.size());
+	} // FIXME
 	// add short_index to L
 //	double time_update = 0;
 //	WallTimer t_update("Updating");

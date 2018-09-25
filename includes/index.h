@@ -86,7 +86,7 @@ public:
 	vector<idi> vertices;
 	vector<weighti> distances;
 
-//	vector<inti> batch_lens = vector<inti>(1, 0); // FIXME
+	vector<inti> batch_lens = vector<inti>(1, 0); // FIXME
 //	idi size = 0;
 
 //	void construct(idi size);
