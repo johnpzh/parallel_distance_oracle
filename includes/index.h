@@ -85,7 +85,9 @@ public:
 //private:
 	vector<idi> vertices;
 	vector<weighti> distances;
-	idi size = 0;
+
+//	vector<inti> batch_lens = vector<inti>(1, 0); // FIXME
+//	idi size = 0;
 
 //	void construct(idi size);
 //public:
@@ -94,7 +96,7 @@ public:
 
 	void add_label_seq(idi v, weighti d)
 	{
-		++size;
+//		++size;
 		vertices.push_back(v);
 		distances.push_back(d);
 	}
@@ -113,14 +115,15 @@ public:
 		return distances[i];
 	}
 
-	weighti get_last_label_d() const
-	{
-		return distances[size - 1];
-	}
+//	weighti get_last_label_d() const
+//	{
+//		return distances[size - 1];
+//	}
 
 	idi get_size() const
 	{
-		return size;
+//		return size;
+		return vertices.size();
 	}
 
 	bool is_v_in_label(idi v) const
@@ -139,7 +142,7 @@ public:
 
 void IndexType::print()
 {
-	for (idi i = 0; i < size; ++i) {
+	for (idi i = 0; i < vertices.size(); ++i) {
 		printf("(%u, %d)\n", vertices[i], distances[i]);
 	}
 }

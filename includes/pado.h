@@ -22,6 +22,7 @@ using std::vector;
 using std::unordered_map;
 using std::stable_sort;
 using std::min;
+using std::fill;
 
 namespace PADO {
 
@@ -337,7 +338,12 @@ private:
 		return roots_start * head_root + (head_root + 1) * head_root / 2 + tail_id;
 	}
 
-
+	// Test only
+	idi check_count = 0;
+	double initializing_time = 0;
+	double candidating_time = 0;
+	double adding_time = 0;
+	// End test
 
 
 
@@ -382,19 +388,21 @@ void VertexCentricPLL::root_batch(
 	double time_can = 0;
 	double time_add = 0;
 
-
+	WallTimer t_init("Initializaing");
 	idi num_v = G.get_num_v();
 	vector<ShortIndex> short_index(num_v, bit_array_size);
 	vector<bool> is_active(num_v, false);
 	vector<bool> has_candidate(num_v, false);
 
 	// Use a distance map to save time, 09/16/2018
+//	static vector< vector<smalli> > dist_matrix(roots_size, vector<smalli>(num_v, SMALLI_MAX));
 	vector< vector<smalli> > dist_matrix(roots_size);
 //	idi buffer_size = (idi) roots_start * roots_size + (roots_size + 1) * roots_size / 2;
 //	vector<smalli> dist_buffer(buffer_size, SMALLI_MAX);
 	for (idi r = 0; r < roots_size; ++r) {
 		vector<smalli> &dmr = dist_matrix[r];
 		dmr.resize(roots_start + r + 1, SMALLI_MAX);
+//		fill(dmr.begin(), dmr.end(), SMALLI_MAX);
 		idi root_id = r + roots_start;
 		const IndexType &Lr = L[root_id];
 		idi size = Lr.get_size();
@@ -419,6 +427,9 @@ void VertexCentricPLL::root_batch(
 		L[v].add_label_seq(v, 0);
 		is_active[v] = true;
 	}
+
+	initializing_time += t_init.get_runtime();
+
 	smalli iter = 1; // iterator, also the distance for current iteration
 	bool stop = false;
 	while (!stop) {
@@ -426,7 +437,7 @@ void VertexCentricPLL::root_batch(
 		WallTimer t_can("Candidating");
 		stop = true;
 		// Push to Candidate
-		for (idi head = 0; head < num_v; ++head) {
+		for (idi head = roots_start; head < num_v; ++head) {
 			if (!is_active[head]) {
 				continue;
 			}
@@ -443,6 +454,9 @@ void VertexCentricPLL::root_batch(
 			for (idi e_i = e_i_start; e_i < e_i_bound; ++e_i) {
 //				idi tail = G.ith_get_edge(head, e_i);
 				idi tail = G.out_edges[e_i];
+				if (tail < roots_start) {
+					continue;
+				}
 				if (tail < head_roots[0]) {
 					break;
 				}
@@ -469,11 +483,12 @@ void VertexCentricPLL::root_batch(
 		}
 
 //		t_can.print_runtime();
+		candidating_time += t_can.get_runtime();
 		time_can += t_can.get_runtime();
 		WallTimer t_add("Adding");
 
 		// Traverse Candidate then add to short index
-		for (idi v = 0; v < num_v; ++v) {
+		for (idi v = roots_start; v < num_v; ++v) {
 			if (!has_candidate[v]) {
 				continue;
 			}
@@ -486,6 +501,7 @@ void VertexCentricPLL::root_batch(
 
 			IndexType &Lv = L[v];
 			idi size_Lv = Lv.get_size();
+//			inti batch_size_Lv = Lv.batch_lens.size(); // FIXME
 			ShortIndex &v_si = short_index[v];
 			vector<inti> candidates;
 			v_si.roots_candidates.get_all_locs_set(candidates);
@@ -502,15 +518,48 @@ void VertexCentricPLL::root_batch(
 //								roots_size);
 				// The new query based on the distance matrix 09/16/2018
 				// Query based on the old Labels.
-				weighti d_query = WEIGHTI_MAX;
+//				weighti d_query = WEIGHTI_MAX;
+				uint32_t d_query = WEIGHTI_MAX;
 				idi cand_real_id = cand + roots_start;
 
 				_mm_prefetch(&Lv.vertices[0], _MM_HINT_T0);
 				_mm_prefetch(&Lv.distances[0], _MM_HINT_T0);
 				_mm_prefetch(&dist_matrix[cand][0], _MM_HINT_T0);
 //				_mm_prefetch(&dist_buffer[get_loc(cand, 0, roots_start)], _MM_HINT_T0);
+//				for (inti batch_i = 1; batch_i < batch_size_Lv; ++batch_i) {
+//					for (idi vi = Lv.batch_lens[batch_i - 1]; vi < Lv.batch_lens[batch_i]; ++vi) {
+//						weighti d_l = Lv.distances[vi];
+//						++check_count;
+//						if (d_l > iter) {
+//							break;
+//						}
+//						idi v_l = Lv.vertices[vi];
+//						++check_count;
+//						if (v_l > cand_real_id) {
+//							continue;
+//						}
+//						uint32_t q_d = d_l + dist_matrix[cand][v_l];
+//						++check_count;
+//						if (q_d < d_query) {
+//							d_query = q_d;
+//						}
+//					}
+//				} // FIXME
+//				for (idi vi = Lv.batch_lens[batch_size_Lv - 1]; vi < size_Lv; ++vi) {
+//					idi v_l = Lv.vertices[vi];
+//					++check_count;
+//					if (v_l > cand_real_id) {
+//						continue;
+//					}
+//					uint32_t q_d = Lv.distances[vi] + dist_matrix[cand][v_l];
+//					++check_count;
+//					if (q_d < d_query) {
+//						d_query = q_d;
+//					}
+//				} // FIXME
 				for (idi vi = 0; vi < size_Lv; ++vi) {
 					idi v_l = Lv.vertices[vi];
+					++check_count;
 					if (v_l > cand_real_id) {
 //						printf("Check: v_l: %u, cand_real_id: %u, roots_start: %u\n",
 //										v_l, cand_real_id, roots_start);
@@ -521,10 +570,15 @@ void VertexCentricPLL::root_batch(
 //						continue;
 //					}
 //					weighti q_d = Lv.distances[vi] + dist_tmp;
-					if (SMALLI_MAX == dist_matrix[cand][v_l]) {
-						continue;
-					}
-					weighti q_d = Lv.distances[vi] + dist_matrix[cand][v_l];
+//					++check_count;
+//					if (SMALLI_MAX == dist_matrix[cand][v_l]) {
+//						continue;
+//					}
+//					weighti q_d = Lv.distances[vi] + dist_matrix[cand][v_l];
+					uint32_t q_d = Lv.distances[vi] + dist_matrix[cand][v_l];
+
+
+					++check_count;
 					if (q_d < d_query) {
 						d_query = q_d;
 					}
@@ -544,7 +598,7 @@ void VertexCentricPLL::root_batch(
 //					}
 //				}
 				// End the new query
-				if (iter < d_query) {
+				if ((uint32_t) iter < d_query) {
 //					v_si.roots_indicator.set_bit(cand);
 //					v_si.roots_distances[cand] = iter;
 //					v_si.set_index(cand, iter);
@@ -569,8 +623,15 @@ void VertexCentricPLL::root_batch(
 		++iter;
 
 //		t_add.print_runtime();
+		adding_time += t_add.get_runtime();
 		time_add += t_add.get_runtime();
 	}
+
+//	for (idi v = roots_start; v < num_v; ++v) {
+//		IndexType &Lv = L[v];
+//		inti this_batch = Lv.batch_lens.size();
+//		Lv.batch_lens.push_back(Lv.vertices.size());
+//	} // FIXME
 	// add short_index to L
 //	double time_update = 0;
 //	WallTimer t_update("Updating");
@@ -1181,6 +1242,14 @@ void VertexCentricPLL::construct(const Graph &G)
 				bit_array_size,
 				L);
 	}
+
+	// Test
+	printf("check_count: %u\n", check_count);
+	double total_time = initializing_time + candidating_time + adding_time;
+	printf("Initializing: %f (%f%%)\n", initializing_time, initializing_time / total_time * 100);
+	printf("Candidating: %f (%f%%)\n", candidating_time, candidating_time / total_time * 100);
+	printf("Adding: %f (%f%%)\n", adding_time, adding_time / total_time * 100);
+	// End test
 }
 
 void VertexCentricPLL::switch_labels_to_old_id(const vector<idi> &rank2id)

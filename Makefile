@@ -16,7 +16,7 @@ TARGET =	pado
 all:	$(TARGET) 
 
 $(TARGET):	$(OBJS)
-	$(CXX) -o $(TARGET) $(OBJS) $(LIBS)
+	$(CXX) $(CXXFLAGS) -o $(TARGET) $(OBJS) $(LIBS)
 	
 pado.o: pado.cpp $(INCLUDES_DIR)/*.h
 	$(CXX) $(CXXFLAGS) -o $@ -c $< $(INCLUDES)	
