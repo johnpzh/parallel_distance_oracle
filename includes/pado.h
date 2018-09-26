@@ -412,7 +412,7 @@ void VertexCentricPLL::root_batch(
 		Lv.batch_sizes.push_back(1);
 		Lv.distances.push_back(0);
 		Lv.distance_sizes.push_back(1);
-		Lv.vertices.push_back(v);
+		Lv.vertices.push_back(r_i);
 		is_active[v] = true;
 		got_labels_in_batch[v] = true;
 
@@ -437,19 +437,18 @@ void VertexCentricPLL::root_batch(
 			idi batch_start = Lr.batch_starts[batch_i];
 			idi batch_size = Lr.batch_sizes[batch_i];
 			idi d_count = 0;
-			for (inti v_i = 0; v_i < batch_size; ++v_i) {
-				idi label_v = Lr.vertices[v_loc] + batch_start;
-//				weighti label_d = Lr.distances[d_loc];
-
-				dmr[label_v] = label_d;
-
-				++v_loc;
-				++d_count;
+			for (inti b_i = 0; b_i < batch_size; ++b_i) {
 				if (d_count == Lr.distance_sizes[d_loc]) {
 					++d_loc;
 					d_count = 0;
 					label_d = Lr.distances[d_loc];
 				}
+				idi label_v = Lr.vertices[v_loc] + batch_start;
+
+				dmr[label_v] = label_d;
+
+				++v_loc;
+				++d_count;
 			}
 		}
 
@@ -470,7 +469,7 @@ void VertexCentricPLL::root_batch(
 	initializing_time += t_init.get_runtime();
 
 	while (!stop) {
-		printf("Iter: %u\n", iter);//test
+//		printf("Iter: %u\n", iter);//test
 		WallTimer t_can("Candidating");
 		stop = true;
 
@@ -578,6 +577,11 @@ void VertexCentricPLL::root_batch(
 					idi batch_size = Lv.batch_sizes[batch_i];
 					idi d_count = 0;
 					for (inti v_i = 0; v_i < batch_size; ++v_i) {
+						if (d_count == Lv.distance_sizes[d_loc]) {
+							++d_loc;
+							d_count = 0;
+							label_d = Lv.distances[d_loc];
+						}
 						idi label_v = Lv.vertices[v_loc] + batch_start;
 
 						if (label_v < cand_real_id) {
@@ -592,11 +596,6 @@ void VertexCentricPLL::root_batch(
 
 						++v_loc;
 						++d_count;
-						if (d_count == Lv.distance_sizes[d_loc]) {
-							++d_loc;
-							d_count = 0;
-							label_d = Lv.distances[d_loc];
-						}
 					}
 				}
 				// Add the candidate to label if necessary
@@ -1372,7 +1371,7 @@ void VertexCentricPLL::construct(const Graph &G)
 	double t_out_initial = out_initial.get_runtime();
 	WallTimer out_wrapper("out_wrapper");
 	for (idi b_i = 0; b_i < b_i_bound; b_i += bit_array_size) {
-		printf("b_i: %u\n", b_i);//test
+//		printf("b_i: %u\n", b_i);//test
 		root_batch(
 				G,
 				b_i,
@@ -1381,7 +1380,7 @@ void VertexCentricPLL::construct(const Graph &G)
 				L);
 	}
 	if (remainer != 0) {
-		printf("b_i: %u\n", b_i_bound);//test
+//		printf("b_i: %u\n", b_i_bound);//test
 		root_batch(
 				G,
 				b_i_bound,
@@ -1424,6 +1423,11 @@ void VertexCentricPLL::switch_labels_to_old_id(const vector<idi> &rank2id)
 			label_sum += batch_size;
 			idi d_count = 0;
 			for (inti v_i = 0; v_i < batch_size; ++v_i) {
+				if (d_count == Lr.distance_sizes[d_loc]) {
+					++d_loc;
+					d_count = 0;
+					label_d = Lr.distances[d_loc];
+				}
 				idi label_v = Lr.vertices[v_loc] + batch_start;
 
 				idi new_l = rank2id[label_v];
@@ -1432,11 +1436,6 @@ void VertexCentricPLL::switch_labels_to_old_id(const vector<idi> &rank2id)
 
 				++v_loc;
 				++d_count;
-				if (d_count == Lr.distance_sizes[d_loc]) {
-					++d_loc;
-					d_count = 0;
-					label_d = Lr.distances[d_loc];
-				}
 			}
 		}
 	}
