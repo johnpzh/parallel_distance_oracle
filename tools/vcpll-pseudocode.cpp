@@ -246,6 +246,7 @@ void batch_process(
 	A distance buffer matrix is dist_matrix; // as static vetor< vector<byte>>, to buffer distances from roots to other vertices
 	A flag array is got_labels; // as static vector<bool>, got_labels[v] is true means vertex v got new labels in this batch
 	A flag array is got_candidates; // as static vector<bool>, got_candidates[v] is true means vertex v is in the queue candidate_queue
+	A flag array is is_active; // as static vector<bool>, is_active[v] is true means vertex v is in the active queue.
 
 	// At the beginning of a batch, initialize the labels L and distance buffer dist_matrix;
 	initialize(
@@ -266,6 +267,7 @@ void batch_process(
 		// Traverse active vertices to push their labels as candidates
 		for (index i_queue = 0; i_queue < end_active_queue; ++i_queue) {
 			v_head = active_queue[i_queue]; // The active vertex v_head
+			is_active[v_head] = false; // reset is_active
 			// Push v_head's labels to v_head's every neighbor
 			push_labels(
 					The active vertex v_head,
@@ -283,6 +285,7 @@ void batch_process(
 		for (index i_queue = 0; i_queue < end_candidate_queue; ++i_queue) {
 			v_id = candidates_queue[i_queue]; // The vertex v_id has candidates
 			A counter inserted_count = 0; //recording number of v_id's truly inserted candidates
+			got_candidates[v_id] = false; // reset got_candidates
 			// Traverse v_id's all candidates
 			for (index cand_root_id = 0; cand_root_id < roots_size; ++cand_root_id) {
 				// Test if cand_root_id is v_id's candidate
@@ -301,7 +304,10 @@ void batch_process(
 				// Only insert cand_root_id into v_id's label if its distance to v_id is shorter than existing distance
 				if (iter < d_query) {
 					// Insert v_id into the active queue
-					active_queue[end_active_queue++] = v_id;
+					if (!is_active[v_id]) {
+						is_active[v_id] = true;
+						active_queue[end_active_queue++] = v_id;
+					}
 					// Update the counter of the number of inserted new labels
 					++inserted_count;
 					// The candidate cand_root_id needs to be added into v_id's label

@@ -376,6 +376,7 @@ void VertexCentricPLL::batch_process(
 	static vector< vector<smalli> > dist_matrix(roots_size, vector<smalli>(num_v));
 	static vector<bool> got_labels(num_v, false); // got_labels[v] is true means vertex v got new labels in this batch
 	static vector<bool> got_candidates(num_v, false); // got_candidates[v] is true means vertex v is in the queue candidate_queue
+	static vector<bool> is_active(num_v, false);// is_active[v] is true means vertex v is in the active queue.
 
 	// At the beginning of a batch, initialize the labels L and distance buffer dist_matrix;
 	initialize(
@@ -396,6 +397,7 @@ void VertexCentricPLL::batch_process(
 		// Traverse active vertices to push their labels as candidates
 		for (idi i_queue = 0; i_queue < end_active_queue; ++i_queue) {
 			idi v_head = active_queue[i_queue];
+			is_active[v_head] = false; // reset is_active
 			push_labels(
 					v_head,
 					roots_start,
@@ -412,6 +414,7 @@ void VertexCentricPLL::batch_process(
 		for (idi i_queue = 0; i_queue < end_candidate_queue; ++i_queue) {
 			idi v_id = candidate_queue[i_queue];
 			inti inserted_count = 0; //recording number of v_id's truly inserted candidates
+			got_candidates[v_id] = false; // reset got_candidates
 			// Traverse v_id's all candidates
 			for (smalli cand_root_id = 0; cand_root_id < roots_size; ++cand_root_id) {
 				if (!short_index[v_id].candidates[cand_root_id]) {
@@ -428,7 +431,10 @@ void VertexCentricPLL::batch_process(
 									iter);
 				// Only insert cand_root_id into v_id's label if its distance to v_id is shorter than existing distance
 				if (iter < d_query) {
-					active_queue[end_active_queue++] = v_id;
+					if (!is_active[v_id]) {
+						is_active[v_id] = true;
+						active_queue[end_active_queue++] = v_id;
+					}
 					++inserted_count;
 					// The candidate cand_root_id needs to be added into v_id's label
 					insert_label_only(
