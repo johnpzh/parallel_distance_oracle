@@ -19,10 +19,10 @@ void pado()
 {
 //	freopen("output.txt", "w", stdout); // test
 //	const char filename[] = "input.dat";
-	const char filename[] = "/Users/johnz/pppp/datasets/dblp/dblp";
+//	const char filename[] = "/Users/johnz/pppp/datasets/dblp/dblp";
 //	const char filename[] = "/Users/johnz/pppp/datasets/chicago/chicago";
 //	const char filename[] = "/Users/johnz/pppp/datasets/wikitalk/wikitalk";
-//	const char filename[] = "tools/edgelist.txt";
+	const char filename[] = "tools/edgelist.txt";
 	printf("Reading...\n");//test
 	Graph G(filename);
 //	G.print();
@@ -75,40 +75,41 @@ void pado()
 //	}
 }
 
-void test_bit()
-{
-	BitArray B(128, 1099511627776 + 4294967296 + 65536 + 2 + 1);
-//	void (* fun) (inti loc) = nullptr;
-	auto fun = [] (inti loc) {
-		printf("loc: %u\n", loc);
-	};
-	puts("=======");
-	B.process_every_bit(fun);
-//	B.unset_bit(32);
+//void test_bit()
+//{
+//	BitArray B(128, 1099511627776 + 4294967296 + 65536 + 2 + 1);
+////	void (* fun) (inti loc) = nullptr;
+//	auto fun = [] (inti loc) {
+//		printf("loc: %u\n", loc);
+//	};
 //	puts("=======");
 //	B.process_every_bit(fun);
-	B.set_bit(64);
-	B.set_bit(127);
-	B.set_bit(8);
-	puts("=======");
-	B.process_every_bit(fun);
-	B.unset_bit(64);
-	B.unset_bit(0);
-	puts("=======");
-	B.process_every_bit(fun);
+////	B.unset_bit(32);
+////	puts("=======");
+////	B.process_every_bit(fun);
+//	B.set_bit(64);
+//	B.set_bit(127);
+//	B.set_bit(8);
+//	puts("=======");
+//	B.process_every_bit(fun);
+//	B.unset_bit(64);
+//	B.unset_bit(0);
+//	puts("=======");
+//	B.process_every_bit(fun);
+//
+//	printf("loc %d set: %u\n", 64, B.is_bit_set(64));
+//	printf("loc %d set: %u\n", 127, B.is_bit_set(127));
+//	printf("loc %d set: %u\n", 8, B.is_bit_set(8));
+//	printf("loc %d set: %u\n", 63, B.is_bit_set(63));
+////	vector<inti> locs = B.get_all_locs_set(128);
+////	for (const auto &l : locs) {
+////		printf(" %u", l);
+////	}
+////	puts("");
+//}
 
-	printf("loc %d set: %u\n", 64, B.is_bit_set(64));
-	printf("loc %d set: %u\n", 127, B.is_bit_set(127));
-	printf("loc %d set: %u\n", 8, B.is_bit_set(8));
-	printf("loc %d set: %u\n", 63, B.is_bit_set(63));
-//	vector<inti> locs = B.get_all_locs_set(128);
-//	for (const auto &l : locs) {
-//		printf(" %u", l);
-//	}
-//	puts("");
-}
-
-int main() {
+int main()
+{
 //	// By Johnpzh
 //	char separator = ' ';
 //	//uint64_t kNum = 50;
