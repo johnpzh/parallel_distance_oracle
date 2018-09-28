@@ -5,3 +5,5 @@
 *.txt
 *.o
 *.xlsx
+*.dSYM
+*.dSYM/
