@@ -19,8 +19,8 @@ void pado()
 {
 //	freopen("output.txt", "w", stdout); // test
 //	const char filename[] = "input.dat";
-//	const char filename[] = "/Users/johnz/pppp/datasets/dblp/dblp";
-	const char filename[] = "/Users/johnz/pppp/datasets/chicago/chicago";
+	const char filename[] = "/Users/johnz/pppp/datasets/dblp/dblp";
+//	const char filename[] = "/Users/johnz/pppp/datasets/chicago/chicago";
 //	const char filename[] = "/Users/johnz/pppp/datasets/wikitalk/wikitalk";
 //	const char filename[] = "tools/edgelist.txt";
 	printf("Reading...\n");//test
@@ -56,11 +56,11 @@ void pado()
 //	}
 	vector<idi> rank2id = G.id_transfer(rank);
 //	G.print();
-	WallTimer timer("Labeling");
+//	WallTimer timer("Labeling");
 	printf("Labeling...\n");//test
 //	VertexCentricPLL(G, rank);
 	VertexCentricPLL VCPLL(G);
-	timer.print_runtime();
+//	timer.print_runtime();
 	VCPLL.switch_labels_to_old_id(rank2id);
 //	VCPLL.print();//test
 

@@ -56,6 +56,12 @@ public:
 	WallTimer(const char *n);
 	double get_runtime();
 	void print_runtime();
+	static double get_time_mark()
+	{
+		timeval t;
+		gettimeofday(&t, NULL);
+		return t.tv_sec + t.tv_usec * 0.000001;
+	}
 };
 
 WallTimer::WallTimer()
