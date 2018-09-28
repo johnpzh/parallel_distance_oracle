@@ -28,7 +28,7 @@ using std::fill;
 
 namespace PADO {
 
-const inti BATCH_SIZE = 64; // The size for regular batch and bit array.
+const inti BATCH_SIZE = 256; // The size for regular batch and bit array.
 
 
 
@@ -177,7 +177,7 @@ inline void VertexCentricPLL::initialize(
 		// Initialize roots labels
 		idi r_real_id = r_id + roots_start;
 		// Short Index
-		short_index[r_id].indicator.set(r_real_id);
+		short_index[r_id].indicator.set(r_id);
 		// Real Index
 		IndexType &Lr = L[r_real_id];
 		Lr.batches.push_back(IndexType::Batch(
@@ -284,21 +284,24 @@ inti VertexCentricPLL::distance_query(
 		idi dist_bound_index = dist_start_index + Lv.batches[b_i].size;
 		// Traverse dist_matrix
 		for (idi dist_i = dist_start_index; dist_i < dist_bound_index; ++dist_i) {
-			idi v_start_index = Lv.distances[dist_i].start_index;
-			idi v_bound_index = v_start_index + Lv.distances[dist_i].size;
 			inti dist = Lv.distances[dist_i].dist;
+			++check_count;
 			if (dist > iter) { // In a batch, the labels' distances are increasingly ordered.
 				// If the half path distance is already greater than ther targeted distance, jump to next batch
 				break;
 			}
+			idi v_start_index = Lv.distances[dist_i].start_index;
+			idi v_bound_index = v_start_index + Lv.distances[dist_i].size;
 			for (idi v_i = v_start_index; v_i < v_bound_index; ++v_i) {
 				idi v = Lv.vertices[v_i] + id_offset;
+				++check_count;
 				if (v > cand_real_id) {
 					// Vertex cand_real_id cannot have labels whose ranks are lower than it.
 					continue;
 				}
 				// I use inti which is wider than smalli so do not need to test INF
 				inti d_tmp = dist + dist_matrix[cand_root_id][v];
+				++check_count;
 				if (d_tmp < d_query) {
 					d_query = d_tmp;
 				}
@@ -392,7 +395,10 @@ void VertexCentricPLL::batch_process(
 			num_v);
 
 	smalli iter = 0; // The iterator, also the distance for current iteration
+	initializing_time += t_init.get_runtime();
+
 	while (0 != end_active_queue) {
+		WallTimer t_cand("Candidating");
 		++iter;
 		// Traverse active vertices to push their labels as candidates
 		for (idi i_queue = 0; i_queue < end_active_queue; ++i_queue) {
@@ -409,6 +415,8 @@ void VertexCentricPLL::batch_process(
 					got_candidates);
 		}
 		end_active_queue = 0; // Set the active_queue empty
+		candidating_time += t_cand.get_runtime();
+		WallTimer t_add("Adding");
 
 		// Traverse vertices in the candidate_queue to insert labels
 		for (idi i_queue = 0; i_queue < end_candidate_queue; ++i_queue) {
@@ -421,6 +429,7 @@ void VertexCentricPLL::batch_process(
 					// Root cand_root_id is not vertex v_id's candidate
 					continue;
 				}
+				short_index[v_id].candidates.reset(cand_root_id);
 				// Get the distance between v_id and cand_root_id based on existing labels
 				inti d_query = distance_query(
 									cand_root_id,
@@ -459,6 +468,7 @@ void VertexCentricPLL::batch_process(
 			}
 		}
 		end_candidate_queue = 0; // Set the candidate_queue empty
+		adding_time += t_add.get_runtime();
 	}
 //	double total_time = time_can + time_add;
 //	printf("Candidating time: %f (%f%%)\n", time_can, time_can / total_time * 100);
@@ -554,19 +564,46 @@ void VertexCentricPLL::switch_labels_to_old_id(const vector<idi> &rank2id)
 	}
 	printf("Label sum: %u (%u), mean: %f\n", label_sum, test_label_sum, label_sum * 1.0 / num_v);
 
-	// Try to print
-	for (idi v = 0; v < num_v; ++v) {
-		const auto &Lv = new_L[v];
-		idi size = Lv.size();
-		printf("Vertex %u (Size %u):", v, size);
-		for (idi i = 0; i < size; ++i) {
-			printf(" (%u, %d)", Lv[i].first, Lv[i].second);
-			fflush(stdout);
-		}
-		puts("");
-	}
-}
+//	// Try to print
+//	for (idi v = 0; v < num_v; ++v) {
+//		const auto &Lv = new_L[v];
+//		idi size = Lv.size();
+//		printf("Vertex %u (Size %u):", v, size);
+//		for (idi i = 0; i < size; ++i) {
+//			printf(" (%u, %d)", Lv[i].first, Lv[i].second);
+//			fflush(stdout);
+//		}
+//		puts("");
+//	}
 
+//	// Try query
+//	idi u;
+//	idi v;
+//	while (std::cin >> u >> v) {
+//		const auto &Lu = new_L[u];
+//		const auto &Lv = new_L[v];
+//		weighti dist = WEIGHTI_MAX;
+//		unordered_map<idi, weighti> markers;
+//		for (idi i = 0; i < Lu.size(); ++i) {
+//			markers[Lu[i].first] = Lu[i].second;
+//		}
+//		for (idi i = 0; i < Lv.size(); ++i) {
+//			const auto &tmp_l = markers.find(Lv[i].first);
+//			if (tmp_l == markers.end()) {
+//				continue;
+//			}
+//			int d = tmp_l->second + Lv[i].second;
+//			if (d < dist) {
+//				dist = d;
+//			}
+//		}
+//		if (dist == 255) {
+//			printf("2147483647\n");
+//		} else {
+//			printf("%u\n", dist);
+//		}
+//	}
+}
 
 }
 #endif /* INCLUDES_PADO_H_ */

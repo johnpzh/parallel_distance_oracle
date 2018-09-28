@@ -50,7 +50,7 @@ void initialize(
 	for (root ID r_id = 0; r_id < roots_size; ++r_id) {
 		// Initialize roots labels
 		The global vertex ID of r_id is r_real_id = r_id + roots_start;
-		short_index[r_id].indicator.set(r_real_id); // Set r_real_id itself has been already selected in r_id's temporary labels
+		short_index[r_id].indicator.set(r_id); // Set r_real_id itself has been already selected in r_id's temporary labels
 		// Insert (r_real_id, 0) to r_id's label L[r_real_id]
 		// Insert new Batch's batch_id, start_index, and size
 		L[r_real_id].batches.push_back(Batch(b_id, L[r_real_id].distances.size(), 1));
@@ -156,15 +156,15 @@ byte distance_query(
 		int dist_bound_index = dist_start_index + L[r_real_id].batches[b_i].size;
 		// Traverse the distances array
 		for (index dist_i = dist_start_index; dist_i < dist_bound_index ++dist_i) {
-			// Index to the label vertices array
-			int v_start_index = L[r_real_id].distances[dist_i].start_index;
-			int v_bound_index = v_start_index + L[r_real_id].distances[dist_i].size;
 			// The label's distance
 			byte dist = L[r_real_id].distances[dist_i].dist;
 			if (dist > iter) { // In a batch, the labels' distances are increasingly ordered.
 				// If the half path distance is already greater than ther targeted distance, jump to next batch
 				break;
 			}
+			// Index to the label vertices array
+			int v_start_index = L[r_real_id].distances[dist_i].start_index;
+			int v_bound_index = v_start_index + L[r_real_id].distances[dist_i].size;
 			// Traverse labels for the same distance
 			for (index v_i = v_start_index; v_i < v_bound_index; ++v_i) {
 				Label v = L[r_real_id].vertices[v_i] + id_offset;
@@ -293,6 +293,7 @@ void batch_process(
 					// Root cand_root_id is not vertex v_id's candidate
 					continue;
 				}
+				short_index[v_id].candidates.reset(cand_root_id); // reset the bit of cand_root_id
 				// Get the distance between v_id and cand_root_id based on existing labels
 				Distance d_query = distance_query(
 										The candidate temperary ID cand_root_id,
