@@ -11,8 +11,8 @@
 #include <unistd.h>
 #include "globals.h"
 #include "graph.h"
-//#include "pado.h"
-#include "pado.20180930.new_struct_but_a_little_slower_than_pll.h"
+#include "pado.h"
+//#include "pado.20180930.new_struct_but_a_little_slower_than_pll.h"
 
 using namespace PADO;
 
@@ -22,8 +22,8 @@ void pado()
 //	const char filename[] = "input.dat";
 //	const char filename[] = "/Users/johnz/pppp/datasets/dblp/dblp";
 //	const char filename[] = "/Users/johnz/pppp/datasets/chicago/chicago";
-	const char filename[] = "/Users/johnz/pppp/datasets/wikitalk/wikitalk";
-//	const char filename[] = "tools/edgelist.txt";
+//	const char filename[] = "/Users/johnz/pppp/datasets/wikitalk/wikitalk";
+	const char filename[] = "tools/edgelist.txt";
 	printf("Reading...\n");//test
 	Graph G(filename);
 //	G.print();

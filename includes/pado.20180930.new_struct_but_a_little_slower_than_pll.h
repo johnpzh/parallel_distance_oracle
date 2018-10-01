@@ -385,7 +385,6 @@ inline void VertexCentricPLL::batch_process(
 //	double time_can = 0;
 //	double time_add = 0;
 
-//	WallTimer t_init("Initializaing");
 //	initializing_time -= WallTimer::get_time_mark();
 	static const idi num_v = G.get_num_v();
 	static vector<idi> active_queue(num_v);
@@ -412,12 +411,10 @@ inline void VertexCentricPLL::batch_process(
 			num_v);
 
 	smalli iter = 0; // The iterator, also the distance for current iteration
-//	initializing_time += t_init.get_runtime();
 //	initializing_time += WallTimer::get_time_mark();
 
 
 	while (0 != end_active_queue) {
-//		WallTimer t_cand("Candidating");
 //		candidating_time -= WallTimer::get_time_mark();
 		++iter;
 		// Traverse active vertices to push their labels as candidates
@@ -435,8 +432,6 @@ inline void VertexCentricPLL::batch_process(
 					got_candidates);
 		}
 		end_active_queue = 0; // Set the active_queue empty
-//		candidating_time += t_cand.get_runtime();
-//		WallTimer t_add("Adding");
 //		candidating_time += WallTimer::get_time_mark();
 //		adding_time -= WallTimer::get_time_mark();
 
