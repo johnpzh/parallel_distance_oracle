@@ -64,15 +64,12 @@ private:
 		vector<Batch> batches; // Batch info
 		vector<DistanceIndexType> distances; // Distance info
 		vector<smalli> vertices; // Vertices in the label, preresented as temperory ID
-
-		smalli shortest_dist_in_global = SMALLI_MAX;
 	};
 
 	// Structure for the type of temporary label
 	struct ShortIndex {
 		bitset<BATCH_SIZE> indicator; // Global indicator, indicator[r] is set means root r once selected as candidate already
 		bitset<BATCH_SIZE> candidates; // Candidates one iteration, candidates[r] is set means root r is candidate in this iteration
-		smalli highest_rank_in_batch;
 	};
 
 	vector<IndexType> L;
@@ -108,7 +105,7 @@ private:
 				smalli cand_root_id,
 				idi v_id,
 				idi roots_start,
-				vector<IndexType> &L,
+				const vector<IndexType> &L,
 				const vector< vector<smalli> > &dist_matrix,
 				smalli iter);
 	inline void insert_label_only(
@@ -128,7 +125,7 @@ private:
 				smalli iter);
 
 	// Test only
-	uint64_t check_count = 0;
+//	uint64_t check_count = 0;
 //	double initializing_time = 0;
 //	double candidating_time = 0;
 //	double adding_time = 0;
@@ -174,7 +171,6 @@ inline void VertexCentricPLL::initialize(
 {
 	for (idi v = 0; v < num_v; ++v) {
 		short_index[v].indicator.reset();
-		short_index[v].highest_rank_in_batch = SMALLI_MAX; // Reset the highest rank in current batch to INF
 	}
 	fill(got_labels.begin(), got_labels.end(), 0);
 
@@ -184,7 +180,6 @@ inline void VertexCentricPLL::initialize(
 		idi r_real_id = r_id + roots_start;
 		// Short Index
 		short_index[r_id].indicator.set(r_id);
-		short_index[r_id].highest_rank_in_batch = r_id;
 		// Real Index
 		IndexType &Lr = L[r_real_id];
 		Lr.batches.push_back(IndexType::Batch(
@@ -261,20 +256,6 @@ inline void VertexCentricPLL::push_labels(
 				break;
 			}
 			ShortIndex &SI_v_tail = short_index[v_tail];
-			if (SI_v_tail.highest_rank_in_batch > label_root_id) {
-				// If label_root_id has higher rank than v_tail's highest rank label in this batch, push it directly.
-				SI_v_tail.highest_rank_in_batch = label_root_id;
-				// Record vertex label_root_id as already selected label, so will not be selected again by v_tail in this batch
-				SI_v_tail.indicator.set(label_root_id);
-				// Record vertex label_root_id as v_tail's candidates label
-				SI_v_tail.candidates.set(label_root_id);
-				if (!got_candidates[v_tail]) {
-					// If v_tail is not in candidate_queue, add it in (prevent duplicate)
-					got_candidates[v_tail] = true;
-					candidate_queue[end_candidate_queue++] = v_tail;
-				}
-				continue;
-			}
 			if (SI_v_tail.indicator[label_root_id]) {
 				// The label is alreay selected before
 				continue;
@@ -294,108 +275,14 @@ inline void VertexCentricPLL::push_labels(
 // Function for distance query;
 // traverse vertex v_id's labels;
 // return the distance between v_id and cand_root_id based on existing labels.
-//inti VertexCentricPLL::distance_query(
-//			smalli cand_root_id,
-//			idi v_id,
-//			idi roots_start,
-//			vector<IndexType> &L,
-//			const vector< vector<smalli> > &dist_matrix,
-//			const vector<bool> &got_labels,
-//			smalli iter)
-//{
-//	if (iter < L[v_id].shortest_dist_in_global) {
-//		// If the cand_root_id's distance to v_id is shorter than v_id's shortest distance in labels, insert cand_root_id directly
-//		L[v_id].shortest_dist_in_global = iter;
-//		return SMALLI_MAX;
-//	}
-//	inti d_query = SMALLI_MAX;
-//	idi cand_real_id = cand_root_id + roots_start;
-//	const IndexType &Lv = L[v_id];
-//	// Traverse v_id's all existing labels
-//	inti b_i_bound;
-//	if (got_labels[v_id]) {
-//		b_i_bound = Lv.batches.size() - 1;
-//	} else {
-//		b_i_bound = Lv.batches.size();
-//	}
-//	// Traverse v_id's labels from previous batches.
-//	_mm_prefetch(&Lv.batches[0], _MM_HINT_T0);
-//	_mm_prefetch(&Lv.distances[0], _MM_HINT_T0);
-//	_mm_prefetch(&Lv.vertices[0], _MM_HINT_T0);
-//	_mm_prefetch(&dist_matrix[cand_root_id][0], _MM_HINT_T0);
-//	for (inti b_i = 0; b_i < b_i_bound; ++b_i) {
-//		idi id_offset = Lv.batches[b_i].batch_id * BATCH_SIZE;
-//		idi dist_start_index = Lv.batches[b_i].start_index;
-//		idi dist_bound_index = dist_start_index + Lv.batches[b_i].size;
-//		// Traverse dist_matrix
-//		for (idi dist_i = dist_start_index; dist_i < dist_bound_index; ++dist_i) {
-//			inti dist = Lv.distances[dist_i].dist;
-//			if (dist > iter) { // In a batch, the labels' distances are increasingly ordered.
-//				// If the half path distance is already greater than ther targeted distance, jump to next batch
-//				break;
-//			}
-//			idi v_start_index = Lv.distances[dist_i].start_index;
-//			idi v_bound_index = v_start_index + Lv.distances[dist_i].size;
-//			for (idi v_i = v_start_index; v_i < v_bound_index; ++v_i) {
-//				idi v = Lv.vertices[v_i] + id_offset; // the label v
-//				if (v > cand_real_id) {
-//					// Vertex cand_real_id cannot have labels whose ranks are lower than it.
-//					continue;
-//				}
-//				// I use inti which is wider than smalli so do not need to test INF
-//				inti d_tmp = dist + dist_matrix[cand_root_id][v];
-////				++check_count;
-//				if (d_tmp < d_query) {
-//					d_query = d_tmp;
-//				}
-//			}
-//		}
-//	}
-//	if (got_labels[v_id]) {
-//		// Traverse v_id's labels in this batch
-//		idi id_offset = Lv.batches[b_i_bound].batch_id * BATCH_SIZE;
-//		idi dist_start_index = Lv.batches[b_i].start_index;
-//		idi dist_bound_index = dist_start_index + Lv.batches[b_i].size;
-//		// Traverse dist_matrix
-//		for (idi dist_i = dist_start_index; dist_i < dist_bound_index; ++dist_i) {
-//			inti dist = Lv.distances[dist_i].dist;
-//			if (dist > iter) { // In a batch, the labels' distances are increasingly ordered.
-//				// If the half path distance is already greater than ther targeted distance, jump to next batch
-//				break;
-//			}
-//			idi v_start_index = Lv.distances[dist_i].start_index;
-//			idi v_bound_index = v_start_index + Lv.distances[dist_i].size;
-//			for (idi v_i = v_start_index; v_i < v_bound_index; ++v_i) {
-//				idi v = Lv.vertices[v_i] + id_offset; // the label v
-//				if (v > cand_real_id) {
-//					// Vertex cand_real_id cannot have labels whose ranks are lower than it.
-//					continue;
-//				}
-//				// I use inti which is wider than smalli so do not need to test INF
-//				inti d_tmp = dist + dist_matrix[cand_root_id][v];
-//				//				++check_count;
-//				if (d_tmp < d_query) {
-//					d_query = d_tmp;
-//				}
-//			}
-//		}
-//	}
-//
-//	return d_query;
-//}
 inti VertexCentricPLL::distance_query(
 			smalli cand_root_id,
 			idi v_id,
 			idi roots_start,
-			vector<IndexType> &L,
+			const vector<IndexType> &L,
 			const vector< vector<smalli> > &dist_matrix,
 			smalli iter)
 {
-	if (iter < L[v_id].shortest_dist_in_global) {
-		// If the cand_root_id's distance to v_id is shorter than v_id's shortest distance in labels, insert cand_root_id directly
-		L[v_id].shortest_dist_in_global = iter;
-		return SMALLI_MAX;
-	}
 	inti d_query = SMALLI_MAX;
 	idi cand_real_id = cand_root_id + roots_start;
 	const IndexType &Lv = L[v_id];
@@ -412,6 +299,7 @@ inti VertexCentricPLL::distance_query(
 		// Traverse dist_matrix
 		for (idi dist_i = dist_start_index; dist_i < dist_bound_index; ++dist_i) {
 			inti dist = Lv.distances[dist_i].dist;
+//			++check_count;
 			if (dist > iter) { // In a batch, the labels' distances are increasingly ordered.
 				// If the half path distance is already greater than ther targeted distance, jump to next batch
 				break;
@@ -419,17 +307,20 @@ inti VertexCentricPLL::distance_query(
 			idi v_start_index = Lv.distances[dist_i].start_index;
 			idi v_bound_index = v_start_index + Lv.distances[dist_i].size;
 			for (idi v_i = v_start_index; v_i < v_bound_index; ++v_i) {
-				idi v = Lv.vertices[v_i] + id_offset; // the label v
+				idi v = Lv.vertices[v_i] + id_offset;
+//				++check_count;
 				if (v > cand_real_id) {
 					// Vertex cand_real_id cannot have labels whose ranks are lower than it.
 					continue;
 				}
 				// I use inti which is wider than smalli so do not need to test INF
+//				distance_query_final_check_time -= WallTimer::get_time_mark();
 				inti d_tmp = dist + dist_matrix[cand_root_id][v];
 //				++check_count;
 				if (d_tmp < d_query) {
 					d_query = d_tmp;
 				}
+//				distance_query_final_check_time += WallTimer::get_time_mark();
 			}
 		}
 	}
@@ -659,7 +550,7 @@ void VertexCentricPLL::construct(const Graph &G)
 	time_labeling += WallTimer::get_time_mark();
 
 	// Test
-	printf("check_count: %llu\n", check_count);
+//	printf("check_count: %llu\n", check_count);
 //	double total_time = initializing_time + candidating_time + adding_time;
 //	printf("Initializing: %f (%f%%)\n", initializing_time, initializing_time / total_time * 100);
 //	printf("Candidating: %f (%f%%)\n", candidating_time, candidating_time / total_time * 100);

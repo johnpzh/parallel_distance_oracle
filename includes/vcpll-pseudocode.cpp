@@ -15,12 +15,15 @@ struct IndexType {
 	vector<Batch> batches; // Batch info
 	vector<DistanceIndexType> distances; // Distance info
 	vector<byte> vertices; // Vertices in the label, preresented as temperory ID
+
+	byte shortest_dist_in_global; // the shortest distance in labels in the past batch
 };
 
 // Structure for the type of temporary label
 struct ShortIndex {
 	bitset indicator; // Global indicator, indicator[r] is set means root r once selected as candidate already
 	bitset candidates; // Candidates one iteration, candidates[r] is set means root r is candidate in this iteration
+	byte highest_rank_in_batch; // the highest rank (vertex) in current batch
 }
 
 const int BATCH_SIZE = 256;
@@ -44,6 +47,7 @@ void initialize(
 	for (vertex v = 0; v < N; ++v) {
 		// Unset v's short_index's bit set indicator; the bitset candidates is already unset
 		short_index[v].indicator.reset();
+		short_index[v].highest_rank_in_batch = SMALLI_MAX; // Reset the highest rank in current batch to INF
 		got_labels[v] = false; // No vertex has got new labels in this batch, yet.
 	}
 	// Initialize roots labels and distance matrix
@@ -51,6 +55,7 @@ void initialize(
 		// Initialize roots labels
 		The global vertex ID of r_id is r_real_id = r_id + roots_start;
 		short_index[r_id].indicator.set(r_id); // Set r_real_id itself has been already selected in r_id's temporary labels
+		short_index[r_id].highest_rank_in_batch = r_id;
 		// Insert (r_real_id, 0) to r_id's label L[r_real_id]
 		// Insert new Batch's batch_id, start_index, and size
 		L[r_real_id].batches.push_back(Batch(b_id, L[r_real_id].distances.size(), 1));
@@ -105,6 +110,9 @@ void push_labels(
 	l_i_bound = l_i_start + L[v_head].distances.rbegin()->size;
 	// Traverse v_head's every neighbor v_tail
 	for (every neighbor v_tail of v_head) { // v_head's neighbors are decreasingly ordered by rank.
+		if (v_tail < roots_start) { // v_tail has higher rank than any roots, then no roots can push new labels to it.
+			return;
+		}
 		if (v_tail < L[v_head].vertices[l_i_start] + roots_start) { // v_tail has higher rank than any v_head's labels
 			return;
 		}
@@ -114,6 +122,20 @@ void push_labels(
 			if (v_tail < label_root_id + roots_start) { // v_head's last inserted labels are ordered by rank.
 				// v_tail has higher rank than all remaining labels
 				break;
+			}
+			if (short_index[v_tail].highest_rank_in_batch > label_root_id) {
+				// If label_root_id has higher rank than v_tail's highest rank label in this batch, push it directly.
+				short_index[v_tail].highest_rank_in_batch = label_root_id;
+				// Record vertex label_root_id as v_tail's candidates label
+				short_index[v_tail].candidates.set(label_root_id);
+				// Record vertex label_root_id as already selected label, so will not be selected again by v_tail in this batch
+				short_index[v_tail].indicator.set(label_root_id);
+				if (!got_candidates[v_tail]) {
+					// If v_tail is not in candidate_queue, add it in
+					got_candidates[v_tail] = true;
+					candidate_queue[end_candidate_queue++] = v_tail;
+				}
+				continue;
 			}
 			if (short_index[v_tail].indicator[label_root_id] is set) {
 				// The label is alreay selected before
@@ -144,7 +166,11 @@ byte distance_query(
 			Distance buffer dist_matrix,
 			The iterator iter) // also the targeted distance
 {
-
+	if (iter < L[v_id].shortest_dist_in_global) {
+		// If the cand_root_id's distance to v_id is shorter than v_id's shortest distance in labels, insert cand_root_id directly
+		L[v_id].shortest_dist_in_global = iter;
+		return INF;
+	}
 	Distance d_query = INF;
 	cand_real_id = cand_root_id + roots_start; // cand_root_id's real ID
 	// Traverse v_id's all existing labels
