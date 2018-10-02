@@ -20,13 +20,13 @@ void pado()
 {
 //	freopen("output.txt", "w", stdout); // test
 //	const char filename[] = "input.dat";
-//	const char filename[] = "/Users/johnz/pppp/datasets/dblp/dblp";
+	const char filename[] = "/Users/johnz/pppp/datasets/dblp/dblp";
 //	const char filename[] = "/Users/johnz/pppp/datasets/chicago/chicago";
 //	const char filename[] = "/Users/johnz/pppp/datasets/wikitalk/wikitalk";
-	const char filename[] = "tools/edgelist.txt";
+//	const char filename[] = "tools/edgelist.txt";
 	printf("Reading...\n");//test
 	Graph G(filename);
-	G.print();
+//	G.print();
 //	vector<idi> rank = {
 //			14,
 //			10,
@@ -52,9 +52,9 @@ void pado()
 
 	printf("Ranking...\n");//test
 	vector<idi> rank = G.make_rank();
-	for (idi v = 0; v < rank.size(); ++v) {
-		printf("vertices %u: rank %u\n", v, rank[v]);//test
-	}
+//	for (idi v = 0; v < rank.size(); ++v) {
+//		printf("vertices %u: rank %u\n", v, rank[v]);//test
+//	}
 	vector<idi> rank2id = G.id_transfer(rank);
 //	G.print();
 //	WallTimer timer("Labeling");

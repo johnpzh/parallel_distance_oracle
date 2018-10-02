@@ -69,7 +69,8 @@ private:
 	// Structure for the type of temporary label
 	struct ShortIndex {
 		bitset<BATCH_SIZE> indicator; // Global indicator, indicator[r] is set means root r once selected as candidate already
-		bitset<BATCH_SIZE> candidates; // Candidates one iteration, candidates[r] is set means root r is candidate in this iteration
+//		bitset<BATCH_SIZE> candidates; // Candidates one iteration, candidates[r] is set means root r is candidate in this iteration
+		bitset<BATCH_SIZE> lasts;
 	};
 
 	vector<IndexType> L;
@@ -95,12 +96,17 @@ private:
 	inline void push_labels(
 				idi v_head,
 				idi roots_start,
+				idi roots_size,
 				const Graph &G,
-				const vector<IndexType> &L,
+				vector<IndexType> &L,
+				vector< vector<smalli> > &dist_matrix,
+				smalli iter,
 				vector<ShortIndex> &short_index,
 				vector<idi> &candidate_queue,
 				inti &end_candidate_queue,
-				vector<bool> &got_candidates);
+				vector<bool> &is_active,
+				vector<bool> &got_labels,
+				idi b_id);
 	inline inti distance_query(
 				smalli cand_root_id,
 				idi v_id,
@@ -108,24 +114,36 @@ private:
 				const vector<IndexType> &L,
 				const vector< vector<smalli> > &dist_matrix,
 				smalli iter);
-	inline void insert_label_only(
+	inline void insert_label(
 				smalli cand_root_id,
 				idi v_id,
 				idi roots_start,
 				inti roots_size,
 				vector<IndexType> &L,
+				vector<ShortIndex> &short_index,
 				vector< vector<smalli> > &dist_matrix,
-				smalli iter);
-	inline void update_label_indices(
-				idi v_id,
-				smalli inserted_count,
-				vector<IndexType> &L,
+				smalli iter,
 				vector<bool> &got_labels,
-				idi b_id,
-				smalli iter);
+				idi b_id);
+
+//	inline void insert_label_only(
+//				smalli cand_root_id,
+//				idi v_id,
+//				idi roots_start,
+//				inti roots_size,
+//				vector<IndexType> &L,
+//				vector< vector<smalli> > &dist_matrix,
+//				smalli iter);
+//	inline void update_label_indices(
+//				idi v_id,
+//				smalli inserted_count,
+//				vector<IndexType> &L,
+//				vector<bool> &got_labels,
+//				idi b_id,
+//				smalli iter);
 
 	// Test only
-	uint64_t check_count = 0;
+//	uint64_t check_count = 0;
 //	double initializing_time = 0;
 //	double candidating_time = 0;
 //	double adding_time = 0;
@@ -180,6 +198,7 @@ inline void VertexCentricPLL::initialize(
 		idi r_real_id = r_id + roots_start;
 		// Short Index
 		short_index[r_id].indicator.set(r_id);
+		short_index[r_id].lasts.set(r_id);
 		// Real Index
 		IndexType &Lr = L[r_real_id];
 		Lr.batches.push_back(IndexType::Batch(
@@ -222,56 +241,6 @@ inline void VertexCentricPLL::initialize(
 
 }
 
-// Function that pushes v_head's labels to v_head's every neighbor
-inline void VertexCentricPLL::push_labels(
-				idi v_head,
-				idi roots_start,
-				const Graph &G,
-				const vector<IndexType> &L,
-				vector<ShortIndex> &short_index,
-				vector<idi> &candidate_queue,
-				inti &end_candidate_queue,
-				vector<bool> &got_candidates)
-{
-	const IndexType &Lv = L[v_head];
-	// These 2 index are used for traversing v_head's last inserted labels
-	idi l_i_start = Lv.distances.rbegin() -> start_index;
-	idi l_i_bound = l_i_start + Lv.distances.rbegin() -> size;
-	// Traverse v_head's every neighbor v_tail
-	idi e_i_start = G.vertices[v_head];
-	idi e_i_bound = e_i_start + G.out_degrees[v_head];
-	for (idi e_i = e_i_start; e_i < e_i_bound; ++e_i) {
-		idi v_tail = G.out_edges[e_i];
-		if (v_tail < roots_start) { // v_tail has higher rank than any roots, then no roots can push new labels to it.
-			return;
-		}
-		if (v_tail <= Lv.vertices[l_i_start] + roots_start) { // v_tail has higher rank than any v_head's labels
-			return;
-		}
-		// Traverse v_head's last inserted labels
-		for (idi l_i = l_i_start; l_i < l_i_bound; ++l_i) {
-			smalli label_root_id = Lv.vertices[l_i];
-			if (v_tail <= label_root_id + roots_start) {
-				// v_tail has higher rank than all remaining labels
-				break;
-			}
-			ShortIndex &SI_v_tail = short_index[v_tail];
-			if (SI_v_tail.indicator[label_root_id]) {
-				// The label is alreay selected before
-				continue;
-			}
-			SI_v_tail.indicator.set(label_root_id);
-			// Record vertex label_root_id as v_tail's candidates label
-			SI_v_tail.candidates.set(label_root_id);
-			if (!got_candidates[v_tail]) {
-				// If v_tail is not in candidate_queue, add it in (prevent duplicate)
-				got_candidates[v_tail] = true;
-				candidate_queue[end_candidate_queue++] = v_tail;
-			}
-		}
-	}
-}
-
 // Function for distance query;
 // traverse vertex v_id's labels;
 // return the distance between v_id and cand_root_id based on existing labels.
@@ -300,7 +269,7 @@ inti VertexCentricPLL::distance_query(
 		for (idi dist_i = dist_start_index; dist_i < dist_bound_index; ++dist_i) {
 			inti dist = Lv.distances[dist_i].dist;
 //			++check_count;
-			if (dist >= iter) { // In a batch, the labels' distances are increasingly ordered.
+			if (dist > iter) { // In a batch, the labels' distances are increasingly ordered.
 				// If the half path distance is already greater than ther targeted distance, jump to next batch
 				break;
 			}
@@ -309,7 +278,7 @@ inti VertexCentricPLL::distance_query(
 			for (idi v_i = v_start_index; v_i < v_bound_index; ++v_i) {
 				idi v = Lv.vertices[v_i] + id_offset;
 //				++check_count;
-				if (v >= cand_real_id) {
+				if (v > cand_real_id) {
 					// Vertex cand_real_id cannot have labels whose ranks are lower than it.
 					continue;
 				}
@@ -327,53 +296,180 @@ inti VertexCentricPLL::distance_query(
 	return d_query;
 }
 
-// Function inserts candidate cand_root_id into vertex v_id's labels;
-// update the distance buffer dist_matrix;
-// but it only update the v_id's labels' vertices array;
-inline void VertexCentricPLL::insert_label_only(
-				smalli cand_root_id,
-				idi v_id,
-				idi roots_start,
-				inti roots_size,
-				vector<IndexType> &L,
-				vector< vector<smalli> > &dist_matrix,
-				smalli iter)
+inline void VertexCentricPLL::insert_label(
+			smalli cand_root_id,
+			idi v_id,
+			idi roots_start,
+			inti roots_size,
+			vector<IndexType> &L,
+			vector<ShortIndex> &short_index,
+			vector< vector<smalli> > &dist_matrix,
+			smalli iter,
+			vector<bool> &got_labels,
+			idi b_id)
 {
-	L[v_id].vertices.push_back(cand_root_id);
+	IndexType &Lv = L[v_id];
+	// Update v_id's other indices arrays
+	if (got_labels[v_id]) {
+		// If vertex v_id has already inserted labels in this batch
+		// ++(L[v_id].batches.rbegin()->size);
+		if (iter == Lv.distances.rbegin() -> dist) {
+			// If the inserted label is in the same iteration, no need to add any new element in the distances array
+			++(Lv.distances.rbegin() -> size);
+		} else {
+			// If the inserted label is in the new iteration, need t add a new element in the distances array
+			// Increase the batches' last element's size because a new distance element need to be added
+			++(Lv.batches.rbegin()->size);
+			Lv.distances.push_back(IndexType::DistanceIndexType(Lv.vertices.size(), 1, iter));
+		}
+	} else {
+		// If vertex v_id has not yet inserted new labels in this batch
+		got_labels[v_id] = true;
+		// Insert a new Batch with batch_id, start_index, and size because a new distance element need to be added
+		Lv.batches.push_back(IndexType::Batch(b_id, Lv.distances.size(), 1));
+		// Insert a new distance element with start_index, size, and dist
+		Lv.distances.push_back(IndexType::DistanceIndexType(Lv.vertices.size(), 1, iter));
+	}
+	// Update v_id's vertices array
+	Lv.vertices.push_back(cand_root_id);
 	// Update the distance buffer if necessary
 	idi v_root_id = v_id - roots_start;
 	if (v_id >= roots_start && v_root_id < roots_size) {
+		// Only if vertex v_id is a root in this batch, update distance buffer dist_matrix
 		dist_matrix[v_root_id][cand_root_id + roots_start] = iter;
+	}
+	short_index[v_id].lasts.set(cand_root_id);
+}
+
+// Function that pushes v_head's labels to v_head's every neighbor
+inline void VertexCentricPLL::push_labels(
+				idi v_head,
+				idi roots_start,
+				inti roots_size,
+				const Graph &G,
+				vector<IndexType> &L,
+				vector< vector<smalli> > &dist_matrix,
+				smalli iter,
+				vector<ShortIndex> &short_index,
+				vector<idi> &candidate_queue,
+				inti &end_candidate_queue,
+				vector<bool> &is_active,
+				vector<bool> &got_labels,
+				idi b_id)
+{
+//	const IndexType &Lv = L[v_head];
+	// These 2 index are used for traversing v_head's last inserted labels
+//	idi l_i_start = Lv.distances.rbegin() -> start_index;
+//	idi l_i_bound = l_i_start + Lv.distances.rbegin() -> size;
+	// Traverse v_head's every neighbor v_tail
+	idi e_i_start = G.vertices[v_head];
+	idi e_i_bound = e_i_start + G.out_degrees[v_head];
+	for (idi e_i = e_i_start; e_i < e_i_bound; ++e_i) {
+		idi v_tail = G.out_edges[e_i];
+		if (v_tail < roots_start) { // v_tail has higher rank than any roots, then no roots can push new labels to it.
+			return;
+		}
+//		if (v_tail < Lv.vertices[l_i_start] + roots_start) { // v_tail has higher rank than any v_head's labels
+//			return;
+//		}
+		// Traverse v_head's last inserted labels
+		for (inti label_root_id = 0; label_root_id < roots_size; ++label_root_id) {
+			if (!short_index[v_head].lasts[label_root_id]) {
+				continue;
+			}
+//			smalli label_root_id = Lv.vertices[l_i];
+			if (v_tail < label_root_id + roots_start) {
+				// v_tail has higher rank than all remaining labels
+				break;
+			}
+			ShortIndex &SI_v_tail = short_index[v_tail];
+			if (SI_v_tail.indicator[label_root_id]) {
+				// The label is alreay selected before
+				continue;
+			}
+			SI_v_tail.indicator.set(label_root_id);
+
+			// Check the distance d(v_tail, label_root_id)
+			inti d_query = distance_query(
+								label_root_id,
+								v_tail,
+								roots_start,
+								L,
+								dist_matrix,
+								iter);
+			// Only insert label_root_id into v_tail's label if its distance to v_tail is shorter than existing distance
+			if (iter < d_query) {
+				// Insert v_id into the active queue
+				if (!is_active[v_tail]) {
+					is_active[v_tail] = true;
+					candidate_queue[end_candidate_queue++] = v_tail;
+				}
+				// The candidate cand_root_id needs to be added into v_tail's label
+				insert_label(
+						label_root_id,
+						v_tail,
+						roots_start,
+						roots_size,
+						L,
+						short_index,
+						dist_matrix,
+						iter,
+						got_labels,
+						b_id);
+			}
+		}
 	}
 }
 
-// Function updates those index arrays in v_id's label only if v_id has been inserted new labels
-inline void VertexCentricPLL::update_label_indices(
-				idi v_id,
-				smalli inserted_count,
-				vector<IndexType> &L,
-				vector<bool> &got_labels,
-				idi b_id,
-				smalli iter)
-{
-	IndexType &Lv = L[v_id];
-	if (got_labels[v_id]) {
-		// Increase the batches' last element's size because a new distance element need to be added
-		++(Lv.batches.rbegin() -> size);
-	} else {
-		got_labels[v_id] = true;
-		// Insert a new Batch with batch_id, start_index, and size because a new distance element need to be added
-		Lv.batches.push_back(IndexType::Batch(
-									b_id,
-									Lv.distances.size(),
-									1));
-	}
-	// Insert a new distance element with start_index, size, and dist
-	Lv.distances.push_back(IndexType::DistanceIndexType(
-										Lv.vertices.size() - inserted_count,
-										inserted_count,
-										iter));
-}
+
+
+//// Function inserts candidate cand_root_id into vertex v_id's labels;
+//// update the distance buffer dist_matrix;
+//// but it only update the v_id's labels' vertices array;
+//inline void VertexCentricPLL::insert_label_only(
+//				smalli cand_root_id,
+//				idi v_id,
+//				idi roots_start,
+//				inti roots_size,
+//				vector<IndexType> &L,
+//				vector< vector<smalli> > &dist_matrix,
+//				smalli iter)
+//{
+//	L[v_id].vertices.push_back(cand_root_id);
+//	// Update the distance buffer if necessary
+//	idi v_root_id = v_id - roots_start;
+//	if (v_id >= roots_start && v_root_id < roots_size) {
+//		dist_matrix[v_root_id][cand_root_id + roots_start] = iter;
+//	}
+//}
+//
+//// Function updates those index arrays in v_id's label only if v_id has been inserted new labels
+//inline void VertexCentricPLL::update_label_indices(
+//				idi v_id,
+//				smalli inserted_count,
+//				vector<IndexType> &L,
+//				vector<bool> &got_labels,
+//				idi b_id,
+//				smalli iter)
+//{
+//	IndexType &Lv = L[v_id];
+//	if (got_labels[v_id]) {
+//		// Increase the batches' last element's size because a new distance element need to be added
+//		++(Lv.batches.rbegin() -> size);
+//	} else {
+//		got_labels[v_id] = true;
+//		// Insert a new Batch with batch_id, start_index, and size because a new distance element need to be added
+//		Lv.batches.push_back(IndexType::Batch(
+//									b_id,
+//									Lv.distances.size(),
+//									1));
+//	}
+//	// Insert a new distance element with start_index, size, and dist
+//	Lv.distances.push_back(IndexType::DistanceIndexType(
+//										Lv.vertices.size() - inserted_count,
+//										inserted_count,
+//										iter));
+//}
 
 inline void VertexCentricPLL::batch_process(
 						const Graph &G,
@@ -394,7 +490,7 @@ inline void VertexCentricPLL::batch_process(
 	static vector<ShortIndex> short_index(num_v);
 	static vector< vector<smalli> > dist_matrix(roots_size, vector<smalli>(num_v));
 	static vector<bool> got_labels(num_v, false); // got_labels[v] is true means vertex v got new labels in this batch
-	static vector<bool> got_candidates(num_v, false); // got_candidates[v] is true means vertex v is in the queue candidate_queue
+//	static vector<bool> got_candidates(num_v, false); // got_candidates[v] is true means vertex v is in the queue candidate_queue
 	static vector<bool> is_active(num_v, false);// is_active[v] is true means vertex v is in the active queue.
 
 	// At the beginning of a batch, initialize the labels L and distance buffer dist_matrix;
@@ -411,8 +507,9 @@ inline void VertexCentricPLL::batch_process(
 			num_v);
 
 	smalli iter = 0; // The iterator, also the distance for current iteration
+	vector<idi> &ref_active_queue = active_queue;
+	vector<idi> &ref_candidate_queue = candidate_queue;
 //	initializing_time += WallTimer::get_time_mark();
-
 
 	while (0 != end_active_queue) {
 //		candidating_time -= WallTimer::get_time_mark();
@@ -420,73 +517,89 @@ inline void VertexCentricPLL::batch_process(
 		// Traverse active vertices to push their labels as candidates
 		for (idi i_queue = 0; i_queue < end_active_queue; ++i_queue) {
 			idi v_head = active_queue[i_queue];
-			is_active[v_head] = false; // reset is_active
+//			is_active[v_head] = false; // reset is_active
 			push_labels(
 					v_head,
 					roots_start,
+					roots_size,
 					G,
 					L,
+					dist_matrix,
+					iter,
 					short_index,
-					candidate_queue,
+					ref_candidate_queue,
 					end_candidate_queue,
-					got_candidates);
+					is_active,
+					got_labels,
+					b_id);
 		}
-		end_active_queue = 0; // Set the active_queue empty
+		// Reset flag array is_active
+		for (idi i_queue = 0; i_queue < end_active_queue; ++i_queue) {
+			idi v = ref_active_queue[i_queue];
+			is_active[v] = false;
+			short_index[v].lasts.reset();
+		}
+		// Swap candidaten_queue and active_queue
+		end_active_queue = end_candidate_queue; // Set the active_queue empty
+		end_candidate_queue = 0;
+		vector<idi> &tmp_ref = ref_active_queue;
+		ref_active_queue = ref_candidate_queue;
+		ref_candidate_queue = tmp_ref;
 //		candidating_time += WallTimer::get_time_mark();
 //		adding_time -= WallTimer::get_time_mark();
 
-		// Traverse vertices in the candidate_queue to insert labels
-		for (idi i_queue = 0; i_queue < end_candidate_queue; ++i_queue) {
-			idi v_id = candidate_queue[i_queue];
-			inti inserted_count = 0; //recording number of v_id's truly inserted candidates
-			got_candidates[v_id] = false; // reset got_candidates
-			// Traverse v_id's all candidates
-			for (inti cand_root_id = 0; cand_root_id < roots_size; ++cand_root_id) {
-				if (!short_index[v_id].candidates[cand_root_id]) {
-					// Root cand_root_id is not vertex v_id's candidate
-					continue;
-				}
-				short_index[v_id].candidates.reset(cand_root_id);
-				// Get the distance between v_id and cand_root_id based on existing labels
-//				distance_query_time -= WallTimer::get_time_mark();
-				inti d_query = distance_query(
-									cand_root_id,
-									v_id,
-									roots_start,
-									L,
-									dist_matrix,
-									iter);
-//				distance_query_time += WallTimer::get_time_mark();
-				// Only insert cand_root_id into v_id's label if its distance to v_id is shorter than existing distance
-				if (iter < d_query) {
-					if (!is_active[v_id]) {
-						is_active[v_id] = true;
-						active_queue[end_active_queue++] = v_id;
-					}
-					++inserted_count;
-					// The candidate cand_root_id needs to be added into v_id's label
-					insert_label_only(
-									cand_root_id,
-									v_id,
-									roots_start,
-									roots_size,
-									L,
-									dist_matrix,
-									iter);
-				}
-			}
-			if (0 != inserted_count) {
-				// Update other arrays in L[v_id] if new labels were inserted in this iteration
-				update_label_indices(
-								v_id,
-								inserted_count,
-								L,
-								got_labels,
-								b_id,
-								iter);
-			}
-		}
-		end_candidate_queue = 0; // Set the candidate_queue empty
+//		// Traverse vertices in the candidate_queue to insert labels
+//		for (idi i_queue = 0; i_queue < end_candidate_queue; ++i_queue) {
+//			idi v_id = candidate_queue[i_queue];
+//			inti inserted_count = 0; //recording number of v_id's truly inserted candidates
+//			got_candidates[v_id] = false; // reset got_candidates
+//			// Traverse v_id's all candidates
+//			for (inti cand_root_id = 0; cand_root_id < roots_size; ++cand_root_id) {
+//				if (!short_index[v_id].candidates[cand_root_id]) {
+//					// Root cand_root_id is not vertex v_id's candidate
+//					continue;
+//				}
+//				short_index[v_id].candidates.reset(cand_root_id);
+//				// Get the distance between v_id and cand_root_id based on existing labels
+////				distance_query_time -= WallTimer::get_time_mark();
+//				inti d_query = distance_query(
+//									cand_root_id,
+//									v_id,
+//									roots_start,
+//									L,
+//									dist_matrix,
+//									iter);
+////				distance_query_time += WallTimer::get_time_mark();
+//				// Only insert cand_root_id into v_id's label if its distance to v_id is shorter than existing distance
+//				if (iter < d_query) {
+//					if (!is_active[v_id]) {
+//						is_active[v_id] = true;
+//						active_queue[end_active_queue++] = v_id;
+//					}
+//					++inserted_count;
+//					// The candidate cand_root_id needs to be added into v_id's label
+//					insert_label_only(
+//									cand_root_id,
+//									v_id,
+//									roots_start,
+//									roots_size,
+//									L,
+//									dist_matrix,
+//									iter);
+//				}
+//			}
+//			if (0 != inserted_count) {
+//				// Update other arrays in L[v_id] if new labels were inserted in this iteration
+//				update_label_indices(
+//								v_id,
+//								inserted_count,
+//								L,
+//								got_labels,
+//								b_id,
+//								iter);
+//			}
+//		}
+//		end_candidate_queue = 0; // Set the candidate_queue empty
 //		adding_time += WallTimer::get_time_mark();
 	}
 //	double total_time = time_can + time_add;
@@ -542,7 +655,7 @@ void VertexCentricPLL::construct(const Graph &G)
 	time_labeling += WallTimer::get_time_mark();
 
 	// Test
-	printf("check_count: %llu\n", check_count);
+//	printf("check_count: %llu\n", check_count);
 //	double total_time = initializing_time + candidating_time + adding_time;
 //	printf("Initializing: %f (%f%%)\n", initializing_time, initializing_time / total_time * 100);
 //	printf("Candidating: %f (%f%%)\n", candidating_time, candidating_time / total_time * 100);
@@ -599,45 +712,45 @@ void VertexCentricPLL::switch_labels_to_old_id(const vector<idi> &rank2id)
 	}
 	printf("Label sum: %u (%u), mean: %f\n", label_sum, test_label_sum, label_sum * 1.0 / num_v);
 
-//	// Try to print
-//	for (idi v = 0; v < num_v; ++v) {
-//		const auto &Lv = new_L[v];
-//		idi size = Lv.size();
-//		printf("Vertex %u (Size %u):", v, size);
-//		for (idi i = 0; i < size; ++i) {
-//			printf(" (%u, %d)", Lv[i].first, Lv[i].second);
-//			fflush(stdout);
-//		}
-//		puts("");
-//	}
+	// Try to print
+	for (idi v = 0; v < num_v; ++v) {
+		const auto &Lv = new_L[v];
+		idi size = Lv.size();
+		printf("Vertex %u (Size %u):", v, size);
+		for (idi i = 0; i < size; ++i) {
+			printf(" (%u, %d)", Lv[i].first, Lv[i].second);
+			fflush(stdout);
+		}
+		puts("");
+	}
 
-//	// Try query
-//	idi u;
-//	idi v;
-//	while (std::cin >> u >> v) {
-//		const auto &Lu = new_L[u];
-//		const auto &Lv = new_L[v];
-//		weighti dist = WEIGHTI_MAX;
-//		unordered_map<idi, weighti> markers;
-//		for (idi i = 0; i < Lu.size(); ++i) {
-//			markers[Lu[i].first] = Lu[i].second;
-//		}
-//		for (idi i = 0; i < Lv.size(); ++i) {
-//			const auto &tmp_l = markers.find(Lv[i].first);
-//			if (tmp_l == markers.end()) {
-//				continue;
-//			}
-//			int d = tmp_l->second + Lv[i].second;
-//			if (d < dist) {
-//				dist = d;
-//			}
-//		}
-//		if (dist == 255) {
-//			printf("2147483647\n");
-//		} else {
-//			printf("%u\n", dist);
-//		}
-//	}
+	// Try query
+	idi u;
+	idi v;
+	while (std::cin >> u >> v) {
+		const auto &Lu = new_L[u];
+		const auto &Lv = new_L[v];
+		weighti dist = WEIGHTI_MAX;
+		unordered_map<idi, weighti> markers;
+		for (idi i = 0; i < Lu.size(); ++i) {
+			markers[Lu[i].first] = Lu[i].second;
+		}
+		for (idi i = 0; i < Lv.size(); ++i) {
+			const auto &tmp_l = markers.find(Lv[i].first);
+			if (tmp_l == markers.end()) {
+				continue;
+			}
+			int d = tmp_l->second + Lv[i].second;
+			if (d < dist) {
+				dist = d;
+			}
+		}
+		if (dist == 255) {
+			printf("2147483647\n");
+		} else {
+			printf("%u\n", dist);
+		}
+	}
 }
 
 }
