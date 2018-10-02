@@ -101,7 +101,7 @@ private:
 				vector<idi> &candidate_queue,
 				inti &end_candidate_queue,
 				vector<bool> &got_candidates);
-	inline inti distance_query(
+	inline bool distance_query(
 				smalli cand_root_id,
 				idi v_id,
 				idi roots_start,
@@ -275,7 +275,8 @@ inline void VertexCentricPLL::push_labels(
 // Function for distance query;
 // traverse vertex v_id's labels;
 // return the distance between v_id and cand_root_id based on existing labels.
-inti VertexCentricPLL::distance_query(
+// return false if shorter distance exists already, return true if the cand_root_id can be added into v_id's label.
+inline bool VertexCentricPLL::distance_query(
 			smalli cand_root_id,
 			idi v_id,
 			idi roots_start,
@@ -283,7 +284,7 @@ inti VertexCentricPLL::distance_query(
 			const vector< vector<smalli> > &dist_matrix,
 			smalli iter)
 {
-	inti d_query = SMALLI_MAX;
+//	inti d_query = SMALLI_MAX;
 	idi cand_real_id = cand_root_id + roots_start;
 	const IndexType &Lv = L[v_id];
 	// Traverse v_id's all existing labels
@@ -301,13 +302,13 @@ inti VertexCentricPLL::distance_query(
 			inti dist = Lv.distances[dist_i].dist;
 //			++check_count;
 			if (dist >= iter) { // In a batch, the labels' distances are increasingly ordered.
-				// If the half path distance is already greater than ther targeted distance, jump to next batch
+				// If the half path distance is already greater than their targeted distance, jump to next batch
 				break;
 			}
 			idi v_start_index = Lv.distances[dist_i].start_index;
 			idi v_bound_index = v_start_index + Lv.distances[dist_i].size;
 			for (idi v_i = v_start_index; v_i < v_bound_index; ++v_i) {
-				idi v = Lv.vertices[v_i] + id_offset;
+				idi v = Lv.vertices[v_i] + id_offset; // v is a label hub of v_id
 //				++check_count;
 				if (v >= cand_real_id) {
 					// Vertex cand_real_id cannot have labels whose ranks are lower than it.
@@ -317,14 +318,18 @@ inti VertexCentricPLL::distance_query(
 //				distance_query_final_check_time -= WallTimer::get_time_mark();
 				inti d_tmp = dist + dist_matrix[cand_root_id][v];
 //				++check_count;
-				if (d_tmp < d_query) {
-					d_query = d_tmp;
+//				if (d_tmp < d_query) {
+//					d_query = d_tmp;
+//				}
+				if (d_tmp <= iter) {
+					return false;
 				}
 //				distance_query_final_check_time += WallTimer::get_time_mark();
 			}
 		}
 	}
-	return d_query;
+//	return d_query;
+	return true;
 }
 
 // Function inserts candidate cand_root_id into vertex v_id's labels;
@@ -447,18 +452,14 @@ inline void VertexCentricPLL::batch_process(
 					continue;
 				}
 				short_index[v_id].candidates.reset(cand_root_id);
-				// Get the distance between v_id and cand_root_id based on existing labels
-//				distance_query_time -= WallTimer::get_time_mark();
-				inti d_query = distance_query(
-									cand_root_id,
-									v_id,
-									roots_start,
-									L,
-									dist_matrix,
-									iter);
-//				distance_query_time += WallTimer::get_time_mark();
 				// Only insert cand_root_id into v_id's label if its distance to v_id is shorter than existing distance
-				if (iter < d_query) {
+				if ( distance_query(
+								cand_root_id,
+								v_id,
+								roots_start,
+								L,
+								dist_matrix,
+								iter) ) {
 					if (!is_active[v_id]) {
 						is_active[v_id] = true;
 						active_queue[end_active_queue++] = v_id;
@@ -466,14 +467,41 @@ inline void VertexCentricPLL::batch_process(
 					++inserted_count;
 					// The candidate cand_root_id needs to be added into v_id's label
 					insert_label_only(
-									cand_root_id,
-									v_id,
-									roots_start,
-									roots_size,
-									L,
-									dist_matrix,
-									iter);
+							cand_root_id,
+							v_id,
+							roots_start,
+							roots_size,
+							L,
+							dist_matrix,
+							iter);
 				}
+//				// Get the distance between v_id and cand_root_id based on existing labels
+////				distance_query_time -= WallTimer::get_time_mark();
+//				inti d_query = distance_query(
+//									cand_root_id,
+//									v_id,
+//									roots_start,
+//									L,
+//									dist_matrix,
+//									iter);
+////				distance_query_time += WallTimer::get_time_mark();
+//				// Only insert cand_root_id into v_id's label if its distance to v_id is shorter than existing distance
+//				if (iter < d_query) {
+//					if (!is_active[v_id]) {
+//						is_active[v_id] = true;
+//						active_queue[end_active_queue++] = v_id;
+//					}
+//					++inserted_count;
+//					// The candidate cand_root_id needs to be added into v_id's label
+//					insert_label_only(
+//									cand_root_id,
+//									v_id,
+//									roots_start,
+//									roots_size,
+//									L,
+//									dist_matrix,
+//									iter);
+//				}
 			}
 			if (0 != inserted_count) {
 				// Update other arrays in L[v_id] if new labels were inserted in this iteration

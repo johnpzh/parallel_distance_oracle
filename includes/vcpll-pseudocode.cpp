@@ -137,8 +137,8 @@ void push_labels(
 
 // Function for distance query;
 // traverse vertex v_id's labels;
-// return the distance between v_id and cand_root_id based on existing labels.
-byte distance_query(
+// return false if shorter distance exists already, return true if the cand_root_id can be added into v_id's label.
+bool distance_query(
 			The candidate temperary ID cand_root_id,
 			The vertex ID v_id,
 			Start ID of roots roots_start,
@@ -148,7 +148,7 @@ byte distance_query(
 			The iterator iter) // also the targeted distance
 {
 
-	Distance d_query = INF;
+	// Distance d_query = INF;
 	cand_real_id = cand_root_id + roots_start; // cand_root_id's real ID
 	// Traverse v_id's all existing labels
 	for (every batch b_i in L[v_id].batches) {
@@ -178,13 +178,13 @@ byte distance_query(
 				}
 				// The query distance based on exsiting labels;
 				Query distance d_tmp = dist + dist_matrix[cand_root_id][v];
-				if (d_tmp < d_query) {
-					d_query = d_tmp;
+				if (d_tmp <= iter) {
+					return false;
 				}
 			}
 		}
 	}
-	return d_query;
+	return true;
 }
 
 // Function inserts candidate cand_root_id into vertex v_id's labels;
@@ -298,16 +298,14 @@ void batch_process(
 					continue;
 				}
 				short_index[v_id].candidates.reset(cand_root_id); // reset the bit of cand_root_id
-				// Get the distance between v_id and cand_root_id based on existing labels
-				Distance d_query = distance_query(
-										The candidate temperary ID cand_root_id,
-										The vertex ID v_id,
-										Start ID of roots roots_start,
-										Real labels L,
-										Distance buffer dist_matrix,
-										The iterator iter);
 				// Only insert cand_root_id into v_id's label if its distance to v_id is shorter than existing distance
-				if (iter < d_query) {
+				if ( distance_query(
+								The candidate temperary ID cand_root_id,
+								The vertex ID v_id,
+								Start ID of roots roots_start,
+								Real labels L,
+								Distance buffer dist_matrix,
+								The iterator iter) ) {
 					// Insert v_id into the active queue
 					if (!is_active[v_id]) {
 						is_active[v_id] = true;
