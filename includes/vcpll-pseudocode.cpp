@@ -15,12 +15,15 @@ struct IndexType {
 	vector<Batch> batches; // Batch info
 	vector<DistanceIndexType> distances; // Distance info
 	vector<byte> vertices; // Vertices in the label, preresented as temperory ID
+	inti last_distances_start;
 };
 
 // Structure for the type of temporary label
 struct ShortIndex {
 	bitset indicator; // Global indicator, indicator[r] is set means root r once selected as candidate already
-	bitset candidates; // Candidates one iteration, candidates[r] is set means root r is candidate in this iteration
+	// bitset candidates; // Candidates one iteration, candidates[r] is set means root r is candidate in this iteration
+	// bitset lasts;
+
 }
 
 const int BATCH_SIZE = 256;
@@ -51,9 +54,11 @@ void initialize(
 		// Initialize roots labels
 		The global vertex ID of r_id is r_real_id = r_id + roots_start;
 		short_index[r_id].indicator.set(r_id); // Set r_real_id itself has been already selected in r_id's temporary labels
+		// short_index[r_id].lasts.set(r_id);
 		// Insert (r_real_id, 0) to r_id's label L[r_real_id]
 		// Insert new Batch's batch_id, start_index, and size
 		L[r_real_id].batches.push_back(Batch(b_id, L[r_real_id].distances.size(), 1));
+		L[r_real_id].last_distances_start = L[r_real_id].distances.size();
 		// Insert new DistanceIndexType's start_index, size, and dist
 		L[r_real_id].distances.push_back(DistanceIndexType(L[r_real_id].vertices.size(), 1, 0));
 		// Insert label vertices temporary ID
@@ -147,9 +152,11 @@ void insert_label(
 			Start ID of roots roots_start,
 			The number of roots roots_size,
 			Real labels L,
+			Temporary labels short_index,
 			Distance buffer dist_matrix,
 			The iterator iter,
-			The flag array got_labels)
+			The flag array got_labels,
+			The current batch ID b_id)
 {
 	// Update v_id's other indices arrays
 	if (got_labels[v_id]) {
@@ -180,6 +187,7 @@ void insert_label(
 		// Only if vertex v_id is a root in this batch, update distance buffer dist_matrix
 		dist_matrix[v_root_id][cand_root_id + roots_start] = iter;
 	}
+	// short_index[v_id].lasts.set(cand_root_id);
 }
 
 // Function that pushes v_head's labels to v_head's every neighbor
@@ -197,62 +205,72 @@ void push_labels(
 	A flag array is_active,
 	The flag array got_labels)
 {
-	// These 2 index are used for traversing v_head's last inserted labels
-	l_i_start = L[v_head].distances.rbegin()->start_index; // The distances array's last element has the start index of labels
-	l_i_bound = l_i_start + L[v_head].distances.rbegin()->size;
-	// Traverse v_head's every neighbor v_tail
-	for (every neighbor v_tail of v_head) { // v_head's neighbors are decreasingly ordered by rank.
-		if (v_tail < roots_start) { // v_tail has higher rank than any roots, then no roots can push new labels to it.
-			return;
-		}
-		if (v_tail < L[v_head].vertices[l_i_start] + roots_start) { // v_tail has higher rank than any v_head's labels
-			return;
-		}
-		// Traverse v_head's last inserted labels
-		for (index l_i = l_i_start; l_i < l_i_bound; ++l_i) {
-			label_root_id = L[v_head].vertices[l_i]; // label_root_id is a last inserted label
-			if (v_tail < label_root_id + roots_start) { // v_head's last inserted labels are ordered by rank.
-				// v_tail has higher rank than all remaining labels
-				break;
+	for (index d_i_start = L[v_head].last_distances_start; d_i_start < L[v_head].distances.size(); ++d_i_start) {
+		// These 2 index are used for traversing v_head's last inserted labels
+		l_i_start = L[v_head].distances[d_i_start]->start_index; // The distances array's last element has the start index of labels
+		// l_i_start = L[v_head].last_distances_start;
+		l_i_bound = l_i_start + L[v_head].distances[d_i_start]->size;
+		Distance l_i_dist = L[v_head].distances[d_i_start].dist + 1;
+		// Traverse v_head's every neighbor v_tail
+		for (every neighbor v_tail of v_head) { // v_head's neighbors are decreasingly ordered by rank.
+			if (v_tail < roots_start) { // v_tail has higher rank than any roots, then no roots can push new labels to it.
+				return;
 			}
-			if (short_index[v_tail].indicator[label_root_id] is set) {
-				// The label is alreay selected before
-				continue;
+			if (v_tail < L[v_head].vertices[l_i_start] + roots_start) { // v_tail has higher rank than any v_head's labels
+				return;
 			}
-			// Record vertex label_root_id as v_tail's candidates label
-			// short_index[v_tail].candidates.set(label_root_id);
-			// Record vertex label_root_id as already selected label, so will not be selected again by v_tail in this batch
-			short_index[v_tail].indicator.set(label_root_id);
-
-			// Check the distance d(v_tail, label_root_id)
-			Distance d_query = distance_query(
-									The candidate temperary ID label_root_id,
-									The vertex ID v_tail,
-									Start ID of roots roots_start,
-									Real labels L,
-									Distance buffer dist_matrix,
-									The iterator iter);
-
-			// Only insert label_root_id into v_tail's label if its distance to v_tail is shorter than existing distance
-			if (iter < d_query) {
-				// Insert v_id into the active queue
-				if (!is_active[v_tail]) {
-					is_active[v_tail] = true;
-					candidate_queue[end_candidate_queue++] = v_tail;
+			// Traverse v_head's last inserted labels
+			for (index l_i = l_i_start; l_i < l_i_bound; ++l_i) {
+				label_root_id = L[v_head].vertices[l_i]; // label_root_id is a last inserted label
+			// for (index label_root_id = 0; label_root_id < roots_size; ++label_root_id) {}
+			// 	if (!short_index[v_head].lasts[label_root_id]) {
+			// 		continue;
+			// 	}
+				if (v_tail < label_root_id + roots_start) { // v_head's last inserted labels are ordered by rank.
+					// v_tail has higher rank than all remaining labels
+					break;
 				}
-				// The candidate cand_root_id needs to be added into v_tail's label
-				insert_label(
-						The candidate temperary ID label_root_id,
-						The vertex ID v_tail,
-						Start ID of roots roots_start,
-						The number of roots roots_size,
-						Real labels L,
-						Distance buffer dist_matrix,
-						The iterator iter,
-						The flag array got_labels);
+				if (short_index[v_tail].indicator[label_root_id] is set) {
+					// The label is alreay selected before
+					continue;
+				}
+				// Record vertex label_root_id as v_tail's candidates label
+				// short_index[v_tail].candidates.set(label_root_id);
+				// Record vertex label_root_id as already selected label, so will not be selected again by v_tail in this batch
+				short_index[v_tail].indicator.set(label_root_id);
+
+				// Check the distance d(v_tail, label_root_id)
+				Distance d_query = distance_query(
+										The candidate temperary ID label_root_id,
+										The vertex ID v_tail,
+										Start ID of roots roots_start,
+										Real labels L,
+										Distance buffer dist_matrix,
+										The iterator l_i_dist);
+
+				// Only insert label_root_id into v_tail's label if its distance to v_tail is shorter than existing distance
+				if (l_i_dist < d_query) {
+					// Insert v_id into the active queue
+					if (!is_active[v_tail]) {
+						is_active[v_tail] = true;
+						candidate_queue[end_candidate_queue++] = v_tail;
+					}
+					// The candidate cand_root_id needs to be added into v_tail's label
+					insert_label(
+							The candidate temperary ID label_root_id,
+							The vertex ID v_tail,
+							Start ID of roots roots_start,
+							The number of roots roots_size,
+							Real labels L,
+							Temporary labels short_index,
+							Distance buffer dist_matrix,
+							The iterator iter,
+							The flag array got_labels);
+				}
 			}
 		}
 	}
+
 }
 
 
@@ -343,7 +361,7 @@ void batch_process(
 		// Traverse active vertices to push their labels as candidates
 		for (index i_queue = 0; i_queue < end_active_queue; ++i_queue) {
 			v_head = ref_active_queue[i_queue]; // The active vertex v_head
-			is_active[v_head] = false; // reset is_active
+			// is_active[v_head] = false; // reset is_active
 			// Push v_head's labels to v_head's every neighbor
 			push_labels(
 					The active vertex v_head,
@@ -357,6 +375,11 @@ void batch_process(
 					The end index of the queue end_candidate_queue,
 					A flag array is_active,
 					The flag array got_labels);
+		}
+		// Reset flag array is_active
+		for (index i_queue = 0; i_queue < end_active_queue; ++i_queue) {
+			is_active[ref_active_queue[i_queue]] = false;
+			// short_index[ref_active_queue[i_queue]].lasts.reset();
 		}
 		// Swap candidaten_queue and active_queue
 		end_active_queue = end_candidate_queue; // Set the active_queue empty
