@@ -125,12 +125,11 @@ private:
 				smalli iter);
 
 	// Test only
-	uint64_t check_count = 0;
+//	uint64_t check_count = 0;
 	double initializing_time = 0;
 	double candidating_time = 0;
 	double adding_time = 0;
 	double distance_query_time = 0;
-//	double distance_query_final_check_time = 0;
 	double init_index_time = 0;
 	double init_dist_matrix_time = 0;
 	double init_start_reset_time = 0;
@@ -261,63 +260,6 @@ inline void VertexCentricPLL::initialize(
 		}
 	}
 	init_dist_matrix_time += WallTimer::get_time_mark();
-
-//	init_start_reset_time -= WallTimer::get_time_mark();
-//	for (idi v = 0; v < num_v; ++v) {
-//		short_index[v].indicator.reset();
-//	}
-//	fill(got_labels.begin(), got_labels.end(), 0);
-
-//	init_start_reset_time += WallTimer::get_time_mark();
-
-//	// Initialize roots labels and distance matrix
-//	for (idi r_id = 0; r_id < roots_size; ++r_id) {
-//		init_index_time -= WallTimer::get_time_mark();
-//		// Initialize roots labels
-//		idi r_real_id = r_id + roots_start;
-//		// Short Index
-//		short_index[r_real_id].indicator.set(r_id);
-//		// Real Index
-//		IndexType &Lr = L[r_real_id];
-//		Lr.batches.push_back(IndexType::Batch(
-//								b_id, // Batch ID
-//								Lr.distances.size(), // start_index
-//								1)); // size
-//		Lr.distances.push_back(IndexType::DistanceIndexType(
-//								Lr.vertices.size(), // start_index
-//								1, // size
-//								0)); // dist
-//		Lr.vertices.push_back(r_id);
-		// Push r_real_id to active queue
-//		active_queue[end_active_queue++] = r_real_id;
-//		got_labels[r_real_id] = true;
-//		init_index_time += WallTimer::get_time_mark();
-//
-//		init_dist_matrix_time -= WallTimer::get_time_mark();
-//		// Initialize distance matrix
-//		fill(dist_matrix[r_id].begin(),
-//				dist_matrix[r_id].begin() + r_real_id + 1,
-//				SMALLI_MAX);
-//		inti b_i_bound = Lr.batches.size();
-//		_mm_prefetch(&Lr.batches[0], _MM_HINT_T0);
-//		_mm_prefetch(&Lr.distances[0], _MM_HINT_T0);
-//		_mm_prefetch(&Lr.vertices[0], _MM_HINT_T0);
-//		for (inti b_i = 0; b_i < b_i_bound; ++b_i) {
-//			idi id_offset = Lr.batches[b_i].batch_id * BATCH_SIZE;
-//			idi dist_start_index = Lr.batches[b_i].start_index;
-//			idi dist_bound_index = dist_start_index + Lr.batches[b_i].size;
-//			// Traverse dist_matrix
-//			for (idi dist_i = dist_start_index; dist_i < dist_bound_index; ++dist_i) {
-//				idi v_start_index = Lr.distances[dist_i].start_index;
-//				idi v_bound_index = v_start_index + Lr.distances[dist_i].size;
-//				smalli dist = Lr.distances[dist_i].dist;
-//				for (idi v_i = v_start_index; v_i < v_bound_index; ++v_i) {
-//					dist_matrix[r_id][Lr.vertices[v_i] + id_offset] = dist;
-//				}
-//			}
-//		}
-//		init_dist_matrix_time += WallTimer::get_time_mark();
-//	}
 }
 
 
@@ -483,14 +425,12 @@ inline bool VertexCentricPLL::distance_query(
 					// in which case dist_matrix[cand_root_id][v] does not exit.
 					continue;
 				}
-//				distance_query_final_check_time -= WallTimer::get_time_mark();
 				inti d_tmp = dist + dist_matrix[cand_root_id][v];
 //				++check_count;
 				if (d_tmp <= iter) {
 					distance_query_time += WallTimer::get_time_mark();
 					return false;
 				}
-//				distance_query_final_check_time += WallTimer::get_time_mark();
 			}
 		}
 	}
@@ -694,18 +634,16 @@ void VertexCentricPLL::construct(const Graph &G)
 	time_labeling += WallTimer::get_time_mark();
 
 	// Test
-	printf("check_count: %llu\n", check_count);
+//	printf("check_count: %llu\n", check_count);
 	double total_time = initializing_time + candidating_time + adding_time;
 	printf("Initializing: %f (%f%%)\n", initializing_time, initializing_time / total_time * 100);
-	printf("Candidating: %f (%f%%)\n", candidating_time, candidating_time / total_time * 100);
-	printf("Adding: %f (%f%%)\n", adding_time, adding_time / total_time * 100);
-	printf("Labeling: %f\n", time_labeling);
-//	printf("10%% Labeling: %f (%f%%)\n", time_ten, time_ten/time_labeling * 100);
-	printf("distance_query_time: %f (%f%%)\n", distance_query_time, distance_query_time / time_labeling * 100);
-//	printf("distance_query_final_check_time: %f (%f%%)\n", distance_query_final_check_time, distance_query_final_check_time / time_labeling * 100);
 	printf("init_start_reset_time: %f (%f%%)\n", init_start_reset_time, init_start_reset_time / initializing_time * 100);
 	printf("init_index_time: %f (%f%%)\n", init_index_time, init_index_time / initializing_time * 100);
 	printf("init_dist_matrix_time: %f (%f%%)\n", init_dist_matrix_time, init_dist_matrix_time / initializing_time * 100);
+	printf("Candidating: %f (%f%%)\n", candidating_time, candidating_time / total_time * 100);
+	printf("Adding: %f (%f%%)\n", adding_time, adding_time / total_time * 100);
+	printf("distance_query_time: %f (%f%%)\n", distance_query_time, distance_query_time / adding_time * 100);
+		printf("Labeling: %f\n", time_labeling);
 	// End test
 }
 
