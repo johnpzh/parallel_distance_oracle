@@ -28,8 +28,7 @@ using std::fill;
 
 namespace PADO {
 
-const inti BATCH_SIZE = 256; // The size for regular batch and bit array.
-const inti BITPARALLEL_SIZE = 50;
+const inti BATCH_SIZE = 1408; // The size for regular batch and bit array.
 
 
 
@@ -46,7 +45,7 @@ private:
 			Batch(idi batch_id_, idi start_index_, inti size_):
 						batch_id(batch_id_), start_index(start_index_), size(size_)
 			{
-				;
+
 			}
 		};
 
@@ -58,12 +57,9 @@ private:
 			DistanceIndexType(idi start_index_, inti size_, smalli dist_):
 						start_index(start_index_), size(size_), dist(dist_)
 			{
-				;
+
 			}
 		};
-
-	    smalli bp_dist[BITPARALLEL_SIZE];
-	    uint64_t bp_sets[BITPARALLEL_SIZE][2];  // [0]: S^{-1}, [1]: S^{0}
 
 		vector<Batch> batches; // Batch info
 		vector<DistanceIndexType> distances; // Distance info
@@ -82,24 +78,12 @@ private:
 
 	vector<IndexType> L;
 	void construct(const Graph &G);
-	inline void bit_parallel_labeling(
-			const Graph &G,
-			vector<IndexType> &L,
-			vector<bool> &used_bp_roots);
-
 	inline void batch_process(
 			const Graph &G,
 			idi b_id,
 			idi root_start,
 			inti roots_size,
-			vector<IndexType> &L,
-			const vector<bool> &used_bp_roots);
-//	inline void batch_process(
-//			const Graph &G,
-//			idi b_id,
-//			idi root_start,
-//			inti roots_size,
-//			vector<IndexType> &L);
+			vector<IndexType> &L);
 
 	inline void initialize(
 				vector<ShortIndex> &short_index,
@@ -110,18 +94,7 @@ private:
 				idi roots_start,
 				inti roots_size,
 				vector<IndexType> &L,
-				idi num_v,
-				const vector<bool> &used_bp_roots);
-//	inline void initialize(
-//				vector<ShortIndex> &short_index,
-//				vector< vector<smalli> > &dist_matrix,
-//				vector<idi> &active_queue,
-//				inti &end_active_queue,
-//				idi b_id,
-//				idi roots_start,
-//				inti roots_size,
-//				vector<IndexType> &L,
-//				idi num_v);
+				idi num_v);
 	inline void push_labels(
 				idi v_head,
 				idi roots_start,
@@ -130,17 +103,7 @@ private:
 				vector<ShortIndex> &short_index,
 				vector<idi> &candidate_queue,
 				inti &end_candidate_queue,
-				vector<bool> &got_candidates,
-				const vector<bool> &used_bp_roots);
-//	inline void push_labels(
-//				idi v_head,
-//				idi roots_start,
-//				const Graph &G,
-//				const vector<IndexType> &L,
-//				vector<ShortIndex> &short_index,
-//				vector<idi> &candidate_queue,
-//				inti &end_candidate_queue,
-//				vector<bool> &got_candidates);
+				vector<bool> &got_candidates);
 	inline bool distance_query(
 				idi cand_root_id,
 				idi v_id,
@@ -200,129 +163,6 @@ VertexCentricPLL::VertexCentricPLL(const Graph &G)
 	construct(G);
 }
 
-inline void VertexCentricPLL::bit_parallel_labeling(
-			const Graph &G,
-			vector<IndexType> &L,
-			vector<bool> &used_bp_roots)
-{
-	idi num_v = G.get_num_v();
-	idi num_e = G.get_num_e();
-
-//	std::vector<bool> usd(num_v, false);  // Used as root? (in new label)
-
-	std::vector<smalli> tmp_d(num_v); // distances from the root to every v
-	std::vector<std::pair<uint64_t, uint64_t> > tmp_s(num_v); // first is S_r^{-1}, second is S_r^{0}
-	std::vector<int> que(num_v); // active queue
-	std::vector<std::pair<idi, idi> > sibling_es(num_e); // siblings, their distances to the root are equal (have difference of 0)
-	std::vector<std::pair<idi, idi> > child_es(num_e); // child and father, their distances to the root have difference of 1.
-
-	idi r = 0; // root r
-	for (inti i_bpspt = 0; i_bpspt < BITPARALLEL_SIZE; ++i_bpspt) {
-		while (r < num_v && used_bp_roots[r]) {
-			++r;
-		}
-		if (r == num_v) {
-			for (idi v = 0; v < num_v; ++v) {
-				L[v].bp_dist[i_bpspt] = SMALLI_MAX;
-			}
-			continue;
-		}
-		used_bp_roots[r] = true;
-
-		fill(tmp_d.begin(), tmp_d.end(), SMALLI_MAX);
-		fill(tmp_s.begin(), tmp_s.end(), std::make_pair(0, 0));
-
-		idi que_t0 = 0, que_t1 = 0, que_h = 0;
-		que[que_h++] = r;
-		tmp_d[r] = 0;
-		que_t1 = que_h;
-
-		int ns = 0; // number of selected neighbor, default 64
-//		std::vector<int> vs; // not sure why need this ???
-//		sort(adj[r].begin(), adj[r].end());
-		// the edge of one vertex in G is ordered decreasingly to rank, lower rank first, so here need to traverse edges backward
-		idi i_bound = G.vertices[r] - 1;
-		idi i_start = i_bound + G.out_degrees[r];
-		for (idi i = i_start; i > i_bound; --i) {
-			idi v = G.out_edges[i];
-			if (!used_bp_roots[v]) {
-				used_bp_roots[v] = true;
-				// Algo3:line4: for every v in S_r, (dist[v], S_r^{-1}[v], S_r^{0}[v]) <- (1, {v}, empty_set)
-				que[que_h++] = v;
-				tmp_d[v] = 1;
-				tmp_s[v].first = 1ULL << ns;
-//				vs.push_back(v);
-				if (++ns == 64) break;
-			}
-		}
-
-		for (smalli d = 0; que_t0 < que_h; ++d) {
-			idi num_sibling_es = 0, num_child_es = 0;
-
-			for (idi que_i = que_t0; que_i < que_t1; ++que_i) {
-				idi v = que[que_i];
-				idi i_start = G.vertices[v];
-				idi i_bound = i_start + G.out_degrees[v];
-				for (idi i = i_start; i < i_bound; ++i) {
-					idi tv = G.out_degrees[i];
-					smalli td = d + 1;
-
-					if (d > tmp_d[tv]) {
-						;
-					}
-					else if (d == tmp_d[tv]) {
-						if (v < tv) { // ??? Why need v < tv !!! Because it's a undirected graph.
-							sibling_es[num_sibling_es].first  = v;
-							sibling_es[num_sibling_es].second = tv;
-							++num_sibling_es;
-						}
-					} else { // d < tmp_d[tv]
-						if (tmp_d[tv] == SMALLI_MAX) {
-							que[que_h++] = tv;
-							tmp_d[tv] = td;
-						}
-						child_es[num_child_es].first  = v;
-						child_es[num_child_es].second = tv;
-						++num_child_es;
-					}
-				}
-			}
-
-			for (idi i = 0; i < num_sibling_es; ++i) {
-				idi v = sibling_es[i].first, w = sibling_es[i].second;
-				tmp_s[v].second |= tmp_s[w].first;
-				tmp_s[w].second |= tmp_s[v].first;
-			}
-			for (idi i = 0; i < num_child_es; ++i) {
-				idi v = child_es[i].first, c = child_es[i].second;
-				tmp_s[c].first  |= tmp_s[v].first;
-				tmp_s[c].second |= tmp_s[v].second;
-			}
-
-			que_t0 = que_t1;
-			que_t1 = que_h;
-		}
-
-		for (idi v = 0; v < num_v; ++v) {
-			L[v].bp_dist[i_bpspt] = tmp_d[v];
-			L[v].bp_sets[i_bpspt][0] = tmp_s[v].first; // S_r^{-1}
-			L[v].bp_sets[i_bpspt][1] = tmp_s[v].second & ~tmp_s[v].first; // Only need those r's neighbors who are not already in S_r^{-1}
-//			index_[inv[v]].bpspt_d[i_bpspt] = tmp_d[v];
-//			index_[inv[v]].bpspt_s[i_bpspt][0] = tmp_s[v].first;
-//			index_[inv[v]].bpspt_s[i_bpspt][1] = tmp_s[v].second & ~tmp_s[v].first;
-		}
-
-		// By Johnpzh
-		//      if (counter < counter_bound) {
-			//    	  ++counter;
-		//    	  time_ten += GetCurrentTimeSec();
-		//      }
-		// End by Johnpzh
-	}
-
-}
-
-
 // Function for initializing at the begin of a batch
 // For a batch, initialize the temporary labels and real labels of roots;
 // traverse roots' labels to initialize distance buffer;
@@ -336,17 +176,14 @@ inline void VertexCentricPLL::initialize(
 			idi roots_start,
 			inti roots_size,
 			vector<IndexType> &L,
-			idi num_v,
-			const vector<bool> &used_bp_roots)
+			idi num_v)
 {
 	idi roots_bound = roots_start + roots_size;
 	init_start_reset_time -= WallTimer::get_time_mark();
 	{
 		//active_queue
 		for (idi r_real_id = roots_start; r_real_id < roots_bound; ++r_real_id) {
-			if (!used_bp_roots[r_real_id]) {
-				active_queue[end_active_queue++] = r_real_id;
-			}
+			active_queue[end_active_queue++] = r_real_id;
 		}
 	}
 	init_start_reset_time += WallTimer::get_time_mark();
@@ -363,12 +200,9 @@ inline void VertexCentricPLL::initialize(
 			if (short_index[v].indicator[BATCH_SIZE]) {
 				short_index[v].indicator.reset();
 			}
-			if (!used_bp_roots[v]) {
-				short_index[v].indicator.set(v - roots_start);
-				short_index[v].indicator.set(BATCH_SIZE);
-				short_index[v].indicator.set(BATCH_SIZE + 1);
-			}
-
+			short_index[v].indicator.set(v - roots_start);
+			short_index[v].indicator.set(BATCH_SIZE);
+			short_index[v].indicator.set(BATCH_SIZE + 1);
 		}
 		for (; v < num_v; ++v) {
 			if (short_index[v].indicator[BATCH_SIZE]) {
@@ -381,9 +215,6 @@ inline void VertexCentricPLL::initialize(
 	{
 //		IndexType &Lr = nullptr;
 		for (idi r_id = 0; r_id < roots_size; ++r_id) {
-			if (used_bp_roots[r_id + roots_start]) {
-				continue;
-			}
 			IndexType &Lr = L[r_id + roots_start];
 			Lr.batches.push_back(IndexType::Batch(
 												b_id, // Batch ID
@@ -409,10 +240,6 @@ inline void VertexCentricPLL::initialize(
 		idi v_bound_index;
 		smalli dist;
 		for (idi r_id = 0; r_id < roots_size; ++r_id) {
-			if (used_bp_roots[r_id + roots_start]) {
-				continue;
-			}
-
 			IndexType &Lr = L[r_id + roots_start];
 //			fill(dist_matrix[r_id].begin(),
 //					dist_matrix[r_id].begin() + r_id + roots_start + 1,
@@ -439,105 +266,6 @@ inline void VertexCentricPLL::initialize(
 	}
 	init_dist_matrix_time += WallTimer::get_time_mark();
 }
-//inline void VertexCentricPLL::initialize(
-//			vector<ShortIndex> &short_index,
-//			vector< vector<smalli> > &dist_matrix,
-//			vector<idi> &active_queue,
-//			inti &end_active_queue,
-//			idi b_id,
-//			idi roots_start,
-//			inti roots_size,
-//			vector<IndexType> &L,
-//			idi num_v)
-//{
-//	idi roots_bound = roots_start + roots_size;
-//	init_start_reset_time -= WallTimer::get_time_mark();
-//	{
-//		//active_queue
-//		for (idi r_real_id = roots_start; r_real_id < roots_bound; ++r_real_id) {
-//			active_queue[end_active_queue++] = r_real_id;
-//		}
-//	}
-//	init_start_reset_time += WallTimer::get_time_mark();
-//	init_index_time -= WallTimer::get_time_mark();
-//	// Short_index
-//	{
-//		idi v = 0;
-//		for ( ; v < roots_start; ++v) {
-//			if (short_index[v].indicator[BATCH_SIZE]) {
-//				short_index[v].indicator.reset();
-//			}
-//		}
-//		for ( ; v < roots_bound; ++v) {
-//			if (short_index[v].indicator[BATCH_SIZE]) {
-//				short_index[v].indicator.reset();
-//			}
-//			short_index[v].indicator.set(v - roots_start);
-//			short_index[v].indicator.set(BATCH_SIZE);
-//			short_index[v].indicator.set(BATCH_SIZE + 1);
-//		}
-//		for (; v < num_v; ++v) {
-//			if (short_index[v].indicator[BATCH_SIZE]) {
-//				short_index[v].indicator.reset();
-//			}
-//		}
-//	}
-////
-//	// Real Index
-//	{
-////		IndexType &Lr = nullptr;
-//		for (idi r_id = 0; r_id < roots_size; ++r_id) {
-//			IndexType &Lr = L[r_id + roots_start];
-//			Lr.batches.push_back(IndexType::Batch(
-//												b_id, // Batch ID
-//												Lr.distances.size(), // start_index
-//												1)); // size
-//			Lr.distances.push_back(IndexType::DistanceIndexType(
-//												Lr.vertices.size(), // start_index
-//												1, // size
-//												0)); // dist
-//			Lr.vertices.push_back(r_id);
-//		}
-//	}
-//	init_index_time += WallTimer::get_time_mark();
-//	init_dist_matrix_time -= WallTimer::get_time_mark();
-//	// Dist_matrix
-//	{
-////		IndexType &Lr;
-//		inti b_i_bound;
-//		idi id_offset;
-//		idi dist_start_index;
-//		idi dist_bound_index;
-//		idi v_start_index;
-//		idi v_bound_index;
-//		smalli dist;
-//		for (idi r_id = 0; r_id < roots_size; ++r_id) {
-//			IndexType &Lr = L[r_id + roots_start];
-////			fill(dist_matrix[r_id].begin(),
-////					dist_matrix[r_id].begin() + r_id + roots_start + 1,
-////					SMALLI_MAX);
-//			b_i_bound = Lr.batches.size();
-//			_mm_prefetch(&Lr.batches[0], _MM_HINT_T0);
-//			_mm_prefetch(&Lr.distances[0], _MM_HINT_T0);
-//			_mm_prefetch(&Lr.vertices[0], _MM_HINT_T0);
-//			for (inti b_i = 0; b_i < b_i_bound; ++b_i) {
-//				id_offset = Lr.batches[b_i].batch_id * BATCH_SIZE;
-//				dist_start_index = Lr.batches[b_i].start_index;
-//				dist_bound_index = dist_start_index + Lr.batches[b_i].size;
-//				// Traverse dist_matrix
-//				for (idi dist_i = dist_start_index; dist_i < dist_bound_index; ++dist_i) {
-//					v_start_index = Lr.distances[dist_i].start_index;
-//					v_bound_index = v_start_index + Lr.distances[dist_i].size;
-//					dist = Lr.distances[dist_i].dist;
-//					for (idi v_i = v_start_index; v_i < v_bound_index; ++v_i) {
-//						dist_matrix[r_id][Lr.vertices[v_i] + id_offset] = dist;
-//					}
-//				}
-//			}
-//		}
-//	}
-//	init_dist_matrix_time += WallTimer::get_time_mark();
-//}
 
 
 
@@ -550,17 +278,7 @@ inline void VertexCentricPLL::push_labels(
 				vector<ShortIndex> &short_index,
 				vector<idi> &candidate_queue,
 				inti &end_candidate_queue,
-				vector<bool> &got_candidates,
-				const vector<bool> &used_bp_roots)
-//inline void VertexCentricPLL::push_labels(
-//				idi v_head,
-//				idi roots_start,
-//				const Graph &G,
-//				const vector<IndexType> &L,
-//				vector<ShortIndex> &short_index,
-//				vector<idi> &candidate_queue,
-//				inti &end_candidate_queue,
-//				vector<bool> &got_candidates)
+				vector<bool> &got_candidates)
 {
 	const IndexType &Lv = L[v_head];
 	// These 2 index are used for traversing v_head's last inserted labels
@@ -571,11 +289,6 @@ inline void VertexCentricPLL::push_labels(
 	idi e_i_bound = e_i_start + G.out_degrees[v_head];
 	for (idi e_i = e_i_start; e_i < e_i_bound; ++e_i) {
 		idi v_tail = G.out_edges[e_i];
-
-		if (used_bp_roots[v_head]) {
-			continue;
-		}
-
 		if (v_tail < roots_start) { // v_tail has higher rank than any roots, then no roots can push new labels to it.
 			return;
 		}
@@ -624,29 +337,6 @@ inline bool VertexCentricPLL::distance_query(
 
 	idi cand_real_id = cand_root_id + roots_start;
 	const IndexType &Lv = L[v_id];
-
-	// Bit Parallel check
-	const IndexType &Lr = L[cand_real_id];
-	_mm_prefetch(&Lv.bp_dist[0], _MM_HINT_T0);
-	_mm_prefetch(&Lv.bp_sets[0][0], _MM_HINT_T0);
-	_mm_prefetch(&Lr.bp_dist[0], _MM_HINT_T0);
-	_mm_prefetch(&Lr.bp_sets[0][0], _MM_HINT_T0);
-    for (inti i = 0; i < BITPARALLEL_SIZE; ++i) {
-      inti td = Lr.bp_dist[i] + Lv.bp_dist[i];
-      if (td - 2 <= iter) {
-        td +=
-            (Lr.bp_sets[i][0] & Lv.bp_sets[i][0]) ? -2 :
-            ((Lr.bp_sets[i][0] & Lv.bp_sets[i][1]) |
-             (Lr.bp_sets[i][1] & Lv.bp_sets[i][0]))
-            ? -1 : 0;
-        if (td <= iter) {
-			distance_query_time += WallTimer::get_time_mark();
-        	return false;
-        }
-      }
-    }
-
-
 	// Traverse v_id's all existing labels
 	inti b_i_bound = Lv.batches.size();
 	_mm_prefetch(&Lv.batches[0], _MM_HINT_T0);
@@ -775,14 +465,7 @@ inline void VertexCentricPLL::batch_process(
 						idi b_id,
 						idi roots_start, // start id of roots
 						inti roots_size, // how many roots in the batch
-						vector<IndexType> &L,
-						const vector<bool> &used_bp_roots)
-//inline void VertexCentricPLL::batch_process(
-//						const Graph &G,
-//						idi b_id,
-//						idi roots_start, // start id of roots
-//						inti roots_size, // how many roots in the batch
-//						vector<IndexType> &L)
+						vector<IndexType> &L)
 {
 //	double time_can = 0;
 //	double time_add = 0;
@@ -808,18 +491,7 @@ inline void VertexCentricPLL::batch_process(
 			roots_start,
 			roots_size,
 			L,
-			num_v,
-			used_bp_roots);
-//	initialize(
-//			short_index,
-//			dist_matrix,
-//			active_queue,
-//			end_active_queue,
-//			b_id,
-//			roots_start,
-//			roots_size,
-//			L,
-//			num_v);
+			num_v);
 
 	smalli iter = 0; // The iterator, also the distance for current iteration
 	initializing_time += WallTimer::get_time_mark();
@@ -841,17 +513,7 @@ inline void VertexCentricPLL::batch_process(
 					short_index,
 					candidate_queue,
 					end_candidate_queue,
-					got_candidates,
-					used_bp_roots);
-//			push_labels(
-//					v_head,
-//					roots_start,
-//					G,
-//					L,
-//					short_index,
-//					candidate_queue,
-//					end_candidate_queue,
-//					got_candidates);
+					got_candidates);
 		}
 		end_active_queue = 0; // Set the active_queue empty
 		candidating_time += WallTimer::get_time_mark();
@@ -929,13 +591,7 @@ void VertexCentricPLL::construct(const Graph &G)
 	L.resize(num_v);
 	idi remainer = num_v % BATCH_SIZE;
 	idi b_i_bound = num_v / BATCH_SIZE;
-	vector<bool> used_bp_roots(num_v, false);
 	double time_labeling = -WallTimer::get_time_mark();
-
-	bit_parallel_labeling(
-				G,
-				L,
-				used_bp_roots);
 
 	for (idi b_i = 0; b_i < b_i_bound; ++b_i) {
 //		printf("b_i: %u\n", b_i);//test
@@ -944,14 +600,7 @@ void VertexCentricPLL::construct(const Graph &G)
 				b_i,
 				b_i * BATCH_SIZE,
 				BATCH_SIZE,
-				L,
-				used_bp_roots);
-//		batch_process(
-//				G,
-//				b_i,
-//				b_i * BATCH_SIZE,
-//				BATCH_SIZE,
-//				L);
+				L);
 	}
 	if (remainer != 0) {
 //		printf("b_i: %u\n", b_i_bound);//test
@@ -960,14 +609,7 @@ void VertexCentricPLL::construct(const Graph &G)
 				b_i_bound,
 				b_i_bound * BATCH_SIZE,
 				remainer,
-				L,
-				used_bp_roots);
-//		batch_process(
-//				G,
-//				b_i_bound,
-//				b_i_bound * BATCH_SIZE,
-//				remainer,
-//				L);
+				L);
 	}
 	time_labeling += WallTimer::get_time_mark();
 
@@ -975,13 +617,13 @@ void VertexCentricPLL::construct(const Graph &G)
 //	printf("check_count: %llu\n", check_count);
 	double total_time = initializing_time + candidating_time + adding_time;
 	printf("Initializing: %f (%f%%)\n", initializing_time, initializing_time / total_time * 100);
-	printf("\tinit_start_reset_time: %f (%f%%)\n", init_start_reset_time, init_start_reset_time / initializing_time * 100);
-	printf("\tinit_index_time: %f (%f%%)\n", init_index_time, init_index_time / initializing_time * 100);
-	printf("\tinit_dist_matrix_time: %f (%f%%)\n", init_dist_matrix_time, init_dist_matrix_time / initializing_time * 100);
+	printf("init_start_reset_time: %f (%f%%)\n", init_start_reset_time, init_start_reset_time / initializing_time * 100);
+	printf("init_index_time: %f (%f%%)\n", init_index_time, init_index_time / initializing_time * 100);
+	printf("init_dist_matrix_time: %f (%f%%)\n", init_dist_matrix_time, init_dist_matrix_time / initializing_time * 100);
 	printf("Candidating: %f (%f%%)\n", candidating_time, candidating_time / total_time * 100);
 	printf("Adding: %f (%f%%)\n", adding_time, adding_time / total_time * 100);
-	printf("\tdistance_query_time: %f (%f%%)\n", distance_query_time, distance_query_time / adding_time * 100);
-	printf("Labeling: %f\n", time_labeling);
+	printf("distance_query_time: %f (%f%%)\n", distance_query_time, distance_query_time / adding_time * 100);
+		printf("Labeling: %f\n", time_labeling);
 	// End test
 }
 
