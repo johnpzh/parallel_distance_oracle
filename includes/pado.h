@@ -28,7 +28,7 @@ using std::fill;
 
 namespace PADO {
 
-const inti BATCH_SIZE = 256; // The size for regular batch and bit array.
+const inti BATCH_SIZE = 1408; // The size for regular batch and bit array.
 
 
 
@@ -68,8 +68,11 @@ private:
 
 	// Structure for the type of temporary label
 	struct ShortIndex {
-//		bool has_indicator = false;
-		bitset<BATCH_SIZE + 1> indicator; // Global indicator, indicator[r] is set means root r once selected as candidate already
+		// I use BATCH_SIZE + 2 bit for indicator bit array.
+		// The v.indicator[BATCH_SIZE] is set if in current batch v has any candidates.
+		// The v.indicator[BATCH_SIZE + 1] is set if in current batch v has got any new labels already.
+		// In this way, when do initialization, only initialize those short_index[v] whose indicator[BATCH_SIZE] is set.
+		bitset<BATCH_SIZE + 2> indicator; // Global indicator, indicator[r] (0 <= r < BATCH_SIZE) is set means root r once selected as candidate already
 		bitset<BATCH_SIZE> candidates; // Candidates one iteration, candidates[r] is set means root r is candidate in this iteration
 	};
 
@@ -82,39 +85,16 @@ private:
 			inti roots_size,
 			vector<IndexType> &L);
 
-//	inline void initialize(
-//				vector<ShortIndex> &short_index,
-//				vector< vector<smalli> > &dist_matrix,
-//				vector<idi> &active_queue,
-//				inti &end_active_queue,
-//				vector<bool> &got_labels,
-//				vector<bool> &has_indicators,
-//				idi b_id,
-//				idi roots_start,
-//				inti roots_size,
-//				vector<IndexType> &L,
-//				idi num_v);
 	inline void initialize(
 				vector<ShortIndex> &short_index,
 				vector< vector<smalli> > &dist_matrix,
 				vector<idi> &active_queue,
 				inti &end_active_queue,
-				vector<bool> &got_labels,
 				idi b_id,
 				idi roots_start,
 				inti roots_size,
 				vector<IndexType> &L,
 				idi num_v);
-//	inline void push_labels(
-//				idi v_head,
-//				idi roots_start,
-//				const Graph &G,
-//				const vector<IndexType> &L,
-//				vector<ShortIndex> &short_index,
-//				vector<idi> &candidate_queue,
-//				inti &end_candidate_queue,
-//				vector<bool> &got_candidates,
-//				vector<bool> &has_indicators);
 	inline void push_labels(
 				idi v_head,
 				idi roots_start,
@@ -143,7 +123,7 @@ private:
 				idi v_id,
 				idi inserted_count,
 				vector<IndexType> &L,
-				vector<bool> &got_labels,
+				vector<ShortIndex> &short_index,
 				idi b_id,
 				smalli iter);
 	inline void reset_at_end(
@@ -187,24 +167,11 @@ VertexCentricPLL::VertexCentricPLL(const Graph &G)
 // For a batch, initialize the temporary labels and real labels of roots;
 // traverse roots' labels to initialize distance buffer;
 // unset flag arrays is_active and got_labels
-//inline void VertexCentricPLL::initialize(
-//			vector<ShortIndex> &short_index,
-//			vector< vector<smalli> > &dist_matrix,
-//			vector<idi> &active_queue,
-//			inti &end_active_queue,
-//			vector<bool> &got_labels,
-//			vector<bool> &has_indicators,
-//			idi b_id,
-//			idi roots_start,
-//			inti roots_size,
-//			vector<IndexType> &L,
-//			idi num_v)
 inline void VertexCentricPLL::initialize(
 			vector<ShortIndex> &short_index,
 			vector< vector<smalli> > &dist_matrix,
 			vector<idi> &active_queue,
 			inti &end_active_queue,
-			vector<bool> &got_labels,
 			idi b_id,
 			idi roots_start,
 			inti roots_size,
@@ -212,36 +179,8 @@ inline void VertexCentricPLL::initialize(
 			idi num_v)
 {
 	idi roots_bound = roots_start + roots_size;
-//	{
-//		idi v = 0;
-//		for ( ; v < roots_start; ++v) {
-//			if (short_index[v].indicator.any()) {
-//				short_index[v].indicator.reset();
-//				got_labels[v] = false;
-//			}
-//		}
-//		for ( ; v < roots_bound; ++v) {
-//			if (short_index[v].indicator.any()) {
-//				short_index[v].indicator.reset();
-//			}
-//			short_index[v].indicator.set(v - roots_start);
-//			got_labels[v] = true;
-//		}
-//		for (; v < num_v; ++v) {
-//			if (short_index[v].indicator.any()) {
-//				short_index[v].indicator.reset();
-//				got_labels[v] = false;
-//			}
-//		}
-//	}
-
 	init_start_reset_time -= WallTimer::get_time_mark();
 	{
-		// got_labels
-		fill(got_labels.begin(), got_labels.begin() + roots_start, 0);
-		fill(got_labels.begin() + roots_start, got_labels.begin() + roots_bound, 1);
-		fill(got_labels.begin() + roots_bound, got_labels.end(), 0);
-
 		//active_queue
 		for (idi r_real_id = roots_start; r_real_id < roots_bound; ++r_real_id) {
 			active_queue[end_active_queue++] = r_real_id;
@@ -252,25 +191,6 @@ inline void VertexCentricPLL::initialize(
 	// Short_index
 	{
 		idi v = 0;
-//		for ( ; v < roots_start; ++v) {
-//			if (has_indicators[v]) {
-//				has_indicators[v] = false;
-//				short_index[v].indicator.reset();
-//			}
-//		}
-//		for ( ; v < roots_bound; ++v) {
-//			if (has_indicators[v]) {
-//				has_indicators[v] = false;
-//				short_index[v].indicator.reset();
-//			}
-//			short_index[v].indicator.set(v - roots_start);
-//		}
-//		for (; v < num_v; ++v) {
-//			if (has_indicators[v]) {
-//				has_indicators[v] = false;
-//				short_index[v].indicator.reset();
-//			}
-//		}
 		for ( ; v < roots_start; ++v) {
 			if (short_index[v].indicator[BATCH_SIZE]) {
 				short_index[v].indicator.reset();
@@ -282,42 +202,13 @@ inline void VertexCentricPLL::initialize(
 			}
 			short_index[v].indicator.set(v - roots_start);
 			short_index[v].indicator.set(BATCH_SIZE);
+			short_index[v].indicator.set(BATCH_SIZE + 1);
 		}
 		for (; v < num_v; ++v) {
 			if (short_index[v].indicator[BATCH_SIZE]) {
 				short_index[v].indicator.reset();
 			}
 		}
-//		for ( ; v < roots_start; ++v) {
-//			if (short_index[v].has_indicator) {
-//				short_index[v].has_indicator = false;
-//				short_index[v].indicator.reset();
-//			}
-//		}
-//		for ( ; v < roots_bound; ++v) {
-//			if (short_index[v].has_indicator) {
-//				short_index[v].has_indicator = false;
-//				short_index[v].indicator.reset();
-//			}
-//			short_index[v].indicator.set(v - roots_start);
-//		}
-//		for (; v < num_v; ++v) {
-//			if (short_index[v].has_indicator) {
-//				short_index[v].has_indicator = false;
-//				short_index[v].indicator.reset();
-//			}
-//		}
-//		idi v = 0;
-//		for ( ; v < roots_start; ++v) {
-//			short_index[v].indicator.reset();
-//		}
-//		for ( ; v < roots_bound; ++v) {
-//			short_index[v].indicator.reset();
-//			short_index[v].indicator.set(v - roots_start);
-//		}
-//		for (; v < num_v; ++v) {
-//			short_index[v].indicator.reset();
-//		}
 	}
 //
 	// Real Index
@@ -377,86 +268,8 @@ inline void VertexCentricPLL::initialize(
 }
 
 
-//inline void VertexCentricPLL::initialize(
-//			vector<ShortIndex> &short_index,
-//			vector< vector<smalli> > &dist_matrix,
-//			vector<idi> &active_queue,
-//			inti &end_active_queue,
-//			vector<bool> &got_labels,
-//			idi b_id,
-//			idi roots_start,
-//			inti roots_size,
-//			vector<IndexType> &L,
-//			idi num_v)
-//{
-//	init_start_reset_time -= WallTimer::get_time_mark();
-//	for (idi v = 0; v < num_v; ++v) {
-//		short_index[v].indicator.reset();
-//	}
-//	fill(got_labels.begin(), got_labels.end(), 0);
-//	init_start_reset_time += WallTimer::get_time_mark();
-//
-//	// Initialize roots labels and distance matrix
-//	for (idi r_id = 0; r_id < roots_size; ++r_id) {
-//		init_index_time -= WallTimer::get_time_mark();
-//		// Initialize roots labels
-//		idi r_real_id = r_id + roots_start;
-//		// Short Index
-//		short_index[r_real_id].indicator.set(r_id);
-//		// Real Index
-//		IndexType &Lr = L[r_real_id];
-//		Lr.batches.push_back(IndexType::Batch(
-//								b_id, // Batch ID
-//								Lr.distances.size(), // start_index
-//								1)); // size
-//		Lr.distances.push_back(IndexType::DistanceIndexType(
-//								Lr.vertices.size(), // start_index
-//								1, // size
-//								0)); // dist
-//		Lr.vertices.push_back(r_id);
-//		// Push r_real_id to active queue
-//		active_queue[end_active_queue++] = r_real_id;
-//		got_labels[r_real_id] = true;
-//		init_index_time += WallTimer::get_time_mark();
-//
-//		init_dist_matrix_time -= WallTimer::get_time_mark();
-//		// Initialize distance matrix
-//		fill(dist_matrix[r_id].begin(),
-//				dist_matrix[r_id].begin() + r_real_id + 1,
-//				SMALLI_MAX);
-//		inti b_i_bound = Lr.batches.size();
-//		_mm_prefetch(&Lr.batches[0], _MM_HINT_T0);
-//		_mm_prefetch(&Lr.distances[0], _MM_HINT_T0);
-//		_mm_prefetch(&Lr.vertices[0], _MM_HINT_T0);
-//		for (inti b_i = 0; b_i < b_i_bound; ++b_i) {
-//			idi id_offset = Lr.batches[b_i].batch_id * BATCH_SIZE;
-//			idi dist_start_index = Lr.batches[b_i].start_index;
-//			idi dist_bound_index = dist_start_index + Lr.batches[b_i].size;
-//			// Traverse dist_matrix
-//			for (idi dist_i = dist_start_index; dist_i < dist_bound_index; ++dist_i) {
-//				idi v_start_index = Lr.distances[dist_i].start_index;
-//				idi v_bound_index = v_start_index + Lr.distances[dist_i].size;
-//				smalli dist = Lr.distances[dist_i].dist;
-//				for (idi v_i = v_start_index; v_i < v_bound_index; ++v_i) {
-//					dist_matrix[r_id][Lr.vertices[v_i] + id_offset] = dist;
-//				}
-//			}
-//		}
-//		init_dist_matrix_time += WallTimer::get_time_mark();
-//	}
-//}
 
 // Function that pushes v_head's labels to v_head's every neighbor
-//inline void VertexCentricPLL::push_labels(
-//				idi v_head,
-//				idi roots_start,
-//				const Graph &G,
-//				const vector<IndexType> &L,
-//				vector<ShortIndex> &short_index,
-//				vector<idi> &candidate_queue,
-//				inti &end_candidate_queue,
-//				vector<bool> &got_candidates,
-//				vector<bool> &has_indicators)
 inline void VertexCentricPLL::push_labels(
 				idi v_head,
 				idi roots_start,
@@ -494,13 +307,10 @@ inline void VertexCentricPLL::push_labels(
 				// The label is alreay selected before
 				continue;
 			}
-//			SI_v_tail.has_indicator = true;
 			SI_v_tail.indicator.set(label_root_id);
-			SI_v_tail.indicator.set(BATCH_SIZE);
+			SI_v_tail.indicator.set(BATCH_SIZE); // has_indicator is true
 			// Record vertex label_root_id as v_tail's candidates label
 			SI_v_tail.candidates.set(label_root_id);
-
-//			has_indicators[v_tail] = true;
 
 			if (!got_candidates[v_tail]) {
 				// If v_tail is not in candidate_queue, add it in (prevent duplicate)
@@ -592,16 +402,17 @@ inline void VertexCentricPLL::update_label_indices(
 				idi v_id,
 				idi inserted_count,
 				vector<IndexType> &L,
-				vector<bool> &got_labels,
+				vector<ShortIndex> &short_index,
 				idi b_id,
 				smalli iter)
 {
 	IndexType &Lv = L[v_id];
-	if (got_labels[v_id]) {
+	// indicator[BATCH_SIZE + 1] is true, means v got some labels already in this batch
+	if (short_index[v_id].indicator[BATCH_SIZE + 1]) {
 		// Increase the batches' last element's size because a new distance element need to be added
 		++(Lv.batches.rbegin() -> size);
 	} else {
-		got_labels[v_id] = true;
+		short_index[v_id].indicator.set(BATCH_SIZE + 1);
 		// Insert a new Batch with batch_id, start_index, and size because a new distance element need to be added
 		Lv.batches.push_back(IndexType::Batch(
 									b_id,
@@ -667,31 +478,15 @@ inline void VertexCentricPLL::batch_process(
 	static idi end_candidate_queue = 0;
 	static vector<ShortIndex> short_index(num_v);
 	static vector< vector<smalli> > dist_matrix(roots_size, vector<smalli>(num_v, SMALLI_MAX));
-	static vector<bool> got_labels(num_v, false); // got_labels[v] is true means vertex v got new labels in this batch
 	static vector<bool> got_candidates(num_v, false); // got_candidates[v] is true means vertex v is in the queue candidate_queue
 	static vector<bool> is_active(num_v, false);// is_active[v] is true means vertex v is in the active queue.
 
-//	static vector<bool> has_indicators(num_v, false);
-
 	// At the beginning of a batch, initialize the labels L and distance buffer dist_matrix;
-//	initialize(
-//			short_index,
-//			dist_matrix,
-//			active_queue,
-//			end_active_queue,
-//			got_labels,
-//			has_indicators,
-//			b_id,
-//			roots_start,
-//			roots_size,
-//			L,
-//			num_v);
 	initialize(
 			short_index,
 			dist_matrix,
 			active_queue,
 			end_active_queue,
-			got_labels,
 			b_id,
 			roots_start,
 			roots_size,
@@ -709,16 +504,7 @@ inline void VertexCentricPLL::batch_process(
 		for (idi i_queue = 0; i_queue < end_active_queue; ++i_queue) {
 			idi v_head = active_queue[i_queue];
 			is_active[v_head] = false; // reset is_active
-//			push_labels(
-//					v_head,
-//					roots_start,
-//					G,
-//					L,
-//					short_index,
-//					candidate_queue,
-//					end_candidate_queue,
-//					got_candidates,
-//					has_indicators);
+
 			push_labels(
 					v_head,
 					roots_start,
@@ -775,7 +561,7 @@ inline void VertexCentricPLL::batch_process(
 								v_id,
 								inserted_count,
 								L,
-								got_labels,
+								short_index,
 								b_id,
 								iter);
 			}
