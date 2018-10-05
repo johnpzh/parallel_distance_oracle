@@ -10,6 +10,7 @@
 
 #include <vector>
 #include <unordered_map>
+#include <map>
 #include <algorithm>
 #include <iostream>
 #include <limits.h>
@@ -21,6 +22,7 @@
 
 using std::vector;
 using std::unordered_map;
+using std::map;
 using std::bitset;
 using std::stable_sort;
 using std::min;
@@ -28,7 +30,7 @@ using std::fill;
 
 namespace PADO {
 
-const inti BATCH_SIZE = 256; // The size for regular batch and bit array.
+const inti BATCH_SIZE = 1280; // The size for regular batch and bit array.
 const inti BITPARALLEL_SIZE = 50;
 
 
@@ -68,7 +70,7 @@ private:
 		vector<Batch> batches; // Batch info
 		vector<DistanceIndexType> distances; // Distance info
 		vector<idi> vertices; // Vertices in the label, preresented as temperory ID
-	};
+	} __attribute__((aligned(64)));
 
 	// Structure for the type of temporary label
 	struct ShortIndex {
@@ -78,7 +80,7 @@ private:
 		// In this way, when do initialization, only initialize those short_index[v] whose indicator[BATCH_SIZE] is set.
 		bitset<BATCH_SIZE + 2> indicator; // Global indicator, indicator[r] (0 <= r < BATCH_SIZE) is set means root r once selected as candidate already
 		bitset<BATCH_SIZE> candidates; // Candidates one iteration, candidates[r] is set means root r is candidate in this iteration
-	};
+	} ;
 
 	vector<IndexType> L;
 	void construct(const Graph &G);
@@ -191,7 +193,9 @@ public:
 			idi v);
 
 	void print();
-	void switch_labels_to_old_id(const vector<idi> &rank2id);
+	void switch_labels_to_old_id(
+					const vector<idi> &rank2id,
+					const vector<idi> &rank);
 
 }; // class VertexCentricPLL
 
@@ -264,7 +268,7 @@ inline void VertexCentricPLL::bit_parallel_labeling(
 				idi i_start = G.vertices[v];
 				idi i_bound = i_start + G.out_degrees[v];
 				for (idi i = i_start; i < i_bound; ++i) {
-					idi tv = G.out_degrees[i];
+					idi tv = G.out_edges[i];
 					smalli td = d + 1;
 
 					if (d > tmp_d[tv]) {
@@ -646,7 +650,6 @@ inline bool VertexCentricPLL::distance_query(
       }
     }
 
-
 	// Traverse v_id's all existing labels
 	inti b_i_bound = Lv.batches.size();
 	_mm_prefetch(&Lv.batches[0], _MM_HINT_T0);
@@ -985,12 +988,15 @@ void VertexCentricPLL::construct(const Graph &G)
 	// End test
 }
 
-void VertexCentricPLL::switch_labels_to_old_id(const vector<idi> &rank2id)
+void VertexCentricPLL::switch_labels_to_old_id(
+								const vector<idi> &rank2id,
+								const vector<idi> &rank)
 {
 	idi label_sum = 0;
 	idi test_label_sum = 0;
 
-	idi num_v = rank2id.size();
+//	idi num_v = rank2id.size();
+	idi num_v = rank.size();
 	vector< vector< pair<idi, weighti> > > new_L(num_v);
 //	for (idi r = 0; r < num_v; ++r) {
 //		idi v = rank2id[r];
@@ -1021,8 +1027,9 @@ void VertexCentricPLL::switch_labels_to_old_id(const vector<idi> &rank2id)
 				inti dist = Lv.distances[dist_i].dist;
 				for (idi v_i = v_start_index; v_i < v_bound_index; ++v_i) {
 					idi tail = Lv.vertices[v_i] + id_offset;
-					idi new_tail = rank2id[tail];
-					new_L[new_v].push_back(make_pair(new_tail, dist));
+//					idi new_tail = rank2id[tail];
+//					new_L[new_v].push_back(make_pair(new_tail, dist));
+					new_L[new_v].push_back(make_pair(tail, dist));
 					++test_label_sum;
 				}
 			}
@@ -1046,10 +1053,30 @@ void VertexCentricPLL::switch_labels_to_old_id(const vector<idi> &rank2id)
 //	idi u;
 //	idi v;
 //	while (std::cin >> u >> v) {
+//		weighti dist = WEIGHTI_MAX;
+//		// Bit Parallel Check
+//		const IndexType &idx_u = L[rank[u]];
+//		const IndexType &idx_v = L[rank[v]];
+//
+//		for (inti i = 0; i < BITPARALLEL_SIZE; ++i) {
+//			int td = idx_v.bp_dist[i] + idx_u.bp_dist[i];
+//			if (td - 2 <= dist) {
+//				td +=
+//					(idx_v.bp_sets[i][0] & idx_u.bp_sets[i][0]) ? -2 :
+//					((idx_v.bp_sets[i][0] & idx_u.bp_sets[i][1])
+//							| (idx_v.bp_sets[i][1] & idx_u.bp_sets[i][0]))
+//							? -1 : 0;
+//				if (td < dist) {
+//					dist = td;
+//				}
+//			}
+//		}
+//
+//		// Normal Index Check
 //		const auto &Lu = new_L[u];
 //		const auto &Lv = new_L[v];
-//		weighti dist = WEIGHTI_MAX;
-//		unordered_map<idi, weighti> markers;
+////		unsorted_map<idi, weighti> markers;
+//		map<idi, weighti> markers;
 //		for (idi i = 0; i < Lu.size(); ++i) {
 //			markers[Lu[i].first] = Lu[i].second;
 //		}

@@ -12,7 +12,8 @@
 #include "globals.h"
 #include "graph.h"
 #include "pado.h"
-//#include "pado.20180930.new_struct_but_a_little_slower_than_pll.h"
+//#include "pado.20181003.initialization_optimization_and_better_than_pll_no_bit_parallel.h"
+
 
 using namespace PADO;
 
@@ -20,9 +21,9 @@ void pado()
 {
 //	freopen("output.txt", "w", stdout); // test
 //	const char filename[] = "input.dat";
-	const char filename[] = "/Users/johnz/pppp/datasets/dblp/dblp";
+//	const char filename[] = "/Users/johnz/pppp/datasets/dblp/dblp";
 //	const char filename[] = "/Users/johnz/pppp/datasets/chicago/chicago";
-//	const char filename[] = "/Users/johnz/pppp/datasets/wikitalk/wikitalk";
+	const char filename[] = "/Users/johnz/pppp/datasets/wikitalk/wikitalk";
 //	const char filename[] = "tools/edgelist.txt";
 	printf("Reading...\n");//test
 	Graph G(filename);
@@ -62,7 +63,8 @@ void pado()
 //	VertexCentricPLL(G, rank);
 	VertexCentricPLL VCPLL(G);
 //	timer.print_runtime();
-	VCPLL.switch_labels_to_old_id(rank2id);
+	VCPLL.switch_labels_to_old_id(rank2id, rank);
+//	VCPLL.switch_labels_to_old_id(rank2id);
 //	VCPLL.print();//test
 
 	// Test for query
