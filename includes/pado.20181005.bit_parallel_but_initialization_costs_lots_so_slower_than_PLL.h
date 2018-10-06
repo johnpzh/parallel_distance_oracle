@@ -74,10 +74,11 @@ private:
 
 	// Structure for the type of temporary label
 	struct ShortIndex {
-		// I use BATCH_SIZE + 1 bit for indicator bit array.
-		// The v.indicator[BATCH_SIZE] is set if in current batch v has got any new labels already.
+		// I use BATCH_SIZE + 2 bit for indicator bit array.
+		// The v.indicator[BATCH_SIZE] is set if in current batch v has any candidates.
+		// The v.indicator[BATCH_SIZE + 1] is set if in current batch v has got any new labels already.
 		// In this way, when do initialization, only initialize those short_index[v] whose indicator[BATCH_SIZE] is set.
-		bitset<BATCH_SIZE + 1> indicator; // Global indicator, indicator[r] (0 <= r < BATCH_SIZE) is set means root r once selected as candidate already
+		bitset<BATCH_SIZE + 2> indicator; // Global indicator, indicator[r] (0 <= r < BATCH_SIZE) is set means root r once selected as candidate already
 		bitset<BATCH_SIZE> candidates; // Candidates one iteration, candidates[r] is set means root r is candidate in this iteration
 	} ;
 
@@ -95,21 +96,34 @@ private:
 			inti roots_size,
 			vector<IndexType> &L,
 			const vector<bool> &used_bp_roots);
-
+//	inline void batch_process(
+//			const Graph &G,
+//			idi b_id,
+//			idi root_start,
+//			inti roots_size,
+//			vector<IndexType> &L);
 
 	inline void initialize(
 				vector<ShortIndex> &short_index,
 				vector< vector<smalli> > &dist_matrix,
 				vector<idi> &active_queue,
-				idi &end_active_queue,
-				vector<idi> &once_activated_queue,
-				idi &end_once_activated_queue,
-				vector<bool> &once_activated,
+				inti &end_active_queue,
 				idi b_id,
 				idi roots_start,
 				inti roots_size,
 				vector<IndexType> &L,
+				idi num_v,
 				const vector<bool> &used_bp_roots);
+//	inline void initialize(
+//				vector<ShortIndex> &short_index,
+//				vector< vector<smalli> > &dist_matrix,
+//				vector<idi> &active_queue,
+//				inti &end_active_queue,
+//				idi b_id,
+//				idi roots_start,
+//				inti roots_size,
+//				vector<IndexType> &L,
+//				idi num_v);
 	inline void push_labels(
 				idi v_head,
 				idi roots_start,
@@ -117,13 +131,19 @@ private:
 				const vector<IndexType> &L,
 				vector<ShortIndex> &short_index,
 				vector<idi> &candidate_queue,
-				idi &end_candidate_queue,
+				inti &end_candidate_queue,
 				vector<bool> &got_candidates,
-				vector<idi> &once_activated_queue,
-				idi &end_once_activated_queue,
-				vector<bool> &once_activated,
 				const vector<bool> &used_bp_roots,
 				smalli iter);
+//	inline void push_labels(
+//				idi v_head,
+//				idi roots_start,
+//				const Graph &G,
+//				const vector<IndexType> &L,
+//				vector<ShortIndex> &short_index,
+//				vector<idi> &candidate_queue,
+//				inti &end_candidate_queue,
+//				vector<bool> &got_candidates);
 	inline bool distance_query(
 				idi cand_root_id,
 				idi v_id,
@@ -319,14 +339,12 @@ inline void VertexCentricPLL::initialize(
 			vector<ShortIndex> &short_index,
 			vector< vector<smalli> > &dist_matrix,
 			vector<idi> &active_queue,
-			idi &end_active_queue,
-			vector<idi> &once_activated_queue,
-			idi &end_once_activated_queue,
-			vector<bool> &once_activated,
+			inti &end_active_queue,
 			idi b_id,
 			idi roots_start,
 			inti roots_size,
 			vector<IndexType> &L,
+			idi num_v,
 			const vector<bool> &used_bp_roots)
 {
 	idi roots_bound = roots_start + roots_size;
@@ -344,41 +362,28 @@ inline void VertexCentricPLL::initialize(
 	// Short_index
 	{
 		init_indicators_time -= WallTimer::get_time_mark();
-		for (idi v_i = 0; v_i < end_once_activated_queue; ++v_i) {
-			idi v = once_activated_queue[v_i];
-			short_index[v].indicator.reset();
-			once_activated[v] = false;
-		}
-		end_once_activated_queue = 0;
-		for (idi v = roots_start; v < roots_bound; ++v) {
-			if (!used_bp_roots[v]) {
-				short_index[v].indicator.set(v - roots_start);
-				short_index[v].indicator.set(BATCH_SIZE); // v got labels
-//				short_index[v].indicator.set(BATCH_SIZE + 1);
+		idi v = 0;
+		for ( ; v < roots_start; ++v) {
+			if (short_index[v].indicator[BATCH_SIZE]) {
+				short_index[v].indicator.reset();
 			}
 		}
-//		idi v = 0;
-//		for ( ; v < roots_start; ++v) {
-//			if (short_index[v].indicator[BATCH_SIZE]) {
-//				short_index[v].indicator.reset();
-//			}
-//		}
-//		for ( ; v < roots_bound; ++v) {
-//			if (short_index[v].indicator[BATCH_SIZE]) {
-//				short_index[v].indicator.reset();
-//			}
-//			if (!used_bp_roots[v]) {
-//				short_index[v].indicator.set(v - roots_start);
-//				short_index[v].indicator.set(BATCH_SIZE);
-//				short_index[v].indicator.set(BATCH_SIZE + 1);
-//			}
-//
-//		}
-//		for (; v < num_v; ++v) {
-//			if (short_index[v].indicator[BATCH_SIZE]) {
-//				short_index[v].indicator.reset();
-//			}
-//		}
+		for ( ; v < roots_bound; ++v) {
+			if (short_index[v].indicator[BATCH_SIZE]) {
+				short_index[v].indicator.reset();
+			}
+			if (!used_bp_roots[v]) {
+				short_index[v].indicator.set(v - roots_start);
+				short_index[v].indicator.set(BATCH_SIZE);
+				short_index[v].indicator.set(BATCH_SIZE + 1);
+			}
+
+		}
+		for (; v < num_v; ++v) {
+			if (short_index[v].indicator[BATCH_SIZE]) {
+				short_index[v].indicator.reset();
+			}
+		}
 		init_indicators_time += WallTimer::get_time_mark();
 	}
 //
@@ -554,11 +559,8 @@ inline void VertexCentricPLL::push_labels(
 				const vector<IndexType> &L,
 				vector<ShortIndex> &short_index,
 				vector<idi> &candidate_queue,
-				idi &end_candidate_queue,
+				inti &end_candidate_queue,
 				vector<bool> &got_candidates,
-				vector<idi> &once_activated_queue,
-				idi &end_once_activated_queue,
-				vector<bool> &once_activated,
 				const vector<bool> &used_bp_roots,
 				smalli iter)
 {
@@ -595,11 +597,11 @@ inline void VertexCentricPLL::push_labels(
 			}
 			ShortIndex &SI_v_tail = short_index[v_tail];
 			if (SI_v_tail.indicator[label_root_id]) {
-				// The label is already selected before
+				// The label is alreay selected before
 				continue;
 			}
 
-			// Bit Parallel Checking: if label_real_id to v_tail has shorter distance already
+			// Bit Parallel Checking
 			++total_check_count;
 			const IndexType &L_label = L[label_real_id];
 			bool no_need_add = false;
@@ -626,17 +628,10 @@ inline void VertexCentricPLL::push_labels(
 		    }
 
 			SI_v_tail.indicator.set(label_root_id);
-//			SI_v_tail.indicator.set(BATCH_SIZE); // has_indicator is true
+			SI_v_tail.indicator.set(BATCH_SIZE); // has_indicator is true
 			// Record vertex label_root_id as v_tail's candidates label
 			SI_v_tail.candidates.set(label_root_id);
 
-			// Add into once_activated_queue
-			if (!once_activated[v_tail]) {
-				// If v_tail is not in the once_activated_queue yet, add it in
-				once_activated[v_tail] = true;
-				once_activated_queue[end_once_activated_queue++] = v_tail;
-			}
-			// Add into candidate_queue
 			if (!got_candidates[v_tail]) {
 				// If v_tail is not in candidate_queue, add it in (prevent duplicate)
 				got_candidates[v_tail] = true;
@@ -757,11 +752,11 @@ inline void VertexCentricPLL::update_label_indices(
 {
 	IndexType &Lv = L[v_id];
 	// indicator[BATCH_SIZE + 1] is true, means v got some labels already in this batch
-	if (short_index[v_id].indicator[BATCH_SIZE]) {
+	if (short_index[v_id].indicator[BATCH_SIZE + 1]) {
 		// Increase the batches' last element's size because a new distance element need to be added
 		++(Lv.batches.rbegin() -> size);
 	} else {
-		short_index[v_id].indicator.set(BATCH_SIZE);
+		short_index[v_id].indicator.set(BATCH_SIZE + 1);
 		// Insert a new Batch with batch_id, start_index, and size because a new distance element need to be added
 		Lv.batches.push_back(IndexType::Batch(
 									b_id,
@@ -837,23 +832,17 @@ inline void VertexCentricPLL::batch_process(
 	static vector<bool> got_candidates(num_v, false); // got_candidates[v] is true means vertex v is in the queue candidate_queue
 	static vector<bool> is_active(num_v, false);// is_active[v] is true means vertex v is in the active queue.
 
-	static vector<idi> once_activated_queue(num_v);
-	static idi end_once_activated_queue = 0;
-	static vector<bool> once_activated(num_v, false);
-
 	// At the beginning of a batch, initialize the labels L and distance buffer dist_matrix;
 	initialize(
 			short_index,
 			dist_matrix,
 			active_queue,
 			end_active_queue,
-			once_activated_queue,
-			end_once_activated_queue,
-			once_activated,
 			b_id,
 			roots_start,
 			roots_size,
 			L,
+			num_v,
 			used_bp_roots);
 //	initialize(
 //			short_index,
@@ -864,9 +853,7 @@ inline void VertexCentricPLL::batch_process(
 //			roots_start,
 //			roots_size,
 //			L,
-//			num_v,
-//			used_bp_roots);
-
+//			num_v);
 
 	smalli iter = 0; // The iterator, also the distance for current iteration
 	initializing_time += WallTimer::get_time_mark();
@@ -889,11 +876,17 @@ inline void VertexCentricPLL::batch_process(
 					candidate_queue,
 					end_candidate_queue,
 					got_candidates,
-					once_activated_queue,
-					end_once_activated_queue,
-					once_activated,
 					used_bp_roots,
 					iter);
+//			push_labels(
+//					v_head,
+//					roots_start,
+//					G,
+//					L,
+//					short_index,
+//					candidate_queue,
+//					end_candidate_queue,
+//					got_candidates);
 		}
 		end_active_queue = 0; // Set the active_queue empty
 		candidating_time += WallTimer::get_time_mark();
