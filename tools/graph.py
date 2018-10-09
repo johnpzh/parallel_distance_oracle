@@ -21,10 +21,10 @@ def adj_matrix_to_edgelist(filename):
 			i += 1
 
 def query_input():
-	with open("output.query.edgelist.txt", "w") as fout:
+	with open("output.query.wikitalk.txt", "w") as fout:
 		low = 0
-		up = 69
-		count = 200
+		up = 2394385
+		count = 1000
 		for i in range(count):
 			fout.write("{} {}\n".format(random.randint(low, up), random.randint(low, up)))
 

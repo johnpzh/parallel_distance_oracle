@@ -79,7 +79,7 @@ private:
 		// In this way, when do initialization, only initialize those short_index[v] whose indicator[BATCH_SIZE] is set.
 		bitset<BATCH_SIZE + 1> indicator; // Global indicator, indicator[r] (0 <= r < BATCH_SIZE) is set means root r once selected as candidate already
 		bitset<BATCH_SIZE> candidates; // Candidates one iteration, candidates[r] is set means root r is candidate in this iteration
-	} __attribute__((aligned(64)));
+	} ;
 
 	vector<IndexType> L;
 	void construct(const Graph &G);
@@ -198,7 +198,7 @@ inline void VertexCentricPLL::bit_parallel_labeling(
 
 	std::vector<smalli> tmp_d(num_v); // distances from the root to every v
 	std::vector<std::pair<uint64_t, uint64_t> > tmp_s(num_v); // first is S_r^{-1}, second is S_r^{0}
-	std::vector<idi> que(num_v); // active queue
+	std::vector<int> que(num_v); // active queue
 	std::vector<std::pair<idi, idi> > sibling_es(num_e); // siblings, their distances to the root are equal (have difference of 0)
 	std::vector<std::pair<idi, idi> > child_es(num_e); // child and father, their distances to the root have difference of 1.
 
@@ -316,7 +316,6 @@ inline void VertexCentricPLL::initialize(
 {
 	idi roots_bound = roots_start + roots_size;
 //	init_start_reset_time -= WallTimer::get_time_mark();
-	// TODO: parallel enqueue
 	{
 		//active_queue
 		for (idi r_real_id = roots_start; r_real_id < roots_bound; ++r_real_id) {
@@ -380,6 +379,7 @@ inline void VertexCentricPLL::initialize(
 			if (used_bp_roots[r_id + roots_start]) {
 				continue;
 			}
+
 			IndexType &Lr = L[r_id + roots_start];
 			b_i_bound = Lr.batches.size();
 			_mm_prefetch(&Lr.batches[0], _MM_HINT_T0);

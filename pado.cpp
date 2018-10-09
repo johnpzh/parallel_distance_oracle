@@ -11,9 +11,12 @@
 #include <unistd.h>
 #include "globals.h"
 #include "graph.h"
-#include "pado.h"
-//#include "pado.tmp.queue_for_once_activated_vertices.h"
+//#include "pado.h"
+#include "pado_para.h"
 
+namespace PADO {
+	int NUM_THREADS = 4;
+}
 
 using namespace PADO;
 
@@ -21,9 +24,9 @@ void pado()
 {
 //	freopen("output.txt", "w", stdout); // test
 //	const char filename[] = "input.dat";
-//	const char filename[] = "/Users/johnz/pppp/datasets/dblp/dblp";
+	const char filename[] = "/Users/johnz/pppp/datasets/dblp/dblp";
 //	const char filename[] = "/Users/johnz/pppp/datasets/chicago/chicago";
-	const char filename[] = "/Users/johnz/pppp/datasets/wikitalk/wikitalk";
+//	const char filename[] = "/Users/johnz/pppp/datasets/wikitalk/wikitalk";
 //	const char filename[] = "tools/edgelist.txt";
 	printf("Reading...\n");//test
 	Graph G(filename);
@@ -58,11 +61,9 @@ void pado()
 //	}
 	vector<idi> rank2id = G.id_transfer(rank);
 //	G.print();
-//	WallTimer timer("Labeling");
 	printf("Labeling...\n");//test
-//	VertexCentricPLL(G, rank);
-	VertexCentricPLL VCPLL(G);
-//	timer.print_runtime();
+	ParaVertexCentricPLL VCPLL(G);
+//	VertexCentricPLL VCPLL(G);
 	VCPLL.switch_labels_to_old_id(rank2id, rank);
 //	VCPLL.switch_labels_to_old_id(rank2id);
 //	VCPLL.print();//test

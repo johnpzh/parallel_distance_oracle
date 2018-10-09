@@ -19,6 +19,7 @@
 #include "globals.h"
 #include "graph.h"
 //#include "index.h"
+#include <omp.h>
 
 using std::vector;
 using std::unordered_map;
@@ -31,12 +32,12 @@ using std::fill;
 namespace PADO {
 
 const inti BATCH_SIZE = 1280; // The size for regular batch and bit array.
-const inti BITPARALLEL_SIZE = 50;
+const inti BITPARALLEL_SIZE = 0;
 
 
 
 //// Batch based processing, 09/11/2018
-class VertexCentricPLL {
+class ParaVertexCentricPLL {
 private:
 	// Structure for the type of label
 	struct IndexType {
@@ -116,9 +117,13 @@ private:
 				const Graph &G,
 				const vector<IndexType> &L,
 				vector<ShortIndex> &short_index,
-				vector<idi> &candidate_queue,
-				idi &end_candidate_queue,
-				vector<bool> &got_candidates,
+//				vector<idi> &candidate_queue,
+//				idi &end_candidate_queue,
+				vector<idi> &tmp_candidate_queue,
+				idi &size_tmp_candidate_queue,
+				idi &offset_tmp_candidate_queue,
+//				vector<bool> &got_candidates,
+				uint8_t *got_candidates,
 				vector<idi> &once_candidated_queue,
 				idi &end_once_candidated_queue,
 				vector<bool> &once_candidated,
@@ -151,6 +156,8 @@ private:
 				inti roots_size,
 				vector<IndexType> &L,
 				vector< vector<smalli> > &dist_matrix);
+	inline idi prefix_sum_for_offsets(
+				vector<idi> &offsets);
 
 	// Test only
 //	uint64_t normal_hit_count = 0;
@@ -169,8 +176,8 @@ private:
 
 
 public:
-	VertexCentricPLL() = default;
-	VertexCentricPLL(const Graph &G);
+	ParaVertexCentricPLL() = default;
+	ParaVertexCentricPLL(const Graph &G);
 
 	weighti query(
 			idi u,
@@ -181,14 +188,14 @@ public:
 					const vector<idi> &rank2id,
 					const vector<idi> &rank);
 
-}; // class VertexCentricPLL
+}; // class ParaVertexCentricPLL
 
-VertexCentricPLL::VertexCentricPLL(const Graph &G)
+ParaVertexCentricPLL::ParaVertexCentricPLL(const Graph &G)
 {
 	construct(G);
 }
 
-inline void VertexCentricPLL::bit_parallel_labeling(
+inline void ParaVertexCentricPLL::bit_parallel_labeling(
 			const Graph &G,
 			vector<IndexType> &L,
 			vector<bool> &used_bp_roots)
@@ -300,7 +307,7 @@ inline void VertexCentricPLL::bit_parallel_labeling(
 // For a batch, initialize the temporary labels and real labels of roots;
 // traverse roots' labels to initialize distance buffer;
 // unset flag arrays is_active and got_labels
-inline void VertexCentricPLL::initialize(
+inline void ParaVertexCentricPLL::initialize(
 			vector<ShortIndex> &short_index,
 			vector< vector<smalli> > &dist_matrix,
 			vector<idi> &active_queue,
@@ -405,15 +412,19 @@ inline void VertexCentricPLL::initialize(
 }
 
 // Function that pushes v_head's labels to v_head's every neighbor
-inline void VertexCentricPLL::push_labels(
+inline void ParaVertexCentricPLL::push_labels(
 				idi v_head,
 				idi roots_start,
 				const Graph &G,
 				const vector<IndexType> &L,
 				vector<ShortIndex> &short_index,
-				vector<idi> &candidate_queue,
-				idi &end_candidate_queue,
-				vector<bool> &got_candidates,
+//				vector<idi> &candidate_queue,
+//				idi &end_candidate_queue,
+				vector<idi> &tmp_candidate_queue,
+				idi &size_tmp_candidate_queue,
+				idi &offset_tmp_candidate_queue,
+//				vector<bool> &got_candidates,
+				uint8_t *got_candidates,
 				vector<idi> &once_candidated_queue,
 				idi &end_once_candidated_queue,
 				vector<bool> &once_candidated,
@@ -497,9 +508,16 @@ inline void VertexCentricPLL::push_labels(
 			// Add into candidate_queue
 			if (!got_candidates[v_tail]) {
 				// If v_tail is not in candidate_queue, add it in (prevent duplicate)
-				got_candidates[v_tail] = true;
-				candidate_queue[end_candidate_queue++] = v_tail;
+				if (CAS(got_candidates + v_tail, (uint8_t) 0, (uint8_t) 1)) {
+					tmp_candidate_queue[offset_tmp_candidate_queue + size_tmp_candidate_queue++] = v_tail;
+				}
 			}
+//			// Add into candidate_queue
+//			if (!got_candidates[v_tail]) {
+//				// If v_tail is not in candidate_queue, add it in (prevent duplicate)
+//				got_candidates[v_tail] = true;
+//				candidate_queue[end_candidate_queue++] = v_tail;
+//			}
 		}
 	}
 }
@@ -508,7 +526,7 @@ inline void VertexCentricPLL::push_labels(
 // traverse vertex v_id's labels;
 // return the distance between v_id and cand_root_id based on existing labels.
 // return false if shorter distance exists already, return true if the cand_root_id can be added into v_id's label.
-inline bool VertexCentricPLL::distance_query(
+inline bool ParaVertexCentricPLL::distance_query(
 			idi cand_root_id,
 			idi v_id,
 			idi roots_start,
@@ -565,7 +583,7 @@ inline bool VertexCentricPLL::distance_query(
 // Function inserts candidate cand_root_id into vertex v_id's labels;
 // update the distance buffer dist_matrix;
 // but it only update the v_id's labels' vertices array;
-inline void VertexCentricPLL::insert_label_only(
+inline void ParaVertexCentricPLL::insert_label_only(
 				idi cand_root_id,
 				idi v_id,
 				idi roots_start,
@@ -583,7 +601,7 @@ inline void VertexCentricPLL::insert_label_only(
 }
 
 // Function updates those index arrays in v_id's label only if v_id has been inserted new labels
-inline void VertexCentricPLL::update_label_indices(
+inline void ParaVertexCentricPLL::update_label_indices(
 				idi v_id,
 				idi inserted_count,
 				vector<IndexType> &L,
@@ -614,7 +632,7 @@ inline void VertexCentricPLL::update_label_indices(
 // Function to reset dist_matrix the distance buffer to INF
 // Traverse every root's labels to reset its distance buffer elements to INF.
 // In this way to reduce the cost of initialization of the next batch.
-inline void VertexCentricPLL::reset_at_end(
+inline void ParaVertexCentricPLL::reset_at_end(
 				idi roots_start,
 				inti roots_size,
 				vector<IndexType> &L,
@@ -648,7 +666,50 @@ inline void VertexCentricPLL::reset_at_end(
 	}
 }
 
-inline void VertexCentricPLL::batch_process(
+// Function to get the prefix sum of elements in offsets
+inline idi ParaVertexCentricPLL::prefix_sum_for_offsets(
+									vector<idi> &offsets)
+{
+	// Get the offset as the prefix sum of out degrees
+	idi offset_sum = 0;
+	idi size = offsets.size();
+	for (idi i = 0; i < size; ++i) {
+		idi tmp = offsets[i];
+		offsets[i] = offset_sum;
+		offset_sum += tmp;
+	}
+	return offset_sum;
+}
+
+// Collect elements in the tmp_queue into the queue
+void collect_into_queue(
+					vector<idi> &tmp_queue,
+					vector<idi> &offsets_tmp_queue, // the locations in tmp_queue for writing from tmp_queue
+					vector<idi> &offsets_queue, // the locations in queue for writing into queue.
+					idi num_elements, // total number of elements which need to be added from tmp_queue to queue
+					vector<idi> &queue,
+					idi &end_queue)
+{
+	idi i_bound = offsets_tmp_queue.size();
+//	#pragma omp parallel for
+	for (idi i = 0; i < i_bound; ++i) {
+		idi i_q_start = end_queue + offsets_queue[i];
+		// idi i_q_bound = i_queue_start + sizes_tmp_queue[i];
+		idi i_q_bound;
+		if (i_bound - 1 != i) {
+			i_q_bound = end_queue + offsets_queue[i + 1];
+		} else {
+			i_q_bound = end_queue + num_elements;
+		}
+		idi end_tmp = offsets_tmp_queue[i];
+		for (idi i_q = i_q_start; i_q < i_q_bound; ++i_q) {
+			queue[i_q] = tmp_queue[end_tmp++];
+		}
+	}
+	end_queue += num_elements;
+}
+
+inline void ParaVertexCentricPLL::batch_process(
 						const Graph &G,
 						idi b_id,
 						idi roots_start, // start id of roots
@@ -665,12 +726,12 @@ inline void VertexCentricPLL::batch_process(
 	static idi end_candidate_queue = 0;
 	static vector<ShortIndex> short_index(num_v);
 	static vector< vector<smalli> > dist_matrix(roots_size, vector<smalli>(num_v, SMALLI_MAX));
-	static vector<bool> got_candidates(num_v, false); // got_candidates[v] is true means vertex v is in the queue candidate_queue
+//	static vector<bool> got_candidates(num_v, false); // got_candidates[v] is true means vertex v is in the queue candidate_queue
+	static uint8_t *got_candidates = (uint8_t *) calloc(num_v, sizeof(uint8_t)); // need raw integer type to do CAS.
 	static vector<bool> is_active(num_v, false);// is_active[v] is true means vertex v is in the active queue.
-
-	static vector<idi> once_candidated_queue(num_v);
+	static vector<idi> once_candidated_queue(num_v); // The vertex who got some candidates in this batch is in the once_candidated_queue.
 	static idi end_once_candidated_queue = 0;
-	static vector<bool> once_candidated(num_v, false);
+	static vector<bool> once_candidated(num_v, false); // once_candidated[v] is true means vertex v got some candidates in this batch
 
 	// At the beginning of a batch, initialize the labels L and distance buffer dist_matrix;
 	initialize(
@@ -694,7 +755,23 @@ inline void VertexCentricPLL::batch_process(
 	while (0 != end_active_queue) {
 //		candidating_time -= WallTimer::get_time_mark();
 		++iter;
+
+		// Prepare for parallel processing the active_queue and adding to candidate_queue.
+		// Every vertex's offset location in tmp_candidate_queue
+		vector<idi> offsets_tmp_candidate_queue(end_active_queue);
+//		#pragma omp parallel for
+		for (idi i_queue = 0; i_queue < end_active_queue; ++i_queue) {
+			// Traverse all active vertices, get their out degrees.
+			offsets_tmp_candidate_queue[i_queue] = G.out_degrees[active_queue[i_queue]];
+		}
+		idi num_neighbors = prefix_sum_for_offsets(offsets_tmp_candidate_queue);
+		// every thread write to tmp_candidate_queue at its offset location
+		vector<idi> tmp_candidate_queue(num_neighbors);
+		// A vector to store the true number of pushed neighbors of every active vertex.
+		vector<idi> sizes_tmp_candidate_queue(end_active_queue, 0);
+
 		// Traverse active vertices to push their labels as candidates
+//		#pragma omp parallel for
 		for (idi i_queue = 0; i_queue < end_active_queue; ++i_queue) {
 			idi v_head = active_queue[i_queue];
 			is_active[v_head] = false; // reset is_active
@@ -705,8 +782,11 @@ inline void VertexCentricPLL::batch_process(
 					G,
 					L,
 					short_index,
-					candidate_queue,
-					end_candidate_queue,
+//					candidate_queue,
+//					end_candidate_queue,
+					tmp_candidate_queue,
+					sizes_tmp_candidate_queue[i_queue],
+					offsets_tmp_candidate_queue[i_queue],
 					got_candidates,
 					once_candidated_queue,
 					end_once_candidated_queue,
@@ -714,6 +794,18 @@ inline void VertexCentricPLL::batch_process(
 					used_bp_roots,
 					iter);
 		}
+
+		// According to sizes_tmp_candidate_queue, get the offset for inserting to the real queue
+		idi total_new = prefix_sum_for_offsets(sizes_tmp_candidate_queue);
+		// Collect all candidate vertices from tmp_candidate_queue into candidate_queue.
+		collect_into_queue(
+					tmp_candidate_queue,
+					offsets_tmp_candidate_queue, // the locations in tmp_queue for writing from tmp_queue
+					sizes_tmp_candidate_queue, // the locations in queue for writing into queue.
+					total_new, // total number of elements which need to be added from tmp_queue to queue
+					candidate_queue,
+					end_candidate_queue);
+		printf("end_candidate_queue: %u\n", end_candidate_queue); getchar(); //test
 		end_active_queue = 0; // Set the active_queue empty
 //		candidating_time += WallTimer::get_time_mark();
 //		adding_time -= WallTimer::get_time_mark();
@@ -722,7 +814,7 @@ inline void VertexCentricPLL::batch_process(
 		for (idi i_queue = 0; i_queue < end_candidate_queue; ++i_queue) {
 			idi v_id = candidate_queue[i_queue];
 			inti inserted_count = 0; //recording number of v_id's truly inserted candidates
-			got_candidates[v_id] = false; // reset got_candidates
+			got_candidates[v_id] = 0; // reset got_candidates
 			// Traverse v_id's all candidates
 			for (inti cand_root_id = 0; cand_root_id < roots_size; ++cand_root_id) {
 				if (!short_index[v_id].candidates[cand_root_id]) {
@@ -788,7 +880,7 @@ inline void VertexCentricPLL::batch_process(
 
 
 
-void VertexCentricPLL::construct(const Graph &G)
+void ParaVertexCentricPLL::construct(const Graph &G)
 {
 	idi num_v = G.get_num_v();
 	L.resize(num_v);
@@ -860,7 +952,7 @@ void VertexCentricPLL::construct(const Graph &G)
 	// End test
 }
 
-void VertexCentricPLL::switch_labels_to_old_id(
+void ParaVertexCentricPLL::switch_labels_to_old_id(
 								const vector<idi> &rank2id,
 								const vector<idi> &rank)
 {
@@ -921,53 +1013,53 @@ void VertexCentricPLL::switch_labels_to_old_id(
 //		puts("");
 //	}
 
-//	// Try query
-//	idi u;
-//	idi v;
-//	while (std::cin >> u >> v) {
-//		weighti dist = WEIGHTI_MAX;
-//		// Bit Parallel Check
-//		const IndexType &idx_u = L[rank[u]];
-//		const IndexType &idx_v = L[rank[v]];
-//
-//		for (inti i = 0; i < BITPARALLEL_SIZE; ++i) {
-//			int td = idx_v.bp_dist[i] + idx_u.bp_dist[i];
-//			if (td - 2 <= dist) {
-//				td +=
-//					(idx_v.bp_sets[i][0] & idx_u.bp_sets[i][0]) ? -2 :
-//					((idx_v.bp_sets[i][0] & idx_u.bp_sets[i][1])
-//							| (idx_v.bp_sets[i][1] & idx_u.bp_sets[i][0]))
-//							? -1 : 0;
-//				if (td < dist) {
-//					dist = td;
-//				}
-//			}
-//		}
-//
-//		// Normal Index Check
-//		const auto &Lu = new_L[u];
-//		const auto &Lv = new_L[v];
-////		unsorted_map<idi, weighti> markers;
-//		map<idi, weighti> markers;
-//		for (idi i = 0; i < Lu.size(); ++i) {
-//			markers[Lu[i].first] = Lu[i].second;
-//		}
-//		for (idi i = 0; i < Lv.size(); ++i) {
-//			const auto &tmp_l = markers.find(Lv[i].first);
-//			if (tmp_l == markers.end()) {
-//				continue;
-//			}
-//			int d = tmp_l->second + Lv[i].second;
-//			if (d < dist) {
-//				dist = d;
-//			}
-//		}
-//		if (dist == 255) {
-//			printf("2147483647\n");
-//		} else {
-//			printf("%u\n", dist);
-//		}
-//	}
+	// Try query
+	idi u;
+	idi v;
+	while (std::cin >> u >> v) {
+		weighti dist = WEIGHTI_MAX;
+		// Bit Parallel Check
+		const IndexType &idx_u = L[rank[u]];
+		const IndexType &idx_v = L[rank[v]];
+
+		for (inti i = 0; i < BITPARALLEL_SIZE; ++i) {
+			int td = idx_v.bp_dist[i] + idx_u.bp_dist[i];
+			if (td - 2 <= dist) {
+				td +=
+					(idx_v.bp_sets[i][0] & idx_u.bp_sets[i][0]) ? -2 :
+					((idx_v.bp_sets[i][0] & idx_u.bp_sets[i][1])
+							| (idx_v.bp_sets[i][1] & idx_u.bp_sets[i][0]))
+							? -1 : 0;
+				if (td < dist) {
+					dist = td;
+				}
+			}
+		}
+
+		// Normal Index Check
+		const auto &Lu = new_L[u];
+		const auto &Lv = new_L[v];
+//		unsorted_map<idi, weighti> markers;
+		map<idi, weighti> markers;
+		for (idi i = 0; i < Lu.size(); ++i) {
+			markers[Lu[i].first] = Lu[i].second;
+		}
+		for (idi i = 0; i < Lv.size(); ++i) {
+			const auto &tmp_l = markers.find(Lv[i].first);
+			if (tmp_l == markers.end()) {
+				continue;
+			}
+			int d = tmp_l->second + Lv[i].second;
+			if (d < dist) {
+				dist = d;
+			}
+		}
+		if (dist == 255) {
+			printf("2147483647\n");
+		} else {
+			printf("%u\n", dist);
+		}
+	}
 }
 
 }
