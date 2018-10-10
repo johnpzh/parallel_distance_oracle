@@ -31,8 +31,8 @@ using std::fill;
 
 namespace PADO {
 
-const inti BATCH_SIZE = 1280; // The size for regular batch and bit array.
-const inti BITPARALLEL_SIZE = 0;
+const inti BATCH_SIZE = 1024; // The size for regular batch and bit array.
+const inti BITPARALLEL_SIZE = 50;
 
 
 
@@ -105,7 +105,8 @@ private:
 				idi &end_active_queue,
 				vector<idi> &once_candidated_queue,
 				idi &end_once_candidated_queue,
-				vector<bool> &once_candidated,
+//				vector<bool> &once_candidated,
+				uint8_t *once_candidated,
 				idi b_id,
 				idi roots_start,
 				inti roots_size,
@@ -126,7 +127,8 @@ private:
 				uint8_t *got_candidates,
 				vector<idi> &once_candidated_queue,
 				idi &end_once_candidated_queue,
-				vector<bool> &once_candidated,
+//				vector<bool> &once_candidated,
+				uint8_t *once_candidated,
 				const vector<bool> &used_bp_roots,
 				smalli iter);
 	inline bool distance_query(
@@ -158,6 +160,13 @@ private:
 				vector< vector<smalli> > &dist_matrix);
 	inline idi prefix_sum_for_offsets(
 				vector<idi> &offsets);
+	inline void collect_into_queue(
+				vector<idi> &tmp_queue,
+				vector<idi> &offsets_tmp_queue, // the locations in tmp_queue for writing from tmp_queue
+				vector<idi> &offsets_queue, // the locations in queue for writing into queue.
+				idi num_elements, // total number of elements which need to be added from tmp_queue to queue
+				vector<idi> &queue,
+				idi &end_queue);
 
 	// Test only
 //	uint64_t normal_hit_count = 0;
@@ -314,7 +323,8 @@ inline void ParaVertexCentricPLL::initialize(
 			idi &end_active_queue,
 			vector<idi> &once_candidated_queue,
 			idi &end_once_candidated_queue,
-			vector<bool> &once_candidated,
+//			vector<bool> &once_candidated,
+			uint8_t *once_candidated,
 			idi b_id,
 			idi roots_start,
 			inti roots_size,
@@ -340,7 +350,7 @@ inline void ParaVertexCentricPLL::initialize(
 		for (idi v_i = 0; v_i < end_once_candidated_queue; ++v_i) {
 			idi v = once_candidated_queue[v_i];
 			short_index[v].indicator.reset();
-			once_candidated[v] = false;
+			once_candidated[v] = 0;
 		}
 		end_once_candidated_queue = 0;
 		for (idi v = roots_start; v < roots_bound; ++v) {
@@ -422,12 +432,15 @@ inline void ParaVertexCentricPLL::push_labels(
 //				idi &end_candidate_queue,
 				vector<idi> &tmp_candidate_queue,
 				idi &size_tmp_candidate_queue,
-				idi &offset_tmp_candidate_queue,
+				idi &offset_tmp_queue,
 //				vector<bool> &got_candidates,
 				uint8_t *got_candidates,
-				vector<idi> &once_candidated_queue,
-				idi &end_once_candidated_queue,
-				vector<bool> &once_candidated,
+//				vector<idi> &once_candidated_queue,
+//				idi &end_once_candidated_queue,
+				vector<idi> &tmp_once_candidated_queue,
+				idi &size_tmp_once_candidated_queue,
+//				vector<bool> &once_candidated,
+				uint8_t *once_candidated,
 				const vector<bool> &used_bp_roots,
 				smalli iter)
 {
@@ -502,16 +515,26 @@ inline void ParaVertexCentricPLL::push_labels(
 			// Add into once_candidated_queue
 			if (!once_candidated[v_tail]) {
 				// If v_tail is not in the once_candidated_queue yet, add it in
-				once_candidated[v_tail] = true;
-				once_candidated_queue[end_once_candidated_queue++] = v_tail;
+				if (CAS(once_candidated + v_tail, (uint8_t) 0, (uint8_t) 1)) {
+					tmp_once_candidated_queue[offset_tmp_queue + size_tmp_once_candidated_queue++] = v_tail;
+				}
 			}
 			// Add into candidate_queue
 			if (!got_candidates[v_tail]) {
 				// If v_tail is not in candidate_queue, add it in (prevent duplicate)
 				if (CAS(got_candidates + v_tail, (uint8_t) 0, (uint8_t) 1)) {
-					tmp_candidate_queue[offset_tmp_candidate_queue + size_tmp_candidate_queue++] = v_tail;
+					tmp_candidate_queue[offset_tmp_queue + size_tmp_candidate_queue++] = v_tail;
 				}
 			}
+
+//			// Add into once_candidated_queue
+//#pragma omp critical
+//			if (!once_candidated[v_tail]) {
+//				// If v_tail is not in the once_candidated_queue yet, add it in
+//				once_candidated[v_tail] = true;
+//				once_candidated_queue[end_once_candidated_queue++] = v_tail;
+//			}
+
 //			// Add into candidate_queue
 //			if (!got_candidates[v_tail]) {
 //				// If v_tail is not in candidate_queue, add it in (prevent duplicate)
@@ -520,6 +543,8 @@ inline void ParaVertexCentricPLL::push_labels(
 //			}
 		}
 	}
+
+//	printf("v_head: %u, size_tmp_candidate_queue: %u\n", v_head, size_tmp_candidate_queue);//test
 }
 
 // Function for distance query;
@@ -682,7 +707,7 @@ inline idi ParaVertexCentricPLL::prefix_sum_for_offsets(
 }
 
 // Collect elements in the tmp_queue into the queue
-void collect_into_queue(
+inline void ParaVertexCentricPLL::collect_into_queue(
 					vector<idi> &tmp_queue,
 					vector<idi> &offsets_tmp_queue, // the locations in tmp_queue for writing from tmp_queue
 					vector<idi> &offsets_queue, // the locations in queue for writing into queue.
@@ -690,16 +715,22 @@ void collect_into_queue(
 					vector<idi> &queue,
 					idi &end_queue)
 {
+	if (0 == num_elements) {
+		return;
+	}
 	idi i_bound = offsets_tmp_queue.size();
-//	#pragma omp parallel for
+#pragma omp parallel for
 	for (idi i = 0; i < i_bound; ++i) {
 		idi i_q_start = end_queue + offsets_queue[i];
-		// idi i_q_bound = i_queue_start + sizes_tmp_queue[i];
 		idi i_q_bound;
 		if (i_bound - 1 != i) {
 			i_q_bound = end_queue + offsets_queue[i + 1];
 		} else {
 			i_q_bound = end_queue + num_elements;
+		}
+		if (i_q_start == i_q_bound) {
+			// If the group has no elements to be added, then continue to the next group
+			continue;
 		}
 		idi end_tmp = offsets_tmp_queue[i];
 		for (idi i_q = i_q_start; i_q < i_q_bound; ++i_q) {
@@ -728,10 +759,12 @@ inline void ParaVertexCentricPLL::batch_process(
 	static vector< vector<smalli> > dist_matrix(roots_size, vector<smalli>(num_v, SMALLI_MAX));
 //	static vector<bool> got_candidates(num_v, false); // got_candidates[v] is true means vertex v is in the queue candidate_queue
 	static uint8_t *got_candidates = (uint8_t *) calloc(num_v, sizeof(uint8_t)); // need raw integer type to do CAS.
-	static vector<bool> is_active(num_v, false);// is_active[v] is true means vertex v is in the active queue.
+//	static vector<bool> is_active(num_v, false);// is_active[v] is true means vertex v is in the active queue.
+	static uint8_t *is_active = (uint8_t *) calloc(num_v, sizeof(uint8_t));
 	static vector<idi> once_candidated_queue(num_v); // The vertex who got some candidates in this batch is in the once_candidated_queue.
 	static idi end_once_candidated_queue = 0;
-	static vector<bool> once_candidated(num_v, false); // once_candidated[v] is true means vertex v got some candidates in this batch
+//	static vector<bool> once_candidated(num_v, false); // once_candidated[v] is true means vertex v got some candidates in this batch
+	static uint8_t *once_candidated = (uint8_t *) calloc(num_v, sizeof(uint8_t)); // need raw integer type to do CAS.
 
 	// At the beginning of a batch, initialize the labels L and distance buffer dist_matrix;
 	initialize(
@@ -756,110 +789,166 @@ inline void ParaVertexCentricPLL::batch_process(
 //		candidating_time -= WallTimer::get_time_mark();
 		++iter;
 
-		// Prepare for parallel processing the active_queue and adding to candidate_queue.
-		// Every vertex's offset location in tmp_candidate_queue
-		vector<idi> offsets_tmp_candidate_queue(end_active_queue);
-//		#pragma omp parallel for
-		for (idi i_queue = 0; i_queue < end_active_queue; ++i_queue) {
-			// Traverse all active vertices, get their out degrees.
-			offsets_tmp_candidate_queue[i_queue] = G.out_degrees[active_queue[i_queue]];
+		// Pushing
+		{
+			// Prepare for parallel processing the active_queue and adding to candidate_queue.
+			// Every vertex's offset location in tmp_candidate_queue
+			// It's used for every thread to write into tmp_candidate_queue and tmp_once_candidated_queue
+			vector<idi> offsets_tmp_queue(end_active_queue);
+#pragma omp parallel for
+			for (idi i_queue = 0; i_queue < end_active_queue; ++i_queue) {
+				// Traverse all active vertices, get their out degrees.
+				offsets_tmp_queue[i_queue] = G.out_degrees[active_queue[i_queue]];
+			}
+			idi num_neighbors = prefix_sum_for_offsets(offsets_tmp_queue);
+			// every thread writes to tmp_candidate_queue at its offset location
+			vector<idi> tmp_candidate_queue(num_neighbors);
+			// A vector to store the true number of pushed neighbors of every active vertex.
+			vector<idi> sizes_tmp_candidate_queue(end_active_queue, 0);
+			// similarly, every thread writes to tmp_once_candidated_queue at its offset location
+			vector<idi> tmp_once_candidated_queue(num_neighbors);
+			// And store the true number of new added once-candidated vertices.
+			vector<idi> sizes_tmp_once_candidated_queue(end_active_queue, 0);
+
+			// Traverse active vertices to push their labels as candidates
+#pragma omp parallel for
+			for (idi i_queue = 0; i_queue < end_active_queue; ++i_queue) {
+				idi v_head = active_queue[i_queue];
+				is_active[v_head] = 0; // reset is_active
+
+				push_labels(
+						v_head,
+						roots_start,
+						G,
+						L,
+						short_index,
+	//					candidate_queue,
+	//					end_candidate_queue,
+						tmp_candidate_queue,
+						sizes_tmp_candidate_queue[i_queue],
+						offsets_tmp_queue[i_queue],
+						got_candidates,
+	//					once_candidated_queue,
+	//					end_once_candidated_queue,
+						tmp_once_candidated_queue,
+						sizes_tmp_once_candidated_queue[i_queue],
+						once_candidated,
+						used_bp_roots,
+						iter);
+			}
+
+			// According to sizes_tmp_candidate_queue, get the offset for inserting to the real queue
+			idi total_new = prefix_sum_for_offsets(sizes_tmp_candidate_queue);
+			// Collect all candidate vertices from tmp_candidate_queue into candidate_queue.
+			collect_into_queue(
+						tmp_candidate_queue,
+						offsets_tmp_queue, // the locations in tmp_queue for writing from tmp_queue
+						sizes_tmp_candidate_queue, // the locations in queue for writing into queue.
+						total_new, // total number of elements which need to be added from tmp_queue to queue
+						candidate_queue,
+						end_candidate_queue);
+			// Get the offset for inserting to the real queue.
+			total_new = prefix_sum_for_offsets(sizes_tmp_once_candidated_queue);
+			// Collect all once-candidated vertices from tmp_once_candidated_queue into once_candidated_queue
+			collect_into_queue(
+						tmp_once_candidated_queue,
+						offsets_tmp_queue,
+						sizes_tmp_once_candidated_queue,
+						total_new,
+						once_candidated_queue,
+						end_once_candidated_queue);
+	//		printf("end_candidate_queue: %u\n", end_candidate_queue); fflush(stdout);//test
+			end_active_queue = 0; // Set the active_queue empty
 		}
-		idi num_neighbors = prefix_sum_for_offsets(offsets_tmp_candidate_queue);
-		// every thread write to tmp_candidate_queue at its offset location
-		vector<idi> tmp_candidate_queue(num_neighbors);
-		// A vector to store the true number of pushed neighbors of every active vertex.
-		vector<idi> sizes_tmp_candidate_queue(end_active_queue, 0);
 
-		// Traverse active vertices to push their labels as candidates
-//		#pragma omp parallel for
-		for (idi i_queue = 0; i_queue < end_active_queue; ++i_queue) {
-			idi v_head = active_queue[i_queue];
-			is_active[v_head] = false; // reset is_active
-
-			push_labels(
-					v_head,
-					roots_start,
-					G,
-					L,
-					short_index,
-//					candidate_queue,
-//					end_candidate_queue,
-					tmp_candidate_queue,
-					sizes_tmp_candidate_queue[i_queue],
-					offsets_tmp_candidate_queue[i_queue],
-					got_candidates,
-					once_candidated_queue,
-					end_once_candidated_queue,
-					once_candidated,
-					used_bp_roots,
-					iter);
-		}
-
-		// According to sizes_tmp_candidate_queue, get the offset for inserting to the real queue
-		idi total_new = prefix_sum_for_offsets(sizes_tmp_candidate_queue);
-		// Collect all candidate vertices from tmp_candidate_queue into candidate_queue.
-		collect_into_queue(
-					tmp_candidate_queue,
-					offsets_tmp_candidate_queue, // the locations in tmp_queue for writing from tmp_queue
-					sizes_tmp_candidate_queue, // the locations in queue for writing into queue.
-					total_new, // total number of elements which need to be added from tmp_queue to queue
-					candidate_queue,
-					end_candidate_queue);
-		printf("end_candidate_queue: %u\n", end_candidate_queue); getchar(); //test
-		end_active_queue = 0; // Set the active_queue empty
 //		candidating_time += WallTimer::get_time_mark();
 //		adding_time -= WallTimer::get_time_mark();
+		// Adding
+		{
+			// Prepare for parallel processing the candidate_queue and adding to active_queue.
+			// Every vertex's offset location in tmp_active_queue is i_queue * roots_size
+			// It's used for every thread to write into tmp_candidate_queue and tmp_once_candidated_queue
+			vector<idi> offsets_tmp_queue(end_candidate_queue);
+#pragma omp parallel for
+			for (idi i_queue = 0; i_queue < end_candidate_queue; ++i_queue) {
+				// Traverse all active vertices, get their out degrees.
+				offsets_tmp_queue[i_queue] = i_queue * roots_size;
+			}
+	//		idi num_neighbors = prefix_sum_for_offsets(offsets_tmp_queue);
+			// every thread writes to tmp_candidate_queue at its offset location
+			vector<idi> tmp_active_queue(end_candidate_queue * roots_size);
+			// A vector to store the true number of pushed neighbors of every active vertex.
+			vector<idi> sizes_tmp_active_queue(end_candidate_queue, 0);
 
-		// Traverse vertices in the candidate_queue to insert labels
-		for (idi i_queue = 0; i_queue < end_candidate_queue; ++i_queue) {
-			idi v_id = candidate_queue[i_queue];
-			inti inserted_count = 0; //recording number of v_id's truly inserted candidates
-			got_candidates[v_id] = 0; // reset got_candidates
-			// Traverse v_id's all candidates
-			for (inti cand_root_id = 0; cand_root_id < roots_size; ++cand_root_id) {
-				if (!short_index[v_id].candidates[cand_root_id]) {
-					// Root cand_root_id is not vertex v_id's candidate
-					continue;
-				}
-				short_index[v_id].candidates.reset(cand_root_id);
-				// Only insert cand_root_id into v_id's label if its distance to v_id is shorter than existing distance
-				if ( distance_query(
+			// Traverse vertices in the candidate_queue to insert labels
+#pragma omp parallel for
+			for (idi i_queue = 0; i_queue < end_candidate_queue; ++i_queue) {
+				idi v_id = candidate_queue[i_queue];
+				inti inserted_count = 0; //recording number of v_id's truly inserted candidates
+				got_candidates[v_id] = 0; // reset got_candidates
+				// Traverse v_id's all candidates
+				for (inti cand_root_id = 0; cand_root_id < roots_size; ++cand_root_id) {
+					if (!short_index[v_id].candidates[cand_root_id]) {
+						// Root cand_root_id is not vertex v_id's candidate
+						continue;
+					}
+					short_index[v_id].candidates.reset(cand_root_id);
+					// Only insert cand_root_id into v_id's label if its distance to v_id is shorter than existing distance
+					if ( distance_query(
+									cand_root_id,
+									v_id,
+									roots_start,
+									L,
+									dist_matrix,
+									iter) ) {
+						if (!is_active[v_id]) {
+							if (CAS(is_active + v_id, (uint8_t) 0, (uint8_t) 1)) {
+								tmp_active_queue[offsets_tmp_queue[i_queue] + sizes_tmp_active_queue[i_queue]++] = v_id;
+							}
+						}
+	//					if (!is_active[v_id]) {
+	//						is_active[v_id] = true;
+	//						active_queue[end_active_queue++] = v_id;
+	//					}
+						++inserted_count;
+						// The candidate cand_root_id needs to be added into v_id's label
+						insert_label_only(
 								cand_root_id,
 								v_id,
 								roots_start,
+								roots_size,
 								L,
 								dist_matrix,
-								iter) ) {
-					if (!is_active[v_id]) {
-						is_active[v_id] = true;
-						active_queue[end_active_queue++] = v_id;
+								iter);
 					}
-					++inserted_count;
-					// The candidate cand_root_id needs to be added into v_id's label
-					insert_label_only(
-							cand_root_id,
-							v_id,
-							roots_start,
-							roots_size,
-							L,
-							dist_matrix,
-							iter);
+				}
+				if (0 != inserted_count) {
+					// Update other arrays in L[v_id] if new labels were inserted in this iteration
+					update_label_indices(
+									v_id,
+									inserted_count,
+									L,
+									short_index,
+									b_id,
+									iter);
 				}
 			}
-			if (0 != inserted_count) {
-				// Update other arrays in L[v_id] if new labels were inserted in this iteration
-				update_label_indices(
-								v_id,
-								inserted_count,
-								L,
-								short_index,
-								b_id,
-								iter);
-			}
+
+			// According to sizes_tmp_active_queue, get the offset for inserting to the real queue
+			idi total_new = prefix_sum_for_offsets(sizes_tmp_active_queue);
+			// Collect all candidate vertices from tmp_candidate_queue into candidate_queue.
+			collect_into_queue(
+						tmp_active_queue,
+						offsets_tmp_queue, // the locations in tmp_queue for writing from tmp_queue
+						sizes_tmp_active_queue, // the locations in queue for writing into queue.
+						total_new, // total number of elements which need to be added from tmp_queue to queue
+						active_queue,
+						end_active_queue);
+			end_candidate_queue = 0; // Set the candidate_queue empty
 		}
-		end_candidate_queue = 0; // Set the candidate_queue empty
 //		adding_time += WallTimer::get_time_mark();
 	}
+
 
 	// Reset the dist_matrix
 //	initializing_time -= WallTimer::get_time_mark();
