@@ -24,7 +24,7 @@ void pado()
 {
 //	freopen("output.txt", "w", stdout); // test
 //	const char filename[] = "input.dat";
-	const char filename[] = "/Users/johnz/pppp/datasets/dblp/dblp";
+	const char filename[] = "/home/f85/zpeng/scratch/datasets/dblp/dblp";
 //	const char filename[] = "/Users/johnz/pppp/datasets/chicago/chicago";
 //	const char filename[] = "/Users/johnz/pppp/datasets/wikitalk/wikitalk";
 //	const char filename[] = "tools/edgelist.txt";

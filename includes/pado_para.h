@@ -32,7 +32,7 @@ using std::fill;
 namespace PADO {
 
 const inti BATCH_SIZE = 1024; // The size for regular batch and bit array.
-const inti BITPARALLEL_SIZE = 50;
+const inti BITPARALLEL_SIZE = 0;
 
 
 
