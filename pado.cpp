@@ -13,18 +13,23 @@
 #include "graph.h"
 //#include "pado.h"
 #include "pado_para.h"
-
-namespace PADO {
-	int NUM_THREADS = 4;
-}
+//#include "pado_para.tmp.off_bp_parallel.h"
+//#include "pado_para.tmp.on_bp_parallel.h"
 
 using namespace PADO;
 
 void pado()
 {
+//	omp_set_num_threads(NUM_THREADS);
+//#pragma omp parallel
+//	{
+//		printf("Threads: %d\n", omp_get_num_threads());
+//	}
+//	exit(1);
 //	freopen("output.txt", "w", stdout); // test
 //	const char filename[] = "input.dat";
 	const char filename[] = "/home/f85/zpeng/scratch/datasets/dblp/dblp";
+//	const char filename[] = "/home/f85/zpeng/scratch/datasets/skitter/skitter";
 //	const char filename[] = "/Users/johnz/pppp/datasets/chicago/chicago";
 //	const char filename[] = "/Users/johnz/pppp/datasets/wikitalk/wikitalk";
 //	const char filename[] = "tools/edgelist.txt";

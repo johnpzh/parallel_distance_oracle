@@ -30,10 +30,9 @@ using std::min;
 using std::fill;
 
 namespace PADO {
-int NUM_THREADS = 4;
+
 const inti BATCH_SIZE = 1024; // The size for regular batch and bit array.
 const inti BITPARALLEL_SIZE = 50;
-const inti THRESHOLD_PARALLEL = 0;
 
 
 
@@ -272,11 +271,9 @@ inline void ParaVertexCentricPLL::bit_parallel_labeling(
 //			idi num_neighbors = prefix_sum_for_offsets(offsets_tmp_queue);
 //			vector<idi> tmp_que(num_neighbors);
 //			vector<idi> sizes_tmp_que(que_size, 0);
-//
 //			// For parallel adding to sibling_es
 //			vector< pair<idi, idi> > tmp_sibling_es(num_neighbors);
 //			vector<idi> sizes_tmp_sibling_es(que_size, 0);
-//
 //			// For parallel adding to child_es
 //			vector< pair<idi, idi> > tmp_child_es(num_neighbors);
 //			vector<idi> sizes_tmp_child_es(que_size, 0);
@@ -424,198 +421,76 @@ inline void ParaVertexCentricPLL::initialize(
 	// Short_index
 	{
 //		init_indicators_time -= WallTimer::get_time_mark();
-		if (end_once_candidated_queue >= THRESHOLD_PARALLEL) {
-#pragma omp parallel for
-			for (idi v_i = 0; v_i < end_once_candidated_queue; ++v_i) {
-				idi v = once_candidated_queue[v_i];
-				short_index[v].indicator.reset();
-				once_candidated[v] = 0;
-			}
-		} else {
-			for (idi v_i = 0; v_i < end_once_candidated_queue; ++v_i) {
-				idi v = once_candidated_queue[v_i];
-				short_index[v].indicator.reset();
-				once_candidated[v] = 0;
-			}
+		for (idi v_i = 0; v_i < end_once_candidated_queue; ++v_i) {
+			idi v = once_candidated_queue[v_i];
+			short_index[v].indicator.reset();
+			once_candidated[v] = 0;
 		}
-//#pragma omp parallel for
-//		for (idi v_i = 0; v_i < end_once_candidated_queue; ++v_i) {
-//			idi v = once_candidated_queue[v_i];
-//			short_index[v].indicator.reset();
-//			once_candidated[v] = 0;
-//		}
 		end_once_candidated_queue = 0;
-		if (roots_size >= THRESHOLD_PARALLEL) {
-#pragma omp parallel for
-			for (idi v = roots_start; v < roots_bound; ++v) {
-				if (!used_bp_roots[v]) {
-					short_index[v].indicator.set(v - roots_start);
-					short_index[v].indicator.set(BATCH_SIZE); // v got labels
-				}
-			}
-		} else {
-			for (idi v = roots_start; v < roots_bound; ++v) {
-				if (!used_bp_roots[v]) {
-					short_index[v].indicator.set(v - roots_start);
-					short_index[v].indicator.set(BATCH_SIZE); // v got labels
-				}
+		for (idi v = roots_start; v < roots_bound; ++v) {
+			if (!used_bp_roots[v]) {
+				short_index[v].indicator.set(v - roots_start);
+				short_index[v].indicator.set(BATCH_SIZE); // v got labels
 			}
 		}
-//		for (idi v = roots_start; v < roots_bound; ++v) {
-//			if (!used_bp_roots[v]) {
-//				short_index[v].indicator.set(v - roots_start);
-//				short_index[v].indicator.set(BATCH_SIZE); // v got labels
-//			}
-//		}
 //		init_indicators_time += WallTimer::get_time_mark();
 	}
 //
 	// Real Index
 	{
-		if (roots_size >= THRESHOLD_PARALLEL) {
-#pragma omp parallel for
-			for (idi r_id = 0; r_id < roots_size; ++r_id) {
-				if (used_bp_roots[r_id + roots_start]) {
-					continue;
-				}
-				IndexType &Lr = L[r_id + roots_start];
-				Lr.batches.push_back(IndexType::Batch(
-													b_id, // Batch ID
-													Lr.distances.size(), // start_index
-													1)); // size
-				Lr.distances.push_back(IndexType::DistanceIndexType(
-													Lr.vertices.size(), // start_index
-													1, // size
-													0)); // dist
-				Lr.vertices.push_back(r_id);
+//		IndexType &Lr = nullptr;
+		for (idi r_id = 0; r_id < roots_size; ++r_id) {
+			if (used_bp_roots[r_id + roots_start]) {
+				continue;
 			}
-		} else {
-			for (idi r_id = 0; r_id < roots_size; ++r_id) {
-				if (used_bp_roots[r_id + roots_start]) {
-					continue;
-				}
-				IndexType &Lr = L[r_id + roots_start];
-				Lr.batches.push_back(IndexType::Batch(
-													b_id, // Batch ID
-													Lr.distances.size(), // start_index
-													1)); // size
-				Lr.distances.push_back(IndexType::DistanceIndexType(
-													Lr.vertices.size(), // start_index
-													1, // size
-													0)); // dist
-				Lr.vertices.push_back(r_id);
-			}
+			IndexType &Lr = L[r_id + roots_start];
+			Lr.batches.push_back(IndexType::Batch(
+												b_id, // Batch ID
+												Lr.distances.size(), // start_index
+												1)); // size
+			Lr.distances.push_back(IndexType::DistanceIndexType(
+												Lr.vertices.size(), // start_index
+												1, // size
+												0)); // dist
+			Lr.vertices.push_back(r_id);
 		}
-//		for (idi r_id = 0; r_id < roots_size; ++r_id) {
-//			if (used_bp_roots[r_id + roots_start]) {
-//				continue;
-//			}
-//			IndexType &Lr = L[r_id + roots_start];
-//			Lr.batches.push_back(IndexType::Batch(
-//												b_id, // Batch ID
-//												Lr.distances.size(), // start_index
-//												1)); // size
-//			Lr.distances.push_back(IndexType::DistanceIndexType(
-//												Lr.vertices.size(), // start_index
-//												1, // size
-//												0)); // dist
-//			Lr.vertices.push_back(r_id);
-//		}
 	}
 //	init_index_time += WallTimer::get_time_mark();
 //	init_dist_matrix_time -= WallTimer::get_time_mark();
 	// Dist_matrix
 	{
-		if (roots_size >= THRESHOLD_PARALLEL) {
-#pragma omp parallel for
-			for (idi r_id = 0; r_id < roots_size; ++r_id) {
-				if (used_bp_roots[r_id + roots_start]) {
-					continue;
-				}
-				IndexType &Lr = L[r_id + roots_start];
-				inti b_i_bound = Lr.batches.size();
-				_mm_prefetch(&Lr.batches[0], _MM_HINT_T0);
-				_mm_prefetch(&Lr.distances[0], _MM_HINT_T0);
-				_mm_prefetch(&Lr.vertices[0], _MM_HINT_T0);
-				for (inti b_i = 0; b_i < b_i_bound; ++b_i) {
-					idi id_offset = Lr.batches[b_i].batch_id * BATCH_SIZE;
-					idi dist_start_index = Lr.batches[b_i].start_index;
-					idi dist_bound_index = dist_start_index + Lr.batches[b_i].size;
-					// Traverse dist_matrix
-					for (idi dist_i = dist_start_index; dist_i < dist_bound_index; ++dist_i) {
-						idi v_start_index = Lr.distances[dist_i].start_index;
-						idi v_bound_index = v_start_index + Lr.distances[dist_i].size;
-						smalli dist = Lr.distances[dist_i].dist;
-						for (idi v_i = v_start_index; v_i < v_bound_index; ++v_i) {
-							dist_matrix[r_id][Lr.vertices[v_i] + id_offset] = dist;
-						}
-					}
-				}
+//		IndexType &Lr;
+		inti b_i_bound;
+		idi id_offset;
+		idi dist_start_index;
+		idi dist_bound_index;
+		idi v_start_index;
+		idi v_bound_index;
+		smalli dist;
+		for (idi r_id = 0; r_id < roots_size; ++r_id) {
+			if (used_bp_roots[r_id + roots_start]) {
+				continue;
 			}
-		} else {
-			inti b_i_bound;
-			idi id_offset;
-			idi dist_start_index;
-			idi dist_bound_index;
-			idi v_start_index;
-			idi v_bound_index;
-			smalli dist;
-			for (idi r_id = 0; r_id < roots_size; ++r_id) {
-				if (used_bp_roots[r_id + roots_start]) {
-					continue;
-				}
-				IndexType &Lr = L[r_id + roots_start];
-				b_i_bound = Lr.batches.size();
-				_mm_prefetch(&Lr.batches[0], _MM_HINT_T0);
-				_mm_prefetch(&Lr.distances[0], _MM_HINT_T0);
-				_mm_prefetch(&Lr.vertices[0], _MM_HINT_T0);
-				for (inti b_i = 0; b_i < b_i_bound; ++b_i) {
-					id_offset = Lr.batches[b_i].batch_id * BATCH_SIZE;
-					dist_start_index = Lr.batches[b_i].start_index;
-					dist_bound_index = dist_start_index + Lr.batches[b_i].size;
-					// Traverse dist_matrix
-					for (idi dist_i = dist_start_index; dist_i < dist_bound_index; ++dist_i) {
-						v_start_index = Lr.distances[dist_i].start_index;
-						v_bound_index = v_start_index + Lr.distances[dist_i].size;
-						dist = Lr.distances[dist_i].dist;
-						for (idi v_i = v_start_index; v_i < v_bound_index; ++v_i) {
-							dist_matrix[r_id][Lr.vertices[v_i] + id_offset] = dist;
-						}
+			IndexType &Lr = L[r_id + roots_start];
+			b_i_bound = Lr.batches.size();
+			_mm_prefetch(&Lr.batches[0], _MM_HINT_T0);
+			_mm_prefetch(&Lr.distances[0], _MM_HINT_T0);
+			_mm_prefetch(&Lr.vertices[0], _MM_HINT_T0);
+			for (inti b_i = 0; b_i < b_i_bound; ++b_i) {
+				id_offset = Lr.batches[b_i].batch_id * BATCH_SIZE;
+				dist_start_index = Lr.batches[b_i].start_index;
+				dist_bound_index = dist_start_index + Lr.batches[b_i].size;
+				// Traverse dist_matrix
+				for (idi dist_i = dist_start_index; dist_i < dist_bound_index; ++dist_i) {
+					v_start_index = Lr.distances[dist_i].start_index;
+					v_bound_index = v_start_index + Lr.distances[dist_i].size;
+					dist = Lr.distances[dist_i].dist;
+					for (idi v_i = v_start_index; v_i < v_bound_index; ++v_i) {
+						dist_matrix[r_id][Lr.vertices[v_i] + id_offset] = dist;
 					}
 				}
 			}
 		}
-//		inti b_i_bound;
-//		idi id_offset;
-//		idi dist_start_index;
-//		idi dist_bound_index;
-//		idi v_start_index;
-//		idi v_bound_index;
-//		smalli dist;
-//		for (idi r_id = 0; r_id < roots_size; ++r_id) {
-//			if (used_bp_roots[r_id + roots_start]) {
-//				continue;
-//			}
-//			IndexType &Lr = L[r_id + roots_start];
-//			b_i_bound = Lr.batches.size();
-//			_mm_prefetch(&Lr.batches[0], _MM_HINT_T0);
-//			_mm_prefetch(&Lr.distances[0], _MM_HINT_T0);
-//			_mm_prefetch(&Lr.vertices[0], _MM_HINT_T0);
-//			for (inti b_i = 0; b_i < b_i_bound; ++b_i) {
-//				id_offset = Lr.batches[b_i].batch_id * BATCH_SIZE;
-//				dist_start_index = Lr.batches[b_i].start_index;
-//				dist_bound_index = dist_start_index + Lr.batches[b_i].size;
-//				// Traverse dist_matrix
-//				for (idi dist_i = dist_start_index; dist_i < dist_bound_index; ++dist_i) {
-//					v_start_index = Lr.distances[dist_i].start_index;
-//					v_bound_index = v_start_index + Lr.distances[dist_i].size;
-//					dist = Lr.distances[dist_i].dist;
-//					for (idi v_i = v_start_index; v_i < v_bound_index; ++v_i) {
-//						dist_matrix[r_id][Lr.vertices[v_i] + id_offset] = dist;
-//					}
-//				}
-//			}
-//		}
 	}
 //	init_dist_matrix_time += WallTimer::get_time_mark();
 }
@@ -862,82 +737,32 @@ inline void ParaVertexCentricPLL::reset_at_end(
 				vector<IndexType> &L,
 				vector< vector<smalli> > &dist_matrix)
 {
-	if (roots_size >= THRESHOLD_PARALLEL) {
-#pragma omp parallel for
-		for (idi r_id = 0; r_id < roots_size; ++r_id) {
-			IndexType &Lr = L[r_id + roots_start];
-			inti b_i_bound = Lr.batches.size();
-			_mm_prefetch(&Lr.batches[0], _MM_HINT_T0);
-			_mm_prefetch(&Lr.distances[0], _MM_HINT_T0);
-			_mm_prefetch(&Lr.vertices[0], _MM_HINT_T0);
-			for (inti b_i = 0; b_i < b_i_bound; ++b_i) {
-				idi id_offset = Lr.batches[b_i].batch_id * BATCH_SIZE;
-				idi dist_start_index = Lr.batches[b_i].start_index;
-				idi dist_bound_index = dist_start_index + Lr.batches[b_i].size;
-				// Traverse dist_matrix
-				for (idi dist_i = dist_start_index; dist_i < dist_bound_index; ++dist_i) {
-					idi v_start_index = Lr.distances[dist_i].start_index;
-					idi v_bound_index = v_start_index + Lr.distances[dist_i].size;
-					for (idi v_i = v_start_index; v_i < v_bound_index; ++v_i) {
-						dist_matrix[r_id][Lr.vertices[v_i] + id_offset] = SMALLI_MAX;
-					}
-				}
-			}
-		}
-	} else {
-		inti b_i_bound;
-		idi id_offset;
-		idi dist_start_index;
-		idi dist_bound_index;
-		idi v_start_index;
-		idi v_bound_index;
-		for (idi r_id = 0; r_id < roots_size; ++r_id) {
-			IndexType &Lr = L[r_id + roots_start];
-			b_i_bound = Lr.batches.size();
-			_mm_prefetch(&Lr.batches[0], _MM_HINT_T0);
-			_mm_prefetch(&Lr.distances[0], _MM_HINT_T0);
-			_mm_prefetch(&Lr.vertices[0], _MM_HINT_T0);
-			for (inti b_i = 0; b_i < b_i_bound; ++b_i) {
-				id_offset = Lr.batches[b_i].batch_id * BATCH_SIZE;
-				dist_start_index = Lr.batches[b_i].start_index;
-				dist_bound_index = dist_start_index + Lr.batches[b_i].size;
-				// Traverse dist_matrix
-				for (idi dist_i = dist_start_index; dist_i < dist_bound_index; ++dist_i) {
-					v_start_index = Lr.distances[dist_i].start_index;
-					v_bound_index = v_start_index + Lr.distances[dist_i].size;
-					for (idi v_i = v_start_index; v_i < v_bound_index; ++v_i) {
-						dist_matrix[r_id][Lr.vertices[v_i] + id_offset] = SMALLI_MAX;
-					}
+	inti b_i_bound;
+	idi id_offset;
+	idi dist_start_index;
+	idi dist_bound_index;
+	idi v_start_index;
+	idi v_bound_index;
+	for (idi r_id = 0; r_id < roots_size; ++r_id) {
+		IndexType &Lr = L[r_id + roots_start];
+		b_i_bound = Lr.batches.size();
+		_mm_prefetch(&Lr.batches[0], _MM_HINT_T0);
+		_mm_prefetch(&Lr.distances[0], _MM_HINT_T0);
+		_mm_prefetch(&Lr.vertices[0], _MM_HINT_T0);
+		for (inti b_i = 0; b_i < b_i_bound; ++b_i) {
+			id_offset = Lr.batches[b_i].batch_id * BATCH_SIZE;
+			dist_start_index = Lr.batches[b_i].start_index;
+			dist_bound_index = dist_start_index + Lr.batches[b_i].size;
+			// Traverse dist_matrix
+			for (idi dist_i = dist_start_index; dist_i < dist_bound_index; ++dist_i) {
+				v_start_index = Lr.distances[dist_i].start_index;
+				v_bound_index = v_start_index + Lr.distances[dist_i].size;
+				for (idi v_i = v_start_index; v_i < v_bound_index; ++v_i) {
+					dist_matrix[r_id][Lr.vertices[v_i] + id_offset] = SMALLI_MAX;
 				}
 			}
 		}
 	}
-//	inti b_i_bound;
-//	idi id_offset;
-//	idi dist_start_index;
-//	idi dist_bound_index;
-//	idi v_start_index;
-//	idi v_bound_index;
-//	for (idi r_id = 0; r_id < roots_size; ++r_id) {
-//		IndexType &Lr = L[r_id + roots_start];
-//		b_i_bound = Lr.batches.size();
-//		_mm_prefetch(&Lr.batches[0], _MM_HINT_T0);
-//		_mm_prefetch(&Lr.distances[0], _MM_HINT_T0);
-//		_mm_prefetch(&Lr.vertices[0], _MM_HINT_T0);
-//		for (inti b_i = 0; b_i < b_i_bound; ++b_i) {
-//			id_offset = Lr.batches[b_i].batch_id * BATCH_SIZE;
-//			dist_start_index = Lr.batches[b_i].start_index;
-//			dist_bound_index = dist_start_index + Lr.batches[b_i].size;
-//			// Traverse dist_matrix
-//			for (idi dist_i = dist_start_index; dist_i < dist_bound_index; ++dist_i) {
-//				v_start_index = Lr.distances[dist_i].start_index;
-//				v_bound_index = v_start_index + Lr.distances[dist_i].size;
-//				for (idi v_i = v_start_index; v_i < v_bound_index; ++v_i) {
-//					dist_matrix[r_id][Lr.vertices[v_i] + id_offset] = SMALLI_MAX;
-//				}
-//			}
-//		}
-//	}
 }
 
 // Function to get the prefix sum of elements in offsets
@@ -1232,9 +1057,9 @@ void ParaVertexCentricPLL::construct(const Graph &G)
 
 	double bp_labeling_time = -WallTimer::get_time_mark();
 	bit_parallel_labeling(
-						G,
-						L,
-						used_bp_roots);
+				G,
+				L,
+				used_bp_roots);
 	bp_labeling_time += WallTimer::get_time_mark();
 
 	for (idi b_i = 0; b_i < b_i_bound; ++b_i) {
@@ -1354,53 +1179,53 @@ void ParaVertexCentricPLL::switch_labels_to_old_id(
 //		puts("");
 //	}
 
-	// Try query
-	idi u;
-	idi v;
-	while (std::cin >> u >> v) {
-		weighti dist = WEIGHTI_MAX;
-		// Bit Parallel Check
-		const IndexType &idx_u = L[rank[u]];
-		const IndexType &idx_v = L[rank[v]];
-
-		for (inti i = 0; i < BITPARALLEL_SIZE; ++i) {
-			int td = idx_v.bp_dist[i] + idx_u.bp_dist[i];
-			if (td - 2 <= dist) {
-				td +=
-					(idx_v.bp_sets[i][0] & idx_u.bp_sets[i][0]) ? -2 :
-					((idx_v.bp_sets[i][0] & idx_u.bp_sets[i][1])
-							| (idx_v.bp_sets[i][1] & idx_u.bp_sets[i][0]))
-							? -1 : 0;
-				if (td < dist) {
-					dist = td;
-				}
-			}
-		}
-
-		// Normal Index Check
-		const auto &Lu = new_L[u];
-		const auto &Lv = new_L[v];
-//		unsorted_map<idi, weighti> markers;
-		map<idi, weighti> markers;
-		for (idi i = 0; i < Lu.size(); ++i) {
-			markers[Lu[i].first] = Lu[i].second;
-		}
-		for (idi i = 0; i < Lv.size(); ++i) {
-			const auto &tmp_l = markers.find(Lv[i].first);
-			if (tmp_l == markers.end()) {
-				continue;
-			}
-			int d = tmp_l->second + Lv[i].second;
-			if (d < dist) {
-				dist = d;
-			}
-		}
-		if (dist == 255) {
-			printf("2147483647\n");
-		} else {
-			printf("%u\n", dist);
-		}
-	}
+//	// Try query
+//	idi u;
+//	idi v;
+//	while (std::cin >> u >> v) {
+//		weighti dist = WEIGHTI_MAX;
+//		// Bit Parallel Check
+//		const IndexType &idx_u = L[rank[u]];
+//		const IndexType &idx_v = L[rank[v]];
+//
+//		for (inti i = 0; i < BITPARALLEL_SIZE; ++i) {
+//			int td = idx_v.bp_dist[i] + idx_u.bp_dist[i];
+//			if (td - 2 <= dist) {
+//				td +=
+//					(idx_v.bp_sets[i][0] & idx_u.bp_sets[i][0]) ? -2 :
+//					((idx_v.bp_sets[i][0] & idx_u.bp_sets[i][1])
+//							| (idx_v.bp_sets[i][1] & idx_u.bp_sets[i][0]))
+//							? -1 : 0;
+//				if (td < dist) {
+//					dist = td;
+//				}
+//			}
+//		}
+//
+//		// Normal Index Check
+//		const auto &Lu = new_L[u];
+//		const auto &Lv = new_L[v];
+////		unsorted_map<idi, weighti> markers;
+//		map<idi, weighti> markers;
+//		for (idi i = 0; i < Lu.size(); ++i) {
+//			markers[Lu[i].first] = Lu[i].second;
+//		}
+//		for (idi i = 0; i < Lv.size(); ++i) {
+//			const auto &tmp_l = markers.find(Lv[i].first);
+//			if (tmp_l == markers.end()) {
+//				continue;
+//			}
+//			int d = tmp_l->second + Lv[i].second;
+//			if (d < dist) {
+//				dist = d;
+//			}
+//		}
+//		if (dist == 255) {
+//			printf("2147483647\n");
+//		} else {
+//			printf("%u\n", dist);
+//		}
+//	}
 }
 
 }

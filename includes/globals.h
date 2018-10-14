@@ -26,18 +26,20 @@ typedef uint8_t smalli;
 typedef uint32_t inti;
 //const int WEIGHTI_MAX = INT_MAX;
 const uint8_t WEIGHTI_MAX = UCHAR_MAX;
-const int SMALLI_MAX = UCHAR_MAX;
+const uint8_t SMALLI_MAX = UCHAR_MAX;
 
 
 // Compare and Swap
 template <typename V_T>
-inline bool CAS(V_T *ptr, V_T old_val, V_T new_val)
+//inline bool CAS(V_T *ptr, V_T old_val, V_T new_val)
+inline bool CAS(void *ptr, V_T old_val, V_T new_val)
 {
 	if (1 == sizeof(V_T)) {
 		return __sync_bool_compare_and_swap((uint8_t *) ptr, *((uint8_t *) &old_val), *((uint8_t *) &new_val));
 	} else if (4 == sizeof(V_T)) {
 		return __sync_bool_compare_and_swap((uint32_t *) ptr, *((uint32_t *) &old_val), *((uint32_t *) &new_val));
-//		return __sync_bool_compare_and_swap(reinterpret_cast<uint32_t *>(ptr), *((uint32_t *) &old_val), *((uint32_t *) &new_val));
+//		return __sync_bool_compare_and_swap((int *) ptr, *((int *) &old_val), *((int *) &new_val));
+//		return __sync_bool_compare_and_swap(reinterpret_cast<uint32_t *>(ptr), *(reinterpret_cast<uint32_t *>(&old_val)), *(reinterpret_cast<uint32_t *>(&new_val)));
 //		return __sync_bool_compare_and_swap(((uint32_t *) &((uint32_t) *ptr)), *((uint32_t *) &old_val), *((uint32_t *) &new_val));
 	} else if (8 == sizeof(V_T)) {
 		return __sync_bool_compare_and_swap((uint64_t *) ptr, *((uint64_t *) &old_val), *((uint64_t *) &new_val));
