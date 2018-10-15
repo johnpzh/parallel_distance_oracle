@@ -33,7 +33,7 @@ namespace PADO {
 int NUM_THREADS = 4;
 const inti BATCH_SIZE = 1024; // The size for regular batch and bit array.
 const inti BITPARALLEL_SIZE = 50;
-const inti THRESHOLD_PARALLEL = 1024;
+const inti THRESHOLD_PARALLEL = 0;
 
 
 
@@ -262,24 +262,26 @@ inline void ParaVertexCentricPLL::bit_parallel_labeling(
 		for (smalli d = 0; que_t0 < que_h; ++d) {
 			idi num_sibling_es = 0, num_child_es = 0;
 
-			// For parallel adding to que
-			idi que_size = que_t1 - que_t0;
-			vector<idi> offsets_tmp_queue(que_size);
-#pragma omp parallel for
-			for (idi i_q = 0; i_q < que_size; ++i_q) {
-				offsets_tmp_queue[i_q] = G.out_degrees[que[que_t0 + i_q]];
-			}
-			idi num_neighbors = prefix_sum_for_offsets(offsets_tmp_queue);
-			vector<idi> tmp_que(num_neighbors);
-			vector<idi> sizes_tmp_que(que_size, 0);
-			// For parallel adding to sibling_es
-			vector< pair<idi, idi> > tmp_sibling_es(num_neighbors);
-			vector<idi> sizes_tmp_sibling_es(que_size, 0);
-			// For parallel adding to child_es
-			vector< pair<idi, idi> > tmp_child_es(num_neighbors);
-			vector<idi> sizes_tmp_child_es(que_size, 0);
+//			// For parallel adding to que
+//			idi que_size = que_t1 - que_t0;
+//			vector<idi> offsets_tmp_queue(que_size);
+//#pragma omp parallel for
+//			for (idi i_q = 0; i_q < que_size; ++i_q) {
+//				offsets_tmp_queue[i_q] = G.out_degrees[que[que_t0 + i_q]];
+//			}
+//			idi num_neighbors = prefix_sum_for_offsets(offsets_tmp_queue);
+//			vector<idi> tmp_que(num_neighbors);
+//			vector<idi> sizes_tmp_que(que_size, 0);
+//
+//			// For parallel adding to sibling_es
+//			vector< pair<idi, idi> > tmp_sibling_es(num_neighbors);
+//			vector<idi> sizes_tmp_sibling_es(que_size, 0);
+//
+//			// For parallel adding to child_es
+//			vector< pair<idi, idi> > tmp_child_es(num_neighbors);
+//			vector<idi> sizes_tmp_child_es(que_size, 0);
 
-#pragma omp parallel for
+//#pragma omp parallel for
 			for (idi que_i = que_t0; que_i < que_t1; ++que_i) {
 				idi tmp_que_i = que_i - que_t0; // location in the tmp_que
 				idi v = que[que_i];
@@ -294,44 +296,44 @@ inline void ParaVertexCentricPLL::bit_parallel_labeling(
 					}
 					else if (d == tmp_d[tv]) {
 						if (v < tv) { // ??? Why need v < tv !!! Because it's a undirected graph.
-							idi &size_in_group = sizes_tmp_sibling_es[tmp_que_i];
-							tmp_sibling_es[offsets_tmp_queue[tmp_que_i] + size_in_group].first = v;
-							tmp_sibling_es[offsets_tmp_queue[tmp_que_i] + size_in_group].second = tv;
-							++size_in_group;
-//							sibling_es[num_sibling_es].first  = v;
-//							sibling_es[num_sibling_es].second = tv;
-//							++num_sibling_es;
+//							idi &size_in_group = sizes_tmp_sibling_es[tmp_que_i];
+//							tmp_sibling_es[offsets_tmp_queue[tmp_que_i] + size_in_group].first = v;
+//							tmp_sibling_es[offsets_tmp_queue[tmp_que_i] + size_in_group].second = tv;
+//							++size_in_group;
+							sibling_es[num_sibling_es].first  = v;
+							sibling_es[num_sibling_es].second = tv;
+							++num_sibling_es;
 						}
 					} else { // d < tmp_d[tv]
-						if (tmp_d[tv] == SMALLI_MAX) {
-							if (CAS(tmp_d + tv, SMALLI_MAX, td)) { // tmp_d[tv] = td
-								tmp_que[offsets_tmp_queue[tmp_que_i] + sizes_tmp_que[tmp_que_i]++] = tv;
-							}
-						}
 //						if (tmp_d[tv] == SMALLI_MAX) {
-//							que[que_h++] = tv;
-//							tmp_d[tv] = td;
+//							if (CAS(tmp_d + tv, SMALLI_MAX, td)) { // tmp_d[tv] = td
+//								tmp_que[offsets_tmp_queue[tmp_que_i] + sizes_tmp_que[tmp_que_i]++] = tv;
+//							}
 //						}
-						idi &size_in_group = sizes_tmp_child_es[tmp_que_i];
-						tmp_child_es[offsets_tmp_queue[tmp_que_i] + size_in_group].first = v;
-						tmp_child_es[offsets_tmp_queue[tmp_que_i] + size_in_group].second = tv;
-						++size_in_group;
-//						child_es[num_child_es].first  = v;
-//						child_es[num_child_es].second = tv;
-//						++num_child_es;
+						if (tmp_d[tv] == SMALLI_MAX) {
+							que[que_h++] = tv;
+							tmp_d[tv] = td;
+						}
+//						idi &size_in_group = sizes_tmp_child_es[tmp_que_i];
+//						tmp_child_es[offsets_tmp_queue[tmp_que_i] + size_in_group].first = v;
+//						tmp_child_es[offsets_tmp_queue[tmp_que_i] + size_in_group].second = tv;
+//						++size_in_group;
+						child_es[num_child_es].first  = v;
+						child_es[num_child_es].second = tv;
+						++num_child_es;
 					}
 				}
 			}
 
-			// From tmp_sibling_es to sibling_es
-			idi total_sizes_tmp_queue = prefix_sum_for_offsets(sizes_tmp_sibling_es);
-			collect_into_queue(
-						tmp_sibling_es,
-						offsets_tmp_queue,
-						sizes_tmp_sibling_es,
-						total_sizes_tmp_queue,
-						sibling_es,
-						num_sibling_es);
+//			// From tmp_sibling_es to sibling_es
+//			idi total_sizes_tmp_queue = prefix_sum_for_offsets(sizes_tmp_sibling_es);
+//			collect_into_queue(
+//						tmp_sibling_es,
+//						offsets_tmp_queue,
+//						sizes_tmp_sibling_es,
+//						total_sizes_tmp_queue,
+//						sibling_es,
+//						num_sibling_es);
 
 #pragma omp parallel for
 			for (idi i = 0; i < num_sibling_es; ++i) {
@@ -342,15 +344,15 @@ inline void ParaVertexCentricPLL::bit_parallel_labeling(
 //				tmp_s[w].second |= tmp_s[v].first;
 			}
 
-			// From tmp_child_es to child_es
-			total_sizes_tmp_queue = prefix_sum_for_offsets(sizes_tmp_child_es);
-			collect_into_queue(
-						tmp_child_es,
-						offsets_tmp_queue,
-						sizes_tmp_child_es,
-						total_sizes_tmp_queue,
-						child_es,
-						num_child_es);
+//			// From tmp_child_es to child_es
+//			total_sizes_tmp_queue = prefix_sum_for_offsets(sizes_tmp_child_es);
+//			collect_into_queue(
+//						tmp_child_es,
+//						offsets_tmp_queue,
+//						sizes_tmp_child_es,
+//						total_sizes_tmp_queue,
+//						child_es,
+//						num_child_es);
 
 #pragma omp parallel for
 			for (idi i = 0; i < num_child_es; ++i) {
@@ -361,15 +363,15 @@ inline void ParaVertexCentricPLL::bit_parallel_labeling(
 //				tmp_s[c].second |= tmp_s[v].second;
 			}
 
-			// From tmp_que to que
-			total_sizes_tmp_queue = prefix_sum_for_offsets(sizes_tmp_que);
-			collect_into_queue(
-						tmp_que,
-						offsets_tmp_queue,
-						sizes_tmp_que,
-						total_sizes_tmp_queue,
-						que,
-						que_h);
+//			// From tmp_que to que
+//			total_sizes_tmp_queue = prefix_sum_for_offsets(sizes_tmp_que);
+//			collect_into_queue(
+//						tmp_que,
+//						offsets_tmp_queue,
+//						sizes_tmp_que,
+//						total_sizes_tmp_queue,
+//						que,
+//						que_h);
 
 			que_t0 = que_t1;
 			que_t1 = que_h;
@@ -1017,7 +1019,6 @@ inline void ParaVertexCentricPLL::batch_process(
 	static uint8_t *once_candidated = (uint8_t *) calloc(num_v, sizeof(uint8_t)); // need raw integer type to do CAS.
 
 	// At the beginning of a batch, initialize the labels L and distance buffer dist_matrix;
-//	printf("initializing...\n");//test
 	initialize(
 			short_index,
 			dist_matrix,
@@ -1041,7 +1042,6 @@ inline void ParaVertexCentricPLL::batch_process(
 		++iter;
 
 		// Pushing
-//		printf("pushing...\n");//test
 		{
 			// Prepare for parallel processing the active_queue and adding to candidate_queue.
 			// Every vertex's offset location in tmp_candidate_queue
@@ -1116,7 +1116,6 @@ inline void ParaVertexCentricPLL::batch_process(
 //		candidating_time += WallTimer::get_time_mark();
 //		adding_time -= WallTimer::get_time_mark();
 		// Adding
-//		printf("adding...\n");//test
 		{
 			// Prepare for parallel processing the candidate_queue and adding to active_queue.
 			// Every vertex's offset location in tmp_active_queue is i_queue * roots_size
@@ -1232,7 +1231,6 @@ void ParaVertexCentricPLL::construct(const Graph &G)
 	double time_labeling = -WallTimer::get_time_mark();
 
 	double bp_labeling_time = -WallTimer::get_time_mark();
-//	printf("BP labeling...\n"); //test
 	bit_parallel_labeling(
 						G,
 						L,
@@ -1256,7 +1254,7 @@ void ParaVertexCentricPLL::construct(const Graph &G)
 //				L);
 	}
 	if (remainer != 0) {
-//		printf("b_i: %u the last batch\n", b_i_bound);//test
+//		printf("b_i: %u\n", b_i_bound);//test
 		batch_process(
 				G,
 				b_i_bound,
@@ -1356,53 +1354,53 @@ void ParaVertexCentricPLL::switch_labels_to_old_id(
 //		puts("");
 //	}
 
-//	// Try query
-//	idi u;
-//	idi v;
-//	while (std::cin >> u >> v) {
-//		weighti dist = WEIGHTI_MAX;
-//		// Bit Parallel Check
-//		const IndexType &idx_u = L[rank[u]];
-//		const IndexType &idx_v = L[rank[v]];
-//
-//		for (inti i = 0; i < BITPARALLEL_SIZE; ++i) {
-//			int td = idx_v.bp_dist[i] + idx_u.bp_dist[i];
-//			if (td - 2 <= dist) {
-//				td +=
-//					(idx_v.bp_sets[i][0] & idx_u.bp_sets[i][0]) ? -2 :
-//					((idx_v.bp_sets[i][0] & idx_u.bp_sets[i][1])
-//							| (idx_v.bp_sets[i][1] & idx_u.bp_sets[i][0]))
-//							? -1 : 0;
-//				if (td < dist) {
-//					dist = td;
-//				}
-//			}
-//		}
-//
-//		// Normal Index Check
-//		const auto &Lu = new_L[u];
-//		const auto &Lv = new_L[v];
-////		unsorted_map<idi, weighti> markers;
-//		map<idi, weighti> markers;
-//		for (idi i = 0; i < Lu.size(); ++i) {
-//			markers[Lu[i].first] = Lu[i].second;
-//		}
-//		for (idi i = 0; i < Lv.size(); ++i) {
-//			const auto &tmp_l = markers.find(Lv[i].first);
-//			if (tmp_l == markers.end()) {
-//				continue;
-//			}
-//			int d = tmp_l->second + Lv[i].second;
-//			if (d < dist) {
-//				dist = d;
-//			}
-//		}
-//		if (dist == 255) {
-//			printf("2147483647\n");
-//		} else {
-//			printf("%u\n", dist);
-//		}
-//	}
+	// Try query
+	idi u;
+	idi v;
+	while (std::cin >> u >> v) {
+		weighti dist = WEIGHTI_MAX;
+		// Bit Parallel Check
+		const IndexType &idx_u = L[rank[u]];
+		const IndexType &idx_v = L[rank[v]];
+
+		for (inti i = 0; i < BITPARALLEL_SIZE; ++i) {
+			int td = idx_v.bp_dist[i] + idx_u.bp_dist[i];
+			if (td - 2 <= dist) {
+				td +=
+					(idx_v.bp_sets[i][0] & idx_u.bp_sets[i][0]) ? -2 :
+					((idx_v.bp_sets[i][0] & idx_u.bp_sets[i][1])
+							| (idx_v.bp_sets[i][1] & idx_u.bp_sets[i][0]))
+							? -1 : 0;
+				if (td < dist) {
+					dist = td;
+				}
+			}
+		}
+
+		// Normal Index Check
+		const auto &Lu = new_L[u];
+		const auto &Lv = new_L[v];
+//		unsorted_map<idi, weighti> markers;
+		map<idi, weighti> markers;
+		for (idi i = 0; i < Lu.size(); ++i) {
+			markers[Lu[i].first] = Lu[i].second;
+		}
+		for (idi i = 0; i < Lv.size(); ++i) {
+			const auto &tmp_l = markers.find(Lv[i].first);
+			if (tmp_l == markers.end()) {
+				continue;
+			}
+			int d = tmp_l->second + Lv[i].second;
+			if (d < dist) {
+				dist = d;
+			}
+		}
+		if (dist == 255) {
+			printf("2147483647\n");
+		} else {
+			printf("%u\n", dist);
+		}
+	}
 }
 
 }
