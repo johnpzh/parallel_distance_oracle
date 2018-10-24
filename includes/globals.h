@@ -13,9 +13,12 @@
 #include <limits.h>
 #include <sys/time.h>
 #include <string>
+#include <vector>
 #include <string.h>
+#include <papi.h>
 
 using std::string;
+using std::vector;
 
 namespace PADO {
 //typedef uint64_t idi; // unsinged long long
@@ -100,7 +103,62 @@ void WallTimer::print_runtime()
 }
 // End Class WallTimer
 
+// For PAPI, cache miss rate
+// PAPI test results
+class L2CacheMissRate {
+public:
+	void measure_start()
+	{
+		int retval;
+		if ((retval = PAPI_start_counters(events, 2)) < PAPI_OK) {
+			test_fail(__FILE__, __LINE__, "measure_start", retval);
+		}
+	}
+	void measure_stop()
+	{
+		int retval;
+		long long counts[2];
+		if ((retval = PAPI_stop_counters(counts, 2)) < PAPI_OK) {
+			test_fail(__FILE__, __LINE__, "measure_stop", retval);
+		} else {
+			for (int i = 0; i < 2; ++i) {
+				values[i] += counts[i];
+			}
+		}
+	}
+	void print(unsigned metrics = (unsigned) -1)
+	{
+		if (metrics == (unsigned) -1) {
+			printf("L2_cache_access: %lld cache_misses: %lld miss_rate: %.2f%%\n", values[0], values[1], 100.0* values[1]/values[0]);
+		} else {
+			printf("%u %.2f\n", metrics, 1.0 * values[1]/values[0]);
+		}
+	}
 
+private:
+	int events[2] = {PAPI_L2_TCA, PAPI_L2_TCM};
+//	long long values[2];
+	vector<long long> values = vector<long long>(2, 0);
+
+	void test_fail(const char *file, int line, const char *call, int retval)
+	{
+		printf("%s\tFAILED\nLine # %d\n", file, line);
+		if ( retval == PAPI_ESYS ) {
+			char buf[128];
+			memset( buf, '\0', sizeof(buf) );
+			sprintf(buf, "System error in %s:", call );
+			perror(buf);
+		}
+		else if ( retval > 0 ) {
+			printf("Error calculating: %s\n", call );
+		}
+		else {
+			printf("Error in %s: %s\n", call, PAPI_strerror(retval) );
+		}
+		printf("\n");
+		exit(1);
+	}
+};
 
 } // namespace PADO
 
