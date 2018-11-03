@@ -33,7 +33,7 @@ namespace PADO {
 int NUM_THREADS = 4;
 const inti BATCH_SIZE = 1024; // The size for regular batch and bit array.
 const inti BITPARALLEL_SIZE = 50;
-const inti THRESHOLD_PARALLEL = 0;
+const inti THRESHOLD_PARALLEL = 1024;
 
 
 
@@ -1017,6 +1017,7 @@ inline void ParaVertexCentricPLL::batch_process(
 	static uint8_t *once_candidated = (uint8_t *) calloc(num_v, sizeof(uint8_t)); // need raw integer type to do CAS.
 
 	// At the beginning of a batch, initialize the labels L and distance buffer dist_matrix;
+//	printf("initializing...\n");//test
 	initialize(
 			short_index,
 			dist_matrix,
@@ -1040,6 +1041,7 @@ inline void ParaVertexCentricPLL::batch_process(
 		++iter;
 
 		// Pushing
+//		printf("pushing...\n");//test
 		{
 			// Prepare for parallel processing the active_queue and adding to candidate_queue.
 			// Every vertex's offset location in tmp_candidate_queue
@@ -1114,6 +1116,7 @@ inline void ParaVertexCentricPLL::batch_process(
 //		candidating_time += WallTimer::get_time_mark();
 //		adding_time -= WallTimer::get_time_mark();
 		// Adding
+//		printf("adding...\n");//test
 		{
 			// Prepare for parallel processing the candidate_queue and adding to active_queue.
 			// Every vertex's offset location in tmp_active_queue is i_queue * roots_size
@@ -1229,6 +1232,7 @@ void ParaVertexCentricPLL::construct(const Graph &G)
 	double time_labeling = -WallTimer::get_time_mark();
 
 	double bp_labeling_time = -WallTimer::get_time_mark();
+//	printf("BP labeling...\n"); //test
 	bit_parallel_labeling(
 						G,
 						L,
@@ -1252,7 +1256,7 @@ void ParaVertexCentricPLL::construct(const Graph &G)
 //				L);
 	}
 	if (remainer != 0) {
-//		printf("b_i: %u\n", b_i_bound);//test
+//		printf("b_i: %u the last batch\n", b_i_bound);//test
 		batch_process(
 				G,
 				b_i_bound,
@@ -1352,53 +1356,53 @@ void ParaVertexCentricPLL::switch_labels_to_old_id(
 //		puts("");
 //	}
 
-	// Try query
-	idi u;
-	idi v;
-	while (std::cin >> u >> v) {
-		weighti dist = WEIGHTI_MAX;
-		// Bit Parallel Check
-		const IndexType &idx_u = L[rank[u]];
-		const IndexType &idx_v = L[rank[v]];
-
-		for (inti i = 0; i < BITPARALLEL_SIZE; ++i) {
-			int td = idx_v.bp_dist[i] + idx_u.bp_dist[i];
-			if (td - 2 <= dist) {
-				td +=
-					(idx_v.bp_sets[i][0] & idx_u.bp_sets[i][0]) ? -2 :
-					((idx_v.bp_sets[i][0] & idx_u.bp_sets[i][1])
-							| (idx_v.bp_sets[i][1] & idx_u.bp_sets[i][0]))
-							? -1 : 0;
-				if (td < dist) {
-					dist = td;
-				}
-			}
-		}
-
-		// Normal Index Check
-		const auto &Lu = new_L[u];
-		const auto &Lv = new_L[v];
-//		unsorted_map<idi, weighti> markers;
-		map<idi, weighti> markers;
-		for (idi i = 0; i < Lu.size(); ++i) {
-			markers[Lu[i].first] = Lu[i].second;
-		}
-		for (idi i = 0; i < Lv.size(); ++i) {
-			const auto &tmp_l = markers.find(Lv[i].first);
-			if (tmp_l == markers.end()) {
-				continue;
-			}
-			int d = tmp_l->second + Lv[i].second;
-			if (d < dist) {
-				dist = d;
-			}
-		}
-		if (dist == 255) {
-			printf("2147483647\n");
-		} else {
-			printf("%u\n", dist);
-		}
-	}
+//	// Try query
+//	idi u;
+//	idi v;
+//	while (std::cin >> u >> v) {
+//		weighti dist = WEIGHTI_MAX;
+//		// Bit Parallel Check
+//		const IndexType &idx_u = L[rank[u]];
+//		const IndexType &idx_v = L[rank[v]];
+//
+//		for (inti i = 0; i < BITPARALLEL_SIZE; ++i) {
+//			int td = idx_v.bp_dist[i] + idx_u.bp_dist[i];
+//			if (td - 2 <= dist) {
+//				td +=
+//					(idx_v.bp_sets[i][0] & idx_u.bp_sets[i][0]) ? -2 :
+//					((idx_v.bp_sets[i][0] & idx_u.bp_sets[i][1])
+//							| (idx_v.bp_sets[i][1] & idx_u.bp_sets[i][0]))
+//							? -1 : 0;
+//				if (td < dist) {
+//					dist = td;
+//				}
+//			}
+//		}
+//
+//		// Normal Index Check
+//		const auto &Lu = new_L[u];
+//		const auto &Lv = new_L[v];
+////		unsorted_map<idi, weighti> markers;
+//		map<idi, weighti> markers;
+//		for (idi i = 0; i < Lu.size(); ++i) {
+//			markers[Lu[i].first] = Lu[i].second;
+//		}
+//		for (idi i = 0; i < Lv.size(); ++i) {
+//			const auto &tmp_l = markers.find(Lv[i].first);
+//			if (tmp_l == markers.end()) {
+//				continue;
+//			}
+//			int d = tmp_l->second + Lv[i].second;
+//			if (d < dist) {
+//				dist = d;
+//			}
+//		}
+//		if (dist == 255) {
+//			printf("2147483647\n");
+//		} else {
+//			printf("%u\n", dist);
+//		}
+//	}
 }
 
 }

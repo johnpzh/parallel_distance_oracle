@@ -30,9 +30,10 @@ using std::min;
 using std::fill;
 
 namespace PADO {
-
+inti NUM_THREADS = 4;
 const inti BATCH_SIZE = 1024; // The size for regular batch and bit array.
-const inti BITPARALLEL_SIZE = 50;
+const inti BITPARALLEL_SIZE = 0;
+const inti THRESHOLD_PARALLEL = 80;
 
 
 
@@ -85,17 +86,36 @@ private:
 	vector<IndexType> L;
 	void construct(const Graph &G);
 	inline void bit_parallel_labeling(
-			const Graph &G,
-			vector<IndexType> &L,
-			vector<bool> &used_bp_roots);
+				const Graph &G,
+				vector<IndexType> &L,
+				vector<bool> &used_bp_roots);
 
 	inline void batch_process(
-			const Graph &G,
-			idi b_id,
-			idi root_start,
-			inti roots_size,
-			vector<IndexType> &L,
-			const vector<bool> &used_bp_roots);
+				const Graph &G,
+				idi b_id,
+				idi roots_start, // start id of roots
+				inti roots_size, // how many roots in the batch
+				vector<IndexType> &L,
+				const vector<bool> &used_bp_roots,
+				vector<idi> &active_queue,
+				idi &end_active_queue,
+				vector<idi> &candidate_queue,
+				idi &end_candidate_queue,
+				vector<ShortIndex> &short_index,
+				vector< vector<smalli> > &dist_matrix,
+				uint8_t *got_candidates,
+				uint8_t *is_active,
+				vector<idi> &once_candidated_queue,
+				idi &end_once_candidated_queue,
+				uint8_t *once_candidated,
+				idi td_bu_threshold);
+//	inline void batch_process(
+//			const Graph &G,
+//			idi b_id,
+//			idi root_start,
+//			inti roots_size,
+//			vector<IndexType> &L,
+//			const vector<bool> &used_bp_roots);
 
 
 	inline void initialize(
@@ -160,26 +180,30 @@ private:
 				vector< vector<smalli> > &dist_matrix);
 	inline idi prefix_sum_for_offsets(
 				vector<idi> &offsets);
+	template <typename T>
 	inline void collect_into_queue(
-				vector<idi> &tmp_queue,
+				vector<T> &tmp_queue,
 				vector<idi> &offsets_tmp_queue, // the locations in tmp_queue for writing from tmp_queue
 				vector<idi> &offsets_queue, // the locations in queue for writing into queue.
 				idi num_elements, // total number of elements which need to be added from tmp_queue to queue
-				vector<idi> &queue,
+				vector<T> &queue,
 				idi &end_queue);
 
 	// Test only
 //	uint64_t normal_hit_count = 0;
 //	uint64_t bp_hit_count = 0;
 //	uint64_t total_check_count = 0;
-//	double initializing_time = 0;
-//	double candidating_time = 0;
-//	double adding_time = 0;
+	double initializing_time = 0;
+	double candidating_time = 0;
+	double adding_time = 0;
 //	double distance_query_time = 0;
 //	double init_index_time = 0;
 //	double init_dist_matrix_time = 0;
 //	double init_start_reset_time = 0;
 //	double init_indicators_time = 0;
+
+	vector<double> thds_adding_time = vector<double>(80, 0.0);
+	vector<uint64_t> thds_adding_count = vector<uint64_t>(80, 0);
 	// End test
 
 
@@ -212,7 +236,8 @@ inline void ParaVertexCentricPLL::bit_parallel_labeling(
 	idi num_v = G.get_num_v();
 	idi num_e = G.get_num_e();
 
-	std::vector<smalli> tmp_d(num_v); // distances from the root to every v
+//	std::vector<smalli> tmp_d(num_v); // distances from the root to every v
+	smalli *tmp_d = (smalli *) malloc(num_v * sizeof(smalli));
 	std::vector<std::pair<uint64_t, uint64_t> > tmp_s(num_v); // first is S_r^{-1}, second is S_r^{0}
 	std::vector<idi> que(num_v); // active queue
 	std::vector< std::pair<idi, idi> > sibling_es(num_e); // siblings, their distances to the root are equal (have difference of 0)
@@ -231,7 +256,8 @@ inline void ParaVertexCentricPLL::bit_parallel_labeling(
 		}
 		used_bp_roots[r] = true;
 
-		fill(tmp_d.begin(), tmp_d.end(), SMALLI_MAX);
+//		fill(tmp_d.begin(), tmp_d.end(), SMALLI_MAX);
+		memset(tmp_d, (uint8_t) -1, num_v * sizeof(smalli));
 		fill(tmp_s.begin(), tmp_s.end(), std::make_pair(0, 0));
 
 		idi que_t0 = 0, que_t1 = 0, que_h = 0;
@@ -257,8 +283,27 @@ inline void ParaVertexCentricPLL::bit_parallel_labeling(
 
 		for (smalli d = 0; que_t0 < que_h; ++d) {
 			idi num_sibling_es = 0, num_child_es = 0;
+
+			// For parallel adding to que
+			idi que_size = que_t1 - que_t0;
+			vector<idi> offsets_tmp_queue(que_size);
+#pragma omp parallel for
+			for (idi i_q = 0; i_q < que_size; ++i_q) {
+				offsets_tmp_queue[i_q] = G.out_degrees[que[que_t0 + i_q]];
+			}
+			idi num_neighbors = prefix_sum_for_offsets(offsets_tmp_queue);
+			vector<idi> tmp_que(num_neighbors);
+			vector<idi> sizes_tmp_que(que_size, 0);
+			// For parallel adding to sibling_es
+			vector< pair<idi, idi> > tmp_sibling_es(num_neighbors);
+			vector<idi> sizes_tmp_sibling_es(que_size, 0);
+			// For parallel adding to child_es
+			vector< pair<idi, idi> > tmp_child_es(num_neighbors);
+			vector<idi> sizes_tmp_child_es(que_size, 0);
+
+#pragma omp parallel for
 			for (idi que_i = que_t0; que_i < que_t1; ++que_i) {
-				idi tmp_que_i = que_i - que_t0;
+				idi tmp_que_i = que_i - que_t0; // location in the tmp_que
 				idi v = que[que_i];
 				idi i_start = G.vertices[v];
 				idi i_bound = i_start + G.out_degrees[v];
@@ -271,43 +316,96 @@ inline void ParaVertexCentricPLL::bit_parallel_labeling(
 					}
 					else if (d == tmp_d[tv]) {
 						if (v < tv) { // ??? Why need v < tv !!! Because it's a undirected graph.
-							sibling_es[num_sibling_es].first  = v;
-							sibling_es[num_sibling_es].second = tv;
-							++num_sibling_es;
+							idi &size_in_group = sizes_tmp_sibling_es[tmp_que_i];
+							tmp_sibling_es[offsets_tmp_queue[tmp_que_i] + size_in_group].first = v;
+							tmp_sibling_es[offsets_tmp_queue[tmp_que_i] + size_in_group].second = tv;
+							++size_in_group;
+//							sibling_es[num_sibling_es].first  = v;
+//							sibling_es[num_sibling_es].second = tv;
+//							++num_sibling_es;
 						}
 					} else { // d < tmp_d[tv]
 						if (tmp_d[tv] == SMALLI_MAX) {
-							que[que_h++] = tv;
-							tmp_d[tv] = td;
+							if (CAS(tmp_d + tv, SMALLI_MAX, td)) { // tmp_d[tv] = td
+								tmp_que[offsets_tmp_queue[tmp_que_i] + sizes_tmp_que[tmp_que_i]++] = tv;
+							}
 						}
-						child_es[num_child_es].first  = v;
-						child_es[num_child_es].second = tv;
-						++num_child_es;
+//						if (tmp_d[tv] == SMALLI_MAX) {
+//							que[que_h++] = tv;
+//							tmp_d[tv] = td;
+//						}
+						idi &size_in_group = sizes_tmp_child_es[tmp_que_i];
+						tmp_child_es[offsets_tmp_queue[tmp_que_i] + size_in_group].first = v;
+						tmp_child_es[offsets_tmp_queue[tmp_que_i] + size_in_group].second = tv;
+						++size_in_group;
+//						child_es[num_child_es].first  = v;
+//						child_es[num_child_es].second = tv;
+//						++num_child_es;
 					}
 				}
 			}
 
+			// From tmp_sibling_es to sibling_es
+			idi total_sizes_tmp_queue = prefix_sum_for_offsets(sizes_tmp_sibling_es);
+			collect_into_queue(
+						tmp_sibling_es,
+						offsets_tmp_queue,
+						sizes_tmp_sibling_es,
+						total_sizes_tmp_queue,
+						sibling_es,
+						num_sibling_es);
+
+#pragma omp parallel for
 			for (idi i = 0; i < num_sibling_es; ++i) {
 				idi v = sibling_es[i].first, w = sibling_es[i].second;
-				tmp_s[v].second |= tmp_s[w].first;
-				tmp_s[w].second |= tmp_s[v].first;
+				__sync_or_and_fetch(&tmp_s[v].second, tmp_s[w].first);
+				__sync_or_and_fetch(&tmp_s[w].second, tmp_s[v].first);
+//				tmp_s[v].second |= tmp_s[w].first;
+//				tmp_s[w].second |= tmp_s[v].first;
 			}
+
+			// From tmp_child_es to child_es
+			total_sizes_tmp_queue = prefix_sum_for_offsets(sizes_tmp_child_es);
+			collect_into_queue(
+						tmp_child_es,
+						offsets_tmp_queue,
+						sizes_tmp_child_es,
+						total_sizes_tmp_queue,
+						child_es,
+						num_child_es);
+
+#pragma omp parallel for
 			for (idi i = 0; i < num_child_es; ++i) {
 				idi v = child_es[i].first, c = child_es[i].second;
-				tmp_s[c].first  |= tmp_s[v].first;
-				tmp_s[c].second |= tmp_s[v].second;
+				__sync_or_and_fetch(&tmp_s[c].first, tmp_s[v].first);
+				__sync_or_and_fetch(&tmp_s[c].second, tmp_s[v].second);
+//				tmp_s[c].first  |= tmp_s[v].first;
+//				tmp_s[c].second |= tmp_s[v].second;
 			}
+
+			// From tmp_que to que
+			total_sizes_tmp_queue = prefix_sum_for_offsets(sizes_tmp_que);
+			collect_into_queue(
+						tmp_que,
+						offsets_tmp_queue,
+						sizes_tmp_que,
+						total_sizes_tmp_queue,
+						que,
+						que_h);
 
 			que_t0 = que_t1;
 			que_t1 = que_h;
 		}
 
+#pragma omp parallel for
 		for (idi v = 0; v < num_v; ++v) {
 			L[v].bp_dist[i_bpspt] = tmp_d[v];
 			L[v].bp_sets[i_bpspt][0] = tmp_s[v].first; // S_r^{-1}
 			L[v].bp_sets[i_bpspt][1] = tmp_s[v].second & ~tmp_s[v].first; // Only need those r's neighbors who are not already in S_r^{-1}
 		}
 	}
+
+	free(tmp_d);
 }
 
 
@@ -346,76 +444,198 @@ inline void ParaVertexCentricPLL::initialize(
 	// Short_index
 	{
 //		init_indicators_time -= WallTimer::get_time_mark();
-		for (idi v_i = 0; v_i < end_once_candidated_queue; ++v_i) {
-			idi v = once_candidated_queue[v_i];
-			short_index[v].indicator.reset();
-			once_candidated[v] = 0;
-		}
-		end_once_candidated_queue = 0;
-		for (idi v = roots_start; v < roots_bound; ++v) {
-			if (!used_bp_roots[v]) {
-				short_index[v].indicator.set(v - roots_start);
-				short_index[v].indicator.set(BATCH_SIZE); // v got labels
+		if (end_once_candidated_queue >= THRESHOLD_PARALLEL) {
+#pragma omp parallel for
+			for (idi v_i = 0; v_i < end_once_candidated_queue; ++v_i) {
+				idi v = once_candidated_queue[v_i];
+				short_index[v].indicator.reset();
+				once_candidated[v] = 0;
+			}
+		} else {
+			for (idi v_i = 0; v_i < end_once_candidated_queue; ++v_i) {
+				idi v = once_candidated_queue[v_i];
+				short_index[v].indicator.reset();
+				once_candidated[v] = 0;
 			}
 		}
+//#pragma omp parallel for
+//		for (idi v_i = 0; v_i < end_once_candidated_queue; ++v_i) {
+//			idi v = once_candidated_queue[v_i];
+//			short_index[v].indicator.reset();
+//			once_candidated[v] = 0;
+//		}
+		end_once_candidated_queue = 0;
+		if (roots_size >= THRESHOLD_PARALLEL) {
+#pragma omp parallel for
+			for (idi v = roots_start; v < roots_bound; ++v) {
+				if (!used_bp_roots[v]) {
+					short_index[v].indicator.set(v - roots_start);
+					short_index[v].indicator.set(BATCH_SIZE); // v got labels
+				}
+			}
+		} else {
+			for (idi v = roots_start; v < roots_bound; ++v) {
+				if (!used_bp_roots[v]) {
+					short_index[v].indicator.set(v - roots_start);
+					short_index[v].indicator.set(BATCH_SIZE); // v got labels
+				}
+			}
+		}
+//		for (idi v = roots_start; v < roots_bound; ++v) {
+//			if (!used_bp_roots[v]) {
+//				short_index[v].indicator.set(v - roots_start);
+//				short_index[v].indicator.set(BATCH_SIZE); // v got labels
+//			}
+//		}
 //		init_indicators_time += WallTimer::get_time_mark();
 	}
 //
 	// Real Index
 	{
-//		IndexType &Lr = nullptr;
-		for (idi r_id = 0; r_id < roots_size; ++r_id) {
-			if (used_bp_roots[r_id + roots_start]) {
-				continue;
+		if (roots_size >= THRESHOLD_PARALLEL) {
+#pragma omp parallel for
+			for (idi r_id = 0; r_id < roots_size; ++r_id) {
+				if (used_bp_roots[r_id + roots_start]) {
+					continue;
+				}
+				IndexType &Lr = L[r_id + roots_start];
+				Lr.batches.push_back(IndexType::Batch(
+													b_id, // Batch ID
+													Lr.distances.size(), // start_index
+													1)); // size
+				Lr.distances.push_back(IndexType::DistanceIndexType(
+													Lr.vertices.size(), // start_index
+													1, // size
+													0)); // dist
+				Lr.vertices.push_back(r_id);
 			}
-			IndexType &Lr = L[r_id + roots_start];
-			Lr.batches.push_back(IndexType::Batch(
-												b_id, // Batch ID
-												Lr.distances.size(), // start_index
-												1)); // size
-			Lr.distances.push_back(IndexType::DistanceIndexType(
-												Lr.vertices.size(), // start_index
-												1, // size
-												0)); // dist
-			Lr.vertices.push_back(r_id);
+		} else {
+			for (idi r_id = 0; r_id < roots_size; ++r_id) {
+				if (used_bp_roots[r_id + roots_start]) {
+					continue;
+				}
+				IndexType &Lr = L[r_id + roots_start];
+				Lr.batches.push_back(IndexType::Batch(
+													b_id, // Batch ID
+													Lr.distances.size(), // start_index
+													1)); // size
+				Lr.distances.push_back(IndexType::DistanceIndexType(
+													Lr.vertices.size(), // start_index
+													1, // size
+													0)); // dist
+				Lr.vertices.push_back(r_id);
+			}
 		}
+//		for (idi r_id = 0; r_id < roots_size; ++r_id) {
+//			if (used_bp_roots[r_id + roots_start]) {
+//				continue;
+//			}
+//			IndexType &Lr = L[r_id + roots_start];
+//			Lr.batches.push_back(IndexType::Batch(
+//												b_id, // Batch ID
+//												Lr.distances.size(), // start_index
+//												1)); // size
+//			Lr.distances.push_back(IndexType::DistanceIndexType(
+//												Lr.vertices.size(), // start_index
+//												1, // size
+//												0)); // dist
+//			Lr.vertices.push_back(r_id);
+//		}
 	}
 //	init_index_time += WallTimer::get_time_mark();
 //	init_dist_matrix_time -= WallTimer::get_time_mark();
 	// Dist_matrix
 	{
-//		IndexType &Lr;
-		inti b_i_bound;
-		idi id_offset;
-		idi dist_start_index;
-		idi dist_bound_index;
-		idi v_start_index;
-		idi v_bound_index;
-		smalli dist;
-		for (idi r_id = 0; r_id < roots_size; ++r_id) {
-			if (used_bp_roots[r_id + roots_start]) {
-				continue;
+		if (roots_size >= THRESHOLD_PARALLEL) {
+#pragma omp parallel for
+			for (idi r_id = 0; r_id < roots_size; ++r_id) {
+				if (used_bp_roots[r_id + roots_start]) {
+					continue;
+				}
+				IndexType &Lr = L[r_id + roots_start];
+				inti b_i_bound = Lr.batches.size();
+				_mm_prefetch(&Lr.batches[0], _MM_HINT_T0);
+				_mm_prefetch(&Lr.distances[0], _MM_HINT_T0);
+				_mm_prefetch(&Lr.vertices[0], _MM_HINT_T0);
+				for (inti b_i = 0; b_i < b_i_bound; ++b_i) {
+					idi id_offset = Lr.batches[b_i].batch_id * BATCH_SIZE;
+					idi dist_start_index = Lr.batches[b_i].start_index;
+					idi dist_bound_index = dist_start_index + Lr.batches[b_i].size;
+					// Traverse dist_matrix
+					for (idi dist_i = dist_start_index; dist_i < dist_bound_index; ++dist_i) {
+						idi v_start_index = Lr.distances[dist_i].start_index;
+						idi v_bound_index = v_start_index + Lr.distances[dist_i].size;
+						smalli dist = Lr.distances[dist_i].dist;
+						for (idi v_i = v_start_index; v_i < v_bound_index; ++v_i) {
+							dist_matrix[r_id][Lr.vertices[v_i] + id_offset] = dist;
+						}
+					}
+				}
 			}
-			IndexType &Lr = L[r_id + roots_start];
-			b_i_bound = Lr.batches.size();
-			_mm_prefetch(&Lr.batches[0], _MM_HINT_T0);
-			_mm_prefetch(&Lr.distances[0], _MM_HINT_T0);
-			_mm_prefetch(&Lr.vertices[0], _MM_HINT_T0);
-			for (inti b_i = 0; b_i < b_i_bound; ++b_i) {
-				id_offset = Lr.batches[b_i].batch_id * BATCH_SIZE;
-				dist_start_index = Lr.batches[b_i].start_index;
-				dist_bound_index = dist_start_index + Lr.batches[b_i].size;
-				// Traverse dist_matrix
-				for (idi dist_i = dist_start_index; dist_i < dist_bound_index; ++dist_i) {
-					v_start_index = Lr.distances[dist_i].start_index;
-					v_bound_index = v_start_index + Lr.distances[dist_i].size;
-					dist = Lr.distances[dist_i].dist;
-					for (idi v_i = v_start_index; v_i < v_bound_index; ++v_i) {
-						dist_matrix[r_id][Lr.vertices[v_i] + id_offset] = dist;
+		} else {
+			inti b_i_bound;
+			idi id_offset;
+			idi dist_start_index;
+			idi dist_bound_index;
+			idi v_start_index;
+			idi v_bound_index;
+			smalli dist;
+			for (idi r_id = 0; r_id < roots_size; ++r_id) {
+				if (used_bp_roots[r_id + roots_start]) {
+					continue;
+				}
+				IndexType &Lr = L[r_id + roots_start];
+				b_i_bound = Lr.batches.size();
+				_mm_prefetch(&Lr.batches[0], _MM_HINT_T0);
+				_mm_prefetch(&Lr.distances[0], _MM_HINT_T0);
+				_mm_prefetch(&Lr.vertices[0], _MM_HINT_T0);
+				for (inti b_i = 0; b_i < b_i_bound; ++b_i) {
+					id_offset = Lr.batches[b_i].batch_id * BATCH_SIZE;
+					dist_start_index = Lr.batches[b_i].start_index;
+					dist_bound_index = dist_start_index + Lr.batches[b_i].size;
+					// Traverse dist_matrix
+					for (idi dist_i = dist_start_index; dist_i < dist_bound_index; ++dist_i) {
+						v_start_index = Lr.distances[dist_i].start_index;
+						v_bound_index = v_start_index + Lr.distances[dist_i].size;
+						dist = Lr.distances[dist_i].dist;
+						for (idi v_i = v_start_index; v_i < v_bound_index; ++v_i) {
+							dist_matrix[r_id][Lr.vertices[v_i] + id_offset] = dist;
+						}
 					}
 				}
 			}
 		}
+//		inti b_i_bound;
+//		idi id_offset;
+//		idi dist_start_index;
+//		idi dist_bound_index;
+//		idi v_start_index;
+//		idi v_bound_index;
+//		smalli dist;
+//		for (idi r_id = 0; r_id < roots_size; ++r_id) {
+//			if (used_bp_roots[r_id + roots_start]) {
+//				continue;
+//			}
+//			IndexType &Lr = L[r_id + roots_start];
+//			b_i_bound = Lr.batches.size();
+//			_mm_prefetch(&Lr.batches[0], _MM_HINT_T0);
+//			_mm_prefetch(&Lr.distances[0], _MM_HINT_T0);
+//			_mm_prefetch(&Lr.vertices[0], _MM_HINT_T0);
+//			for (inti b_i = 0; b_i < b_i_bound; ++b_i) {
+//				id_offset = Lr.batches[b_i].batch_id * BATCH_SIZE;
+//				dist_start_index = Lr.batches[b_i].start_index;
+//				dist_bound_index = dist_start_index + Lr.batches[b_i].size;
+//				// Traverse dist_matrix
+//				for (idi dist_i = dist_start_index; dist_i < dist_bound_index; ++dist_i) {
+//					v_start_index = Lr.distances[dist_i].start_index;
+//					v_bound_index = v_start_index + Lr.distances[dist_i].size;
+//					dist = Lr.distances[dist_i].dist;
+//					for (idi v_i = v_start_index; v_i < v_bound_index; ++v_i) {
+//						dist_matrix[r_id][Lr.vertices[v_i] + id_offset] = dist;
+//					}
+//				}
+//			}
+//		}
 	}
 //	init_dist_matrix_time += WallTimer::get_time_mark();
 }
@@ -464,8 +684,8 @@ inline void ParaVertexCentricPLL::push_labels(
 			return;
 		}
 		const IndexType &L_tail = L[v_tail];
-		_mm_prefetch(&L_tail.bp_dist[0], _MM_HINT_T0);
-		_mm_prefetch(&L_tail.bp_sets[0][0], _MM_HINT_T0);
+//		_mm_prefetch(&L_tail.bp_dist[0], _MM_HINT_T0);
+//		_mm_prefetch(&L_tail.bp_sets[0][0], _MM_HINT_T0);
 		// Traverse v_head's last inserted labels
 		for (idi l_i = l_i_start; l_i < l_i_bound; ++l_i) {
 			idi label_root_id = Lv.vertices[l_i];
@@ -485,8 +705,8 @@ inline void ParaVertexCentricPLL::push_labels(
 			const IndexType &L_label = L[label_real_id];
 			bool no_need_add = false;
 
-			_mm_prefetch(&L_label.bp_dist[0], _MM_HINT_T0);
-			_mm_prefetch(&L_label.bp_sets[0][0], _MM_HINT_T0);
+//			_mm_prefetch(&L_label.bp_dist[0], _MM_HINT_T0);
+//			_mm_prefetch(&L_label.bp_sets[0][0], _MM_HINT_T0);
 		    for (inti i = 0; i < BITPARALLEL_SIZE; ++i) {
 		      inti td = L_label.bp_dist[i] + L_tail.bp_dist[i];
 		      if (td - 2 <= iter) {
@@ -569,7 +789,7 @@ inline bool ParaVertexCentricPLL::distance_query(
 	_mm_prefetch(&Lv.batches[0], _MM_HINT_T0);
 	_mm_prefetch(&Lv.distances[0], _MM_HINT_T0);
 	_mm_prefetch(&Lv.vertices[0], _MM_HINT_T0);
-	//_mm_prefetch(&dist_matrix[cand_root_id][0], _MM_HINT_T0);
+	_mm_prefetch(&dist_matrix[cand_root_id][0], _MM_HINT_T0);
 	for (inti b_i = 0; b_i < b_i_bound; ++b_i) {
 		idi id_offset = Lv.batches[b_i].batch_id * BATCH_SIZE;
 		idi dist_start_index = Lv.batches[b_i].start_index;
@@ -583,7 +803,7 @@ inline bool ParaVertexCentricPLL::distance_query(
 			}
 			idi v_start_index = Lv.distances[dist_i].start_index;
 			idi v_bound_index = v_start_index + Lv.distances[dist_i].size;
-			_mm_prefetch(&dist_matrix[cand_root_id][0], _MM_HINT_T0);
+//			_mm_prefetch(&dist_matrix[cand_root_id][0], _MM_HINT_T0);
 			for (idi v_i = v_start_index; v_i < v_bound_index; ++v_i) {
 				idi v = Lv.vertices[v_i] + id_offset; // v is a label hub of v_id
 				if (v >= cand_real_id) {
@@ -662,32 +882,82 @@ inline void ParaVertexCentricPLL::reset_at_end(
 				vector<IndexType> &L,
 				vector< vector<smalli> > &dist_matrix)
 {
-	inti b_i_bound;
-	idi id_offset;
-	idi dist_start_index;
-	idi dist_bound_index;
-	idi v_start_index;
-	idi v_bound_index;
-	for (idi r_id = 0; r_id < roots_size; ++r_id) {
-		IndexType &Lr = L[r_id + roots_start];
-		b_i_bound = Lr.batches.size();
-		_mm_prefetch(&Lr.batches[0], _MM_HINT_T0);
-		_mm_prefetch(&Lr.distances[0], _MM_HINT_T0);
-		_mm_prefetch(&Lr.vertices[0], _MM_HINT_T0);
-		for (inti b_i = 0; b_i < b_i_bound; ++b_i) {
-			id_offset = Lr.batches[b_i].batch_id * BATCH_SIZE;
-			dist_start_index = Lr.batches[b_i].start_index;
-			dist_bound_index = dist_start_index + Lr.batches[b_i].size;
-			// Traverse dist_matrix
-			for (idi dist_i = dist_start_index; dist_i < dist_bound_index; ++dist_i) {
-				v_start_index = Lr.distances[dist_i].start_index;
-				v_bound_index = v_start_index + Lr.distances[dist_i].size;
-				for (idi v_i = v_start_index; v_i < v_bound_index; ++v_i) {
-					dist_matrix[r_id][Lr.vertices[v_i] + id_offset] = SMALLI_MAX;
+	if (roots_size >= THRESHOLD_PARALLEL) {
+#pragma omp parallel for
+		for (idi r_id = 0; r_id < roots_size; ++r_id) {
+			IndexType &Lr = L[r_id + roots_start];
+			inti b_i_bound = Lr.batches.size();
+			_mm_prefetch(&Lr.batches[0], _MM_HINT_T0);
+			_mm_prefetch(&Lr.distances[0], _MM_HINT_T0);
+			_mm_prefetch(&Lr.vertices[0], _MM_HINT_T0);
+			for (inti b_i = 0; b_i < b_i_bound; ++b_i) {
+				idi id_offset = Lr.batches[b_i].batch_id * BATCH_SIZE;
+				idi dist_start_index = Lr.batches[b_i].start_index;
+				idi dist_bound_index = dist_start_index + Lr.batches[b_i].size;
+				// Traverse dist_matrix
+				for (idi dist_i = dist_start_index; dist_i < dist_bound_index; ++dist_i) {
+					idi v_start_index = Lr.distances[dist_i].start_index;
+					idi v_bound_index = v_start_index + Lr.distances[dist_i].size;
+					for (idi v_i = v_start_index; v_i < v_bound_index; ++v_i) {
+						dist_matrix[r_id][Lr.vertices[v_i] + id_offset] = SMALLI_MAX;
+					}
+				}
+			}
+		}
+	} else {
+		inti b_i_bound;
+		idi id_offset;
+		idi dist_start_index;
+		idi dist_bound_index;
+		idi v_start_index;
+		idi v_bound_index;
+		for (idi r_id = 0; r_id < roots_size; ++r_id) {
+			IndexType &Lr = L[r_id + roots_start];
+			b_i_bound = Lr.batches.size();
+			_mm_prefetch(&Lr.batches[0], _MM_HINT_T0);
+			_mm_prefetch(&Lr.distances[0], _MM_HINT_T0);
+			_mm_prefetch(&Lr.vertices[0], _MM_HINT_T0);
+			for (inti b_i = 0; b_i < b_i_bound; ++b_i) {
+				id_offset = Lr.batches[b_i].batch_id * BATCH_SIZE;
+				dist_start_index = Lr.batches[b_i].start_index;
+				dist_bound_index = dist_start_index + Lr.batches[b_i].size;
+				// Traverse dist_matrix
+				for (idi dist_i = dist_start_index; dist_i < dist_bound_index; ++dist_i) {
+					v_start_index = Lr.distances[dist_i].start_index;
+					v_bound_index = v_start_index + Lr.distances[dist_i].size;
+					for (idi v_i = v_start_index; v_i < v_bound_index; ++v_i) {
+						dist_matrix[r_id][Lr.vertices[v_i] + id_offset] = SMALLI_MAX;
+					}
 				}
 			}
 		}
 	}
+//	inti b_i_bound;
+//	idi id_offset;
+//	idi dist_start_index;
+//	idi dist_bound_index;
+//	idi v_start_index;
+//	idi v_bound_index;
+//	for (idi r_id = 0; r_id < roots_size; ++r_id) {
+//		IndexType &Lr = L[r_id + roots_start];
+//		b_i_bound = Lr.batches.size();
+//		_mm_prefetch(&Lr.batches[0], _MM_HINT_T0);
+//		_mm_prefetch(&Lr.distances[0], _MM_HINT_T0);
+//		_mm_prefetch(&Lr.vertices[0], _MM_HINT_T0);
+//		for (inti b_i = 0; b_i < b_i_bound; ++b_i) {
+//			id_offset = Lr.batches[b_i].batch_id * BATCH_SIZE;
+//			dist_start_index = Lr.batches[b_i].start_index;
+//			dist_bound_index = dist_start_index + Lr.batches[b_i].size;
+//			// Traverse dist_matrix
+//			for (idi dist_i = dist_start_index; dist_i < dist_bound_index; ++dist_i) {
+//				v_start_index = Lr.distances[dist_i].start_index;
+//				v_bound_index = v_start_index + Lr.distances[dist_i].size;
+//				for (idi v_i = v_start_index; v_i < v_bound_index; ++v_i) {
+//					dist_matrix[r_id][Lr.vertices[v_i] + id_offset] = SMALLI_MAX;
+//				}
+//			}
+//		}
+//	}
 }
 
 // Function to get the prefix sum of elements in offsets
@@ -706,12 +976,15 @@ inline idi ParaVertexCentricPLL::prefix_sum_for_offsets(
 }
 
 // Collect elements in the tmp_queue into the queue
+template <typename T>
 inline void ParaVertexCentricPLL::collect_into_queue(
-					vector<idi> &tmp_queue,
+//					vector<idi> &tmp_queue,
+					vector<T> &tmp_queue,
 					vector<idi> &offsets_tmp_queue, // the locations in tmp_queue for writing from tmp_queue
 					vector<idi> &offsets_queue, // the locations in queue for writing into queue.
 					idi num_elements, // total number of elements which need to be added from tmp_queue to queue
-					vector<idi> &queue,
+//					vector<idi> &queue,
+					vector<T> &queue,
 					idi &end_queue)
 {
 	if (0 == num_elements) {
@@ -745,27 +1018,47 @@ inline void ParaVertexCentricPLL::batch_process(
 						idi roots_start, // start id of roots
 						inti roots_size, // how many roots in the batch
 						vector<IndexType> &L,
-						const vector<bool> &used_bp_roots)
+						const vector<bool> &used_bp_roots,
+						vector<idi> &active_queue,
+						idi &end_active_queue,
+						vector<idi> &candidate_queue,
+						idi &end_candidate_queue,
+						vector<ShortIndex> &short_index,
+						vector< vector<smalli> > &dist_matrix,
+						uint8_t *got_candidates,
+						uint8_t *is_active,
+						vector<idi> &once_candidated_queue,
+						idi &end_once_candidated_queue,
+						uint8_t *once_candidated,
+						idi td_bu_threshold)
+//inline void ParaVertexCentricPLL::batch_process(
+//						const Graph &G,
+//						idi b_id,
+//						idi roots_start, // start id of roots
+//						inti roots_size, // how many roots in the batch
+//						vector<IndexType> &L,
+//						const vector<bool> &used_bp_roots)
 {
 
-//	initializing_time -= WallTimer::get_time_mark();
-	static const idi num_v = G.get_num_v();
-	static vector<idi> active_queue(num_v);
-	static idi end_active_queue = 0;
-	static vector<idi> candidate_queue(num_v);
-	static idi end_candidate_queue = 0;
-	static vector<ShortIndex> short_index(num_v);
-	static vector< vector<smalli> > dist_matrix(roots_size, vector<smalli>(num_v, SMALLI_MAX));
-//	static vector<bool> got_candidates(num_v, false); // got_candidates[v] is true means vertex v is in the queue candidate_queue
-	static uint8_t *got_candidates = (uint8_t *) calloc(num_v, sizeof(uint8_t)); // need raw integer type to do CAS.
-//	static vector<bool> is_active(num_v, false);// is_active[v] is true means vertex v is in the active queue.
-	static uint8_t *is_active = (uint8_t *) calloc(num_v, sizeof(uint8_t));
-	static vector<idi> once_candidated_queue(num_v); // The vertex who got some candidates in this batch is in the once_candidated_queue.
-	static idi end_once_candidated_queue = 0;
-//	static vector<bool> once_candidated(num_v, false); // once_candidated[v] is true means vertex v got some candidates in this batch
-	static uint8_t *once_candidated = (uint8_t *) calloc(num_v, sizeof(uint8_t)); // need raw integer type to do CAS.
+	initializing_time -= WallTimer::get_time_mark();
+//	static const idi num_v = G.get_num_v();
+//	static vector<idi> active_queue(num_v);
+//	static idi end_active_queue = 0;
+//	static vector<idi> candidate_queue(num_v);
+//	static idi end_candidate_queue = 0;
+//	static vector<ShortIndex> short_index(num_v);
+//	static vector< vector<smalli> > dist_matrix(roots_size, vector<smalli>(num_v, SMALLI_MAX));
+//	static uint8_t *got_candidates = (uint8_t *) calloc(num_v, sizeof(uint8_t)); // need raw integer type to do CAS.
+//	static uint8_t *is_active = (uint8_t *) calloc(num_v, sizeof(uint8_t));
+//	static vector<idi> once_candidated_queue(num_v); // The vertex who got some candidates in this batch is in the once_candidated_queue.
+//	static idi end_once_candidated_queue = 0;
+//	static uint8_t *once_candidated = (uint8_t *) calloc(num_v, sizeof(uint8_t)); // need raw integer type to do CAS.
 
 	// At the beginning of a batch, initialize the labels L and distance buffer dist_matrix;
+//	printf("initializing...\n");//test
+	bool is_dense = false;
+	bool last_is_dense = false;
+
 	initialize(
 			short_index,
 			dist_matrix,
@@ -781,14 +1074,15 @@ inline void ParaVertexCentricPLL::batch_process(
 			used_bp_roots);
 
 	smalli iter = 0; // The iterator, also the distance for current iteration
-//	initializing_time += WallTimer::get_time_mark();
+	initializing_time += WallTimer::get_time_mark();
 
 
 	while (0 != end_active_queue) {
-//		candidating_time -= WallTimer::get_time_mark();
+		candidating_time -= WallTimer::get_time_mark();
 		++iter;
 
 		// Pushing
+//		printf("pushing...\n");//test
 		{
 			// Prepare for parallel processing the active_queue and adding to candidate_queue.
 			// Every vertex's offset location in tmp_candidate_queue
@@ -800,6 +1094,12 @@ inline void ParaVertexCentricPLL::batch_process(
 				offsets_tmp_queue[i_queue] = G.out_degrees[active_queue[i_queue]];
 			}
 			idi num_neighbors = prefix_sum_for_offsets(offsets_tmp_queue);
+			if (end_active_queue + num_neighbors > td_bu_threshold) {
+				is_dense = true;
+			} else {
+				is_dense = false;
+			}
+
 			// every thread writes to tmp_candidate_queue at its offset location
 			vector<idi> tmp_candidate_queue(num_neighbors);
 			// A vector to store the true number of pushed neighbors of every active vertex.
@@ -860,97 +1160,169 @@ inline void ParaVertexCentricPLL::batch_process(
 			end_active_queue = 0; // Set the active_queue empty
 		}
 
-//		candidating_time += WallTimer::get_time_mark();
-//		adding_time -= WallTimer::get_time_mark();
+		candidating_time += WallTimer::get_time_mark();
+		adding_time -= WallTimer::get_time_mark();
 		// Adding
+//		printf("adding...\n");//test
 		{
-			// Prepare for parallel processing the candidate_queue and adding to active_queue.
-			// Every vertex's offset location in tmp_active_queue is i_queue * roots_size
-			// It's used for every thread to write into tmp_candidate_queue and tmp_once_candidated_queue
-			vector<idi> offsets_tmp_queue(end_candidate_queue);
+			if (is_dense) {
+				// Prepare for parallel processing the candidate_queue and adding to active_queue.
+				// Every vertex's offset location in tmp_active_queue is i_queue * roots_size
+				// It's used for every thread to write into tmp_candidate_queue and tmp_once_candidated_queue
+				vector<idi> offsets_tmp_queue(end_candidate_queue);
 #pragma omp parallel for
-			for (idi i_queue = 0; i_queue < end_candidate_queue; ++i_queue) {
-				// Traverse all active vertices, get their out degrees.
-				offsets_tmp_queue[i_queue] = i_queue * roots_size;
-			}
-	//		idi num_neighbors = prefix_sum_for_offsets(offsets_tmp_queue);
-			// every thread writes to tmp_candidate_queue at its offset location
-			vector<idi> tmp_active_queue(end_candidate_queue * roots_size);
-			// A vector to store the true number of pushed neighbors of every active vertex.
-			vector<idi> sizes_tmp_active_queue(end_candidate_queue, 0);
+				for (idi i_queue = 0; i_queue < end_candidate_queue; ++i_queue) {
+					// Traverse all active vertices, get their out degrees.
+					offsets_tmp_queue[i_queue] = i_queue * roots_size;
+				}
+				//		idi num_neighbors = prefix_sum_for_offsets(offsets_tmp_queue);
+				// every thread writes to tmp_candidate_queue at its offset location
+				vector<idi> tmp_active_queue(end_candidate_queue * roots_size);
+				// A vector to store the true number of pushed neighbors of every active vertex.
+				vector<idi> sizes_tmp_active_queue(end_candidate_queue, 0);
 
-			// Traverse vertices in the candidate_queue to insert labels
+				// Traverse vertices in the candidate_queue to insert labels
+				// Here schedule dynamic will be slower
 #pragma omp parallel for
-			for (idi i_queue = 0; i_queue < end_candidate_queue; ++i_queue) {
-				idi v_id = candidate_queue[i_queue];
-				inti inserted_count = 0; //recording number of v_id's truly inserted candidates
-				got_candidates[v_id] = 0; // reset got_candidates
-				// Traverse v_id's all candidates
-				for (inti cand_root_id = 0; cand_root_id < roots_size; ++cand_root_id) {
-					if (!short_index[v_id].candidates[cand_root_id]) {
-						// Root cand_root_id is not vertex v_id's candidate
-						continue;
-					}
-					short_index[v_id].candidates.reset(cand_root_id);
-					// Only insert cand_root_id into v_id's label if its distance to v_id is shorter than existing distance
-					if ( distance_query(
+				for (idi i_queue = 0; i_queue < end_candidate_queue; ++i_queue) {
+					inti tid = omp_get_thread_num();
+					thds_adding_time[tid] -= WallTimer::get_time_mark();
+
+					idi v_id = candidate_queue[i_queue];
+					inti inserted_count = 0; //recording number of v_id's truly inserted candidates
+					got_candidates[v_id] = 0; // reset got_candidates
+					// Traverse v_id's all candidates
+					for (inti cand_root_id = 0; cand_root_id < roots_size; ++cand_root_id) {
+						if (!short_index[v_id].candidates[cand_root_id]) {
+							// Root cand_root_id is not vertex v_id's candidate
+							continue;
+						}
+						short_index[v_id].candidates.reset(cand_root_id);
+						// Only insert cand_root_id into v_id's label if its distance to v_id is shorter than existing distance
+						++thds_adding_count[tid];
+						if ( distance_query(
 									cand_root_id,
 									v_id,
 									roots_start,
 									L,
 									dist_matrix,
 									iter) ) {
-						if (!is_active[v_id]) {
-							if (CAS(is_active + v_id, (uint8_t) 0, (uint8_t) 1)) {
-								tmp_active_queue[offsets_tmp_queue[i_queue] + sizes_tmp_active_queue[i_queue]++] = v_id;
+							if (!is_active[v_id]) {
+								if (CAS(is_active + v_id, (uint8_t) 0, (uint8_t) 1)) {
+									tmp_active_queue[offsets_tmp_queue[i_queue] + sizes_tmp_active_queue[i_queue]++] = v_id;
+								}
 							}
+							//					if (!is_active[v_id]) {
+							//						is_active[v_id] = true;
+							//						active_queue[end_active_queue++] = v_id;
+							//					}
+							++inserted_count;
+							// The candidate cand_root_id needs to be added into v_id's label
+							insert_label_only(
+									cand_root_id,
+									v_id,
+									roots_start,
+									roots_size,
+									L,
+									dist_matrix,
+									iter);
 						}
-	//					if (!is_active[v_id]) {
-	//						is_active[v_id] = true;
-	//						active_queue[end_active_queue++] = v_id;
-	//					}
-						++inserted_count;
-						// The candidate cand_root_id needs to be added into v_id's label
-						insert_label_only(
-								cand_root_id,
+					}
+					if (0 != inserted_count) {
+						// Update other arrays in L[v_id] if new labels were inserted in this iteration
+						update_label_indices(
 								v_id,
-								roots_start,
-								roots_size,
+								inserted_count,
 								L,
-								dist_matrix,
+								short_index,
+								b_id,
 								iter);
 					}
+					thds_adding_time[tid] += WallTimer::get_time_mark();
 				}
-				if (0 != inserted_count) {
-					// Update other arrays in L[v_id] if new labels were inserted in this iteration
-					update_label_indices(
-									v_id,
-									inserted_count,
-									L,
-									short_index,
-									b_id,
-									iter);
-				}
-			}
 
-			// According to sizes_tmp_active_queue, get the offset for inserting to the real queue
-			idi total_new = prefix_sum_for_offsets(sizes_tmp_active_queue);
-			// Collect all candidate vertices from tmp_candidate_queue into candidate_queue.
-			collect_into_queue(
+				// According to sizes_tmp_active_queue, get the offset for inserting to the real queue
+				idi total_new = prefix_sum_for_offsets(sizes_tmp_active_queue);
+				// Collect all candidate vertices from tmp_candidate_queue into candidate_queue.
+				collect_into_queue(
 						tmp_active_queue,
 						offsets_tmp_queue, // the locations in tmp_queue for writing from tmp_queue
 						sizes_tmp_active_queue, // the locations in queue for writing into queue.
 						total_new, // total number of elements which need to be added from tmp_queue to queue
 						active_queue,
 						end_active_queue);
-			end_candidate_queue = 0; // Set the candidate_queue empty
+				end_candidate_queue = 0; // Set the candidate_queue empty
+
+				last_is_dense = true;
+			} else {
+				// Sparse
+#pragma omp parallel for
+				for (idi v_id = 0; v_id < G.get_num_v(); ++v_id) {
+					inti tid = omp_get_thread_num();
+					thds_adding_time[tid] -= WallTimer::get_time_mark();
+
+					idi v_id = candidate_queue[i_queue];
+					inti inserted_count = 0; //recording number of v_id's truly inserted candidates
+					got_candidates[v_id] = 0; // reset got_candidates
+					// Traverse v_id's all candidates
+					for (inti cand_root_id = 0; cand_root_id < roots_size; ++cand_root_id) {
+						if (!short_index[v_id].candidates[cand_root_id]) {
+							// Root cand_root_id is not vertex v_id's candidate
+							continue;
+						}
+						short_index[v_id].candidates.reset(cand_root_id);
+						// Only insert cand_root_id into v_id's label if its distance to v_id is shorter than existing distance
+						++thds_adding_count[tid];
+						if ( distance_query(
+									cand_root_id,
+									v_id,
+									roots_start,
+									L,
+									dist_matrix,
+									iter) ) {
+							if (!is_active[v_id]) {
+								if (CAS(is_active + v_id, (uint8_t) 0, (uint8_t) 1)) {
+									tmp_active_queue[offsets_tmp_queue[i_queue] + sizes_tmp_active_queue[i_queue]++] = v_id;
+								}
+							}
+							//					if (!is_active[v_id]) {
+							//						is_active[v_id] = true;
+							//						active_queue[end_active_queue++] = v_id;
+							//					}
+							++inserted_count;
+							// The candidate cand_root_id needs to be added into v_id's label
+							insert_label_only(
+									cand_root_id,
+									v_id,
+									roots_start,
+									roots_size,
+									L,
+									dist_matrix,
+									iter);
+						}
+					}
+					if (0 != inserted_count) {
+						// Update other arrays in L[v_id] if new labels were inserted in this iteration
+						update_label_indices(
+								v_id,
+								inserted_count,
+								L,
+								short_index,
+								b_id,
+								iter);
+					}
+					thds_adding_time[tid] += WallTimer::get_time_mark();
+				}
+
+				last_is_dense = false;
+			}
 		}
-//		adding_time += WallTimer::get_time_mark();
+		adding_time += WallTimer::get_time_mark();
 	}
 
 
 	// Reset the dist_matrix
-//	initializing_time -= WallTimer::get_time_mark();
+	initializing_time -= WallTimer::get_time_mark();
 //	init_dist_matrix_time -= WallTimer::get_time_mark();
 	reset_at_end(
 			roots_start,
@@ -958,7 +1330,7 @@ inline void ParaVertexCentricPLL::batch_process(
 			L,
 			dist_matrix);
 //	init_dist_matrix_time += WallTimer::get_time_mark();
-//	initializing_time += WallTimer::get_time_mark();
+	initializing_time += WallTimer::get_time_mark();
 
 
 //	double total_time = time_can + time_add;
@@ -970,18 +1342,36 @@ inline void ParaVertexCentricPLL::batch_process(
 
 void ParaVertexCentricPLL::construct(const Graph &G)
 {
+	initializing_time -= WallTimer::get_time_mark();
+
 	idi num_v = G.get_num_v();
 	L.resize(num_v);
 	idi remainer = num_v % BATCH_SIZE;
 	idi b_i_bound = num_v / BATCH_SIZE;
 	vector<bool> used_bp_roots(num_v, false);
+
+	vector<idi> active_queue(num_v);
+	idi end_active_queue = 0;
+	vector<idi> candidate_queue(num_v);
+	idi end_candidate_queue = 0;
+	vector<ShortIndex> short_index(num_v);
+	vector< vector<smalli> > dist_matrix(BATCH_SIZE, vector<smalli>(num_v, SMALLI_MAX));
+	uint8_t *got_candidates = (uint8_t *) calloc(num_v, sizeof(uint8_t)); // need raw integer type to do CAS.
+	uint8_t *is_active = (uint8_t *) calloc(num_v, sizeof(uint8_t)); // need raw integer type to do CAS.
+	vector<idi> once_candidated_queue(num_v); // The vertex who got some candidates in this batch is in the once_candidated_queue.
+	idi end_once_candidated_queue = 0;
+	uint8_t *once_candidated = (uint8_t *) calloc(num_v, sizeof(uint8_t)); // need raw integer type to do CAS.
+	idi td_bu_threshold = G.get_num_e() / 20;
+
+	initializing_time += WallTimer::get_time_mark();
 	double time_labeling = -WallTimer::get_time_mark();
 
 	double bp_labeling_time = -WallTimer::get_time_mark();
+//	printf("BP labeling...\n"); //test
 	bit_parallel_labeling(
-				G,
-				L,
-				used_bp_roots);
+						G,
+						L,
+						used_bp_roots);
 	bp_labeling_time += WallTimer::get_time_mark();
 
 	for (idi b_i = 0; b_i < b_i_bound; ++b_i) {
@@ -992,41 +1382,73 @@ void ParaVertexCentricPLL::construct(const Graph &G)
 				b_i * BATCH_SIZE,
 				BATCH_SIZE,
 				L,
-				used_bp_roots);
+				used_bp_roots,
+				active_queue,
+				end_active_queue,
+				candidate_queue,
+				end_candidate_queue,
+				short_index,
+				dist_matrix,
+				got_candidates,
+				is_active,
+				once_candidated_queue,
+				end_once_candidated_queue,
+				once_candidated,
+				td_bu_threshold);
 //		batch_process(
 //				G,
 //				b_i,
 //				b_i * BATCH_SIZE,
 //				BATCH_SIZE,
-//				L);
+//				L,
+//				used_bp_roots);
 	}
 	if (remainer != 0) {
-//		printf("b_i: %u\n", b_i_bound);//test
+//		printf("b_i: %u the last batch\n", b_i_bound);//test
 		batch_process(
 				G,
 				b_i_bound,
 				b_i_bound * BATCH_SIZE,
 				remainer,
 				L,
-				used_bp_roots);
+				used_bp_roots,
+				active_queue,
+				end_active_queue,
+				candidate_queue,
+				end_candidate_queue,
+				short_index,
+				dist_matrix,
+				got_candidates,
+				is_active,
+				once_candidated_queue,
+				end_once_candidated_queue,
+				once_candidated,
+				td_bu_threshold);
 //		batch_process(
 //				G,
 //				b_i_bound,
 //				b_i_bound * BATCH_SIZE,
 //				remainer,
-//				L);
+//				L,
+//				used_bp_roots);
 	}
 	time_labeling += WallTimer::get_time_mark();
 
+	free(got_candidates);
+	free(is_active);
+	free(once_candidated);
+
 	// Test
-//	printf("BP labeling: %f (%f%%)\n", bp_labeling_time, bp_labeling_time / time_labeling * 100);
-//	printf("Initializing: %f (%f%%)\n", initializing_time, initializing_time / time_labeling * 100);
+	printf("Threads: %d\n", NUM_THREADS);
+	printf("BP_labeling: %.2f %.2f%%\n", bp_labeling_time, bp_labeling_time / time_labeling * 100);
+	printf("BP_Roots_Size: %u\n", BITPARALLEL_SIZE);
+	printf("Initializing: %.2f %.2f%%\n", initializing_time, initializing_time / time_labeling * 100);
 //		printf("\tinit_start_reset_time: %f (%f%%)\n", init_start_reset_time, init_start_reset_time / initializing_time * 100);
 //		printf("\tinit_index_time: %f (%f%%)\n", init_index_time, init_index_time / initializing_time * 100);
 //			printf("\t\tinit_indicators_time: %f (%f%%)\n", init_indicators_time, init_indicators_time / init_index_time * 100);
 //		printf("\tinit_dist_matrix_time: %f (%f%%)\n", init_dist_matrix_time, init_dist_matrix_time / initializing_time * 100);
-//	printf("Candidating: %f (%f%%)\n", candidating_time, candidating_time / time_labeling * 100);
-//	printf("Adding: %f (%f%%)\n", adding_time, adding_time / time_labeling * 100);
+	printf("Candidating: %.2f %.2f%%\n", candidating_time, candidating_time / time_labeling * 100);
+	printf("Adding: %.2f %.2f%%\n", adding_time, adding_time / time_labeling * 100);
 //		printf("\tdistance_query_time: %f (%f%%)\n", distance_query_time, distance_query_time / adding_time * 100);
 //		printf("\ttotal_check_count: %llu\n", total_check_count);
 //		printf("\tbp_hit_count (to total_check): %llu (%f%%)\n",
@@ -1036,6 +1458,26 @@ void ParaVertexCentricPLL::construct(const Graph &G)
 //						normal_hit_count,
 //						normal_hit_count * 100.0 / total_check_count,
 //						normal_hit_count * 100.0 / (total_check_count - bp_hit_count));
+
+	uint64_t total_thds_adding_count = 0;
+	double total_thds_adding_time = 0;
+	for (inti tid = 0; tid < NUM_THREADS; ++tid) {
+		total_thds_adding_count += thds_adding_count[tid];
+		total_thds_adding_time += thds_adding_time[tid];
+	}
+	printf("Threads_adding_count:");
+	for (inti tid = 0; tid < NUM_THREADS; ++tid) {
+		printf(" %lu(%.2f%%)", thds_adding_count[tid], thds_adding_count[tid] * 100.0 / total_thds_adding_count);
+	} puts("");
+	printf("Threads_adding_time:");
+	for (inti tid = 0; tid < NUM_THREADS; ++tid) {
+		printf(" %f(%.2f%%)", thds_adding_time[tid], thds_adding_time[tid] * 100.0 / total_thds_adding_time);
+	} puts("");
+	//printf("Threads_adding_average_time:");
+	//for (inti tid = 0; tid < NUM_THREADS; ++tid) {
+	//	printf(" %f", thds_adding_time[tid] / thds_adding_count[tid]);
+	//} puts("");
+
 	printf("Labeling: %f\n", time_labeling);
 	// End test
 }

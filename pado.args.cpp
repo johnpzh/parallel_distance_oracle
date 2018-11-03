@@ -11,8 +11,7 @@
 #include <unistd.h>
 #include "globals.h"
 #include "graph.h"
-//#include "pado_para.h"
-#include "pado_para.tmp.miss_rate_profile.h"
+#include "pado_para.h"
 //#include "pado.tmp.queue_for_once_activated_vertices.h"
 
 
@@ -20,39 +19,65 @@ using namespace PADO;
 
 void pado(const char filename[])
 {
-//	printf("Reading...\n");//test
+//	freopen("output.txt", "w", stdout); // test
+//	const char filename[] = "input.dat";
+//	const char filename[] = "/Users/johnz/pppp/datasets/dblp/dblp";
+//	const char filename[] = "/Users/johnz/pppp/datasets/chicago/chicago";
+	//const char filename[] = "/scratch/ssd0/zpeng/wikitalk/wikitalk";
+	//const char filename[] = "/scratch/ssd0/zpeng/indochina/indochina";
+//	const char filename[] = "tools/edgelist.txt";
+	printf("Reading...\n");//test
 	Graph G(filename);
 //	G.print();
-//	printf("Ranking...\n");//test
+//	vector<idi> rank = {
+//			14,
+//			10,
+//			7,
+//			8,
+//			15,
+//			16,
+//			4,
+//			5,
+//			6,
+//			11,
+//			17,
+//			12,
+//			1,
+//			2,
+//			9,
+//			3,
+//			18,
+//			13,
+//			19,
+//			20
+//	};
+
+	printf("Ranking...\n");//test
 	vector<idi> rank = G.make_rank();
 //	for (idi v = 0; v < rank.size(); ++v) {
 //		printf("vertices %u: rank %u\n", v, rank[v]);//test
 //	}
 	vector<idi> rank2id = G.id_transfer(rank);
 //	G.print();
-//	printf("Labeling...\n");//test
+//	WallTimer timer("Labeling");
+	printf("Labeling...\n");//test
 //	VertexCentricPLL(G, rank);
-
-//	NUM_THREADS = 1;
-//	omp_set_num_threads(NUM_THREADS);
-//	ParaVertexCentricPLL VCPLL(G);
-//	VCPLL.switch_labels_to_old_id(rank2id, rank);
-
-
-	for (inti t_num = 1; t_num <= 32; t_num *= 2) {
-		NUM_THREADS = t_num;
-		omp_set_num_threads(NUM_THREADS);
-		ParaVertexCentricPLL VCPLL(G);
-//		VCPLL.switch_labels_to_old_id(rank2id, rank);
-	}
-//	{
-//		NUM_THREADS = 40;
-//		omp_set_num_threads(NUM_THREADS);
-//		ParaVertexCentricPLL VCPLL(G);
-////		VCPLL.switch_labels_to_old_id(rank2id, rank);
-//	}
+	//VertexCentricPLL VCPLL(G);
+	ParaVertexCentricPLL VCPLL(G);
+//	timer.print_runtime();
+	VCPLL.switch_labels_to_old_id(rank2id, rank);
+//	VCPLL.switch_labels_to_old_id(rank2id);
 //	VCPLL.print();//test
 
+	// Test for query
+//	idi u, v;
+//	while (std::cin >> u >> v) {
+//		idi d = VCPLL.query(u,v);
+//		if (d == 255) {
+//			d = 2147483647;
+//		}
+//		printf("%u\n", d);
+//	}
 }
 
 int main(int argc, char *argv[])
@@ -97,6 +122,6 @@ int main(int argc, char *argv[])
 		exit(EXIT_FAILURE);
 	}
 	pado(argv[1]);
-	printf("Done!\n\n");
+	puts("Done!");
 	return EXIT_SUCCESS;
 }

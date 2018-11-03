@@ -7,3 +7,5 @@
 *.xlsx
 *.dSYM
 *.dSYM/
+*.swp
+*.swo
