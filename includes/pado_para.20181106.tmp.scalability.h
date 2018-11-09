@@ -967,6 +967,69 @@ inline void ParaVertexCentricPLL::reset_at_end(
 inline idi ParaVertexCentricPLL::prefix_sum_for_offsets(
 									vector<idi> &offsets)
 {
+	idi size_offsets = offsets.size();
+	if (1 == size_offsets) {
+		idi tmp = offsets[0];
+		offsets[0] = 0;
+		return tmp;
+	} else if (size_offsets < 2048) {
+		idi offset_sum = 0;
+		idi size = size_offsets;
+		for (idi i = 0; i < size; ++i) {
+			idi tmp = offsets[i];
+			offsets[i] = offset_sum;
+			offset_sum += tmp;
+		}
+		return offset_sum;
+	} else {
+		// Parallel Prefix Sum, based on Guy E. Blelloch's Prefix Sums and Their Applications
+		idi last_element = offsets[size_offsets - 1];
+		//	idi size = 1 << ((idi) log2(size_offsets - 1) + 1);
+		idi size = 1 << ((idi) log2(size_offsets));
+		//	vector<idi> nodes(size, 0);
+		idi tmp_element = offsets[size - 1];
+		//#pragma omp parallel for
+		//	for (idi i = 0; i < size_offsets; ++i) {
+		//		nodes[i] = offsets[i];
+		//	}
+
+		// Up-Sweep (Reduce) Phase
+		idi log2size = log2(size);
+		for (idi d = 0; d < log2size; ++d) {
+			idi by = 1 << (d + 1);
+#pragma omp parallel for
+			for (idi k = 0; k < size; k += by) {
+				offsets[k + (1 << (d + 1)) - 1] += offsets[k + (1 << d) - 1];
+			}
+		}
+
+		// Down-Sweep Phase
+		offsets[size - 1] = 0;
+		for (idi d = log2(size) - 1; d != (idi) -1 ; --d) {
+			idi by = 1 << (d + 1);
+#pragma omp parallel for
+			for (idi k = 0; k < size; k += by) {
+				idi t = offsets[k + (1 << d) - 1];
+				offsets[k + (1 << d) - 1] = offsets[k + (1 << (d + 1)) - 1];
+				offsets[k + (1 << (d + 1)) - 1] += t;
+			}
+		}
+
+		//#pragma omp parallel for
+		//	for (idi i = 0; i < size_offsets; ++i) {
+		//		offsets[i] = nodes[i];
+		//	}
+		if (size != size_offsets) {
+			idi tmp_sum = offsets[size - 1] + tmp_element;
+			for (idi i = size; i < size_offsets; ++i) {
+				idi t = offsets[i];
+				offsets[i] = tmp_sum;
+				tmp_sum += t;
+			}
+		}
+
+		return offsets[size_offsets - 1] + last_element;
+	}
 //	// Get the offset as the prefix sum of out degrees
 //	idi offset_sum = 0;
 //	idi size = offsets.size();
@@ -977,44 +1040,55 @@ inline idi ParaVertexCentricPLL::prefix_sum_for_offsets(
 //	}
 //	return offset_sum;
 
-// Parallel Prefix Sum, based on Guy E. Blelloch's Prefix Sums and Their Applications
-	idi size_offsets = offsets.size();
-	idi last_element = offsets[size_offsets - 1];
-	idi size = 1 << ((idi) log2(size_offsets - 1) + 1);
-	vector<idi> nodes(size, 0);
-#pragma omp parallel for
-	for (idi i = 0; i < size_offsets; ++i) {
-		nodes[i] = offsets[i];
-	}
-
-	// Up-Sweep (Reduce) Phase
-	idi log2size = log2(size);
-	for (idi d = 0; d < log2size; ++d) {
-		idi by = 1 << (d + 1);
-#pragma omp parallel for
-		for (idi k = 0; k < size; k += by) {
-			nodes[k + (1 << (d + 1)) - 1] += nodes[k + (1 << d) - 1];
-		}
-	}
-
-	// Down-Sweep Phase
-	nodes[size - 1] = 0;
-	for (idi d = log2(size) - 1; d != (idi) -1 ; --d) {
-		idi by = 1 << (d + 1);
-#pragma omp parallel for
-		for (idi k = 0; k < size; k += by) {
-			idi t = nodes[k + (1 << d) - 1];
-			nodes[k + (1 << d) - 1] = nodes[k + (1 << (d + 1)) - 1];
-			nodes[k + (1 << (d + 1)) - 1] += t;
-		}
-	}
-
-#pragma omp parallel for
-	for (idi i = 0; i < size_offsets; ++i) {
-		offsets[i] = nodes[i];
-	}
-
-	return offsets[size_offsets - 1] + last_element;
+//// Parallel Prefix Sum, based on Guy E. Blelloch's Prefix Sums and Their Applications
+//	idi size_offsets = offsets.size();
+//	idi last_element = offsets[size_offsets - 1];
+////	idi size = 1 << ((idi) log2(size_offsets - 1) + 1);
+//	idi size = 1 << ((idi) log2(size_offsets));
+////	vector<idi> nodes(size, 0);
+//	idi tmp_element = offsets[size - 1];
+////#pragma omp parallel for
+////	for (idi i = 0; i < size_offsets; ++i) {
+////		nodes[i] = offsets[i];
+////	}
+//
+//	// Up-Sweep (Reduce) Phase
+//	idi log2size = log2(size);
+//	for (idi d = 0; d < log2size; ++d) {
+//		idi by = 1 << (d + 1);
+//#pragma omp parallel for
+//		for (idi k = 0; k < size; k += by) {
+//			offsets[k + (1 << (d + 1)) - 1] += offsets[k + (1 << d) - 1];
+//		}
+//	}
+//
+//	// Down-Sweep Phase
+//	offsets[size - 1] = 0;
+//	for (idi d = log2(size) - 1; d != (idi) -1 ; --d) {
+//		idi by = 1 << (d + 1);
+//#pragma omp parallel for
+//		for (idi k = 0; k < size; k += by) {
+//			idi t = offsets[k + (1 << d) - 1];
+//			offsets[k + (1 << d) - 1] = offsets[k + (1 << (d + 1)) - 1];
+//			offsets[k + (1 << (d + 1)) - 1] += t;
+//		}
+//	}
+//
+////#pragma omp parallel for
+////	for (idi i = 0; i < size_offsets; ++i) {
+////		offsets[i] = nodes[i];
+////	}
+//	if (size != offsets.size()) {
+//		idi tmp_sum = offsets[size - 1] + tmp_element;
+//		idi i_bound = offsets.size();
+//		for (idi i = size; i < i_bound; ++i) {
+//			idi t = offsets[i];
+//			offsets[i] = tmp_sum;
+//			tmp_sum += t;
+//		}
+//	}
+//
+//	return offsets[size_offsets - 1] + last_element;
 }
 
 // Collect elements in the tmp_queue into the queue
