@@ -67,8 +67,8 @@ private:
 			}
 		};
 
-	    smalli bp_dist[BITPARALLEL_SIZE];
-	    uint64_t bp_sets[BITPARALLEL_SIZE][2];  // [0]: S^{-1}, [1]: S^{0}
+	    //smalli bp_dist[BITPARALLEL_SIZE];
+	    //uint64_t bp_sets[BITPARALLEL_SIZE][2];  // [0]: S^{-1}, [1]: S^{0}
 
 		vector<Batch> batches; // Batch info
 		vector<DistanceIndexType> distances; // Distance info
@@ -86,10 +86,10 @@ private:
 
 	vector<IndexType> L;
 	void construct(const Graph &G);
-	inline void bit_parallel_labeling(
-				const Graph &G,
-				vector<IndexType> &L,
-				vector<bool> &used_bp_roots);
+//	inline void bit_parallel_labeling(
+//				const Graph &G,
+//				vector<IndexType> &L,
+//				vector<bool> &used_bp_roots);
 
 	inline void batch_process(
 				const Graph &G,
@@ -687,7 +687,7 @@ inline void ParaVertexCentricPLL::push_labels(
 		if (v_tail <= Lv.vertices[l_i_start] + roots_start) { // v_tail has higher rank than any v_head's labels
 			return;
 		}
-		//const IndexType &L_tail = L[v_tail];
+		const IndexType &L_tail = L[v_tail];
 //		_mm_prefetch(&L_tail.bp_dist[0], _MM_HINT_T0);
 //		_mm_prefetch(&L_tail.bp_sets[0][0], _MM_HINT_T0);
 		// Traverse v_head's last inserted labels
@@ -967,77 +967,128 @@ inline void ParaVertexCentricPLL::reset_at_end(
 inline idi ParaVertexCentricPLL::prefix_sum_for_offsets(
 									vector<idi> &offsets)
 {
-	if (1 == offsets.size()) {
-		return offsets[0];
-	} else if (2 == offsets.size()) {
-		offsets[1] += offsets[0];
-		return offsets[1];
-	}
-//	vector<idi> tmp_offsets(offsets);
-	// Get the offset as the prefix sum of out degrees
-	idi offset_sum = 0;
-	idi size = offsets.size();
-//	printf("size: %u\n", size);//test
-	for (idi i = 0; i < size; ++i) {
-		idi tmp = offsets[i];
-		offsets[i] = offset_sum;
-		offset_sum += tmp;
-	}
-	return offset_sum;
+	idi size_offsets = offsets.size();
+	if (1 == size_offsets) {
+		idi tmp = offsets[0];
+		offsets[0] = 0;
+		return tmp;
+	} else if (size_offsets < 2048) {
+		idi offset_sum = 0;
+		idi size = size_offsets;
+		for (idi i = 0; i < size; ++i) {
+			idi tmp = offsets[i];
+			offsets[i] = offset_sum;
+			offset_sum += tmp;
+		}
+		return offset_sum;
+	} else {
+		// Parallel Prefix Sum, based on Guy E. Blelloch's Prefix Sums and Their Applications
+		idi last_element = offsets[size_offsets - 1];
+		//	idi size = 1 << ((idi) log2(size_offsets - 1) + 1);
+		idi size = 1 << ((idi) log2(size_offsets));
+		//	vector<idi> nodes(size, 0);
+		idi tmp_element = offsets[size - 1];
+		//#pragma omp parallel for
+		//	for (idi i = 0; i < size_offsets; ++i) {
+		//		nodes[i] = offsets[i];
+		//	}
 
-	
-//	{
-////		vector<idi> tmp_offsets(tmp_offsets);
-//		// Parallel Prefix Sum, based on Guy E. Blelloch's Prefix Sums and Their Applications
-//		idi size_offsets = offsets.size();
-//		idi size = 1 << ((idi) log2(size_offsets - 1) + 1);
-//		printf("size_offsets: %u size: %u\n", size_offsets, size);//test
-//		vector<idi> nodes(size, 0);
-////		copy(offsets.begin(), offsets.end(), nodes.begin());
-//#pragma omp parallel for
-//		for (idi i = 0; i < size_offsets; ++i) {
-//			nodes[i] = offsets[i];
-//		}
-//
-//		// Up-Sweep (Reduce) Phase
-//		for (idi d = 0; d < log2(size); ++d) {
-//			idi by = 1 << (d + 1);
-//#pragma omp parallel for
-//			for (idi k = 0; k < size; k += by) {
-//				nodes[k + (1 << (d + 1)) - 1] += nodes[k + (1 << d) - 1];
-//				idi tmp = k + (1 << (d + 1)) - 1;
-//				if (tmp >= size) {
-//					printf("@1010\n"); exit(1);
-//				}
-//			}
-//		}
-//
-//		// Down-Sweep Phase
-//		nodes[size - 1] = 0;
-//		for (idi d = log2(size) - 1; d != (idi) -1 ; --d) {
-//			idi by = 1 << (d + 1);
-//#pragma omp parallel for
-//			for (idi k = 0; k < size; k += by) {
-//				idi t = nodes[k + (1 << d) - 1];
-//				nodes[k + (1 << d) - 1] = nodes[k + (1 << (d + 1)) - 1];
-//				nodes[k + (1 << (d + 1)) - 1] += t;
-//				idi tmp = k + (1 << (d + 1)) - 1;
-//				if (tmp >= size) {
-//					printf("@1026\n"); exit(1);
-//				}
-//			}
-//		}
-//
-//
-//#pragma omp parallel for
-//		for (idi i = 2; i < size_offsets; ++i) {
-//			offsets[i - 1] = nodes[i];
-//		}
-//		offsets[size_offsets - 1] += offsets[size_offsets - 2];
-//
-//		return offsets[size_offsets - 1];
+		// Up-Sweep (Reduce) Phase
+		idi log2size = log2(size);
+		for (idi d = 0; d < log2size; ++d) {
+			idi by = 1 << (d + 1);
+#pragma omp parallel for
+			for (idi k = 0; k < size; k += by) {
+				offsets[k + (1 << (d + 1)) - 1] += offsets[k + (1 << d) - 1];
+			}
+		}
+
+		// Down-Sweep Phase
+		offsets[size - 1] = 0;
+		for (idi d = log2(size) - 1; d != (idi) -1 ; --d) {
+			idi by = 1 << (d + 1);
+#pragma omp parallel for
+			for (idi k = 0; k < size; k += by) {
+				idi t = offsets[k + (1 << d) - 1];
+				offsets[k + (1 << d) - 1] = offsets[k + (1 << (d + 1)) - 1];
+				offsets[k + (1 << (d + 1)) - 1] += t;
+			}
+		}
+
+		//#pragma omp parallel for
+		//	for (idi i = 0; i < size_offsets; ++i) {
+		//		offsets[i] = nodes[i];
+		//	}
+		if (size != size_offsets) {
+			idi tmp_sum = offsets[size - 1] + tmp_element;
+			for (idi i = size; i < size_offsets; ++i) {
+				idi t = offsets[i];
+				offsets[i] = tmp_sum;
+				tmp_sum += t;
+			}
+		}
+
+		return offsets[size_offsets - 1] + last_element;
+	}
+//	// Get the offset as the prefix sum of out degrees
+//	idi offset_sum = 0;
+//	idi size = offsets.size();
+//	for (idi i = 0; i < size; ++i) {
+//		idi tmp = offsets[i];
+//		offsets[i] = offset_sum;
+//		offset_sum += tmp;
 //	}
 //	return offset_sum;
+
+//// Parallel Prefix Sum, based on Guy E. Blelloch's Prefix Sums and Their Applications
+//	idi size_offsets = offsets.size();
+//	idi last_element = offsets[size_offsets - 1];
+////	idi size = 1 << ((idi) log2(size_offsets - 1) + 1);
+//	idi size = 1 << ((idi) log2(size_offsets));
+////	vector<idi> nodes(size, 0);
+//	idi tmp_element = offsets[size - 1];
+////#pragma omp parallel for
+////	for (idi i = 0; i < size_offsets; ++i) {
+////		nodes[i] = offsets[i];
+////	}
+//
+//	// Up-Sweep (Reduce) Phase
+//	idi log2size = log2(size);
+//	for (idi d = 0; d < log2size; ++d) {
+//		idi by = 1 << (d + 1);
+//#pragma omp parallel for
+//		for (idi k = 0; k < size; k += by) {
+//			offsets[k + (1 << (d + 1)) - 1] += offsets[k + (1 << d) - 1];
+//		}
+//	}
+//
+//	// Down-Sweep Phase
+//	offsets[size - 1] = 0;
+//	for (idi d = log2(size) - 1; d != (idi) -1 ; --d) {
+//		idi by = 1 << (d + 1);
+//#pragma omp parallel for
+//		for (idi k = 0; k < size; k += by) {
+//			idi t = offsets[k + (1 << d) - 1];
+//			offsets[k + (1 << d) - 1] = offsets[k + (1 << (d + 1)) - 1];
+//			offsets[k + (1 << (d + 1)) - 1] += t;
+//		}
+//	}
+//
+////#pragma omp parallel for
+////	for (idi i = 0; i < size_offsets; ++i) {
+////		offsets[i] = nodes[i];
+////	}
+//	if (size != offsets.size()) {
+//		idi tmp_sum = offsets[size - 1] + tmp_element;
+//		idi i_bound = offsets.size();
+//		for (idi i = size; i < i_bound; ++i) {
+//			idi t = offsets[i];
+//			offsets[i] = tmp_sum;
+//			tmp_sum += t;
+//		}
+//	}
+//
+//	return offsets[size_offsets - 1] + last_element;
 }
 
 // Collect elements in the tmp_queue into the queue
@@ -1166,7 +1217,7 @@ inline void ParaVertexCentricPLL::batch_process(
 
 			// Traverse active vertices to push their labels as candidates
 // schedule dynamic is slower
-//#pragma omp parallel for
+#pragma omp parallel for
 			for (idi i_queue = 0; i_queue < end_active_queue; ++i_queue) {
 				idi v_head = active_queue[i_queue];
 				is_active[v_head] = 0; // reset is_active
@@ -1387,7 +1438,7 @@ void ParaVertexCentricPLL::construct(const Graph &G)
 
 
 	for (idi b_i = 0; b_i < b_i_bound; ++b_i) {
-		printf("b_i: %u\n", b_i);//test
+//		printf("b_i: %u\n", b_i);//test
 		batch_process(
 				G,
 				b_i,
@@ -1415,7 +1466,7 @@ void ParaVertexCentricPLL::construct(const Graph &G)
 //				used_bp_roots);
 	}
 	if (remainer != 0) {
-		printf("b_i: %u the last batch\n", b_i_bound);//test
+//		printf("b_i: %u the last batch\n", b_i_bound);//test
 		batch_process(
 				G,
 				b_i_bound,
@@ -1562,23 +1613,23 @@ void ParaVertexCentricPLL::switch_labels_to_old_id(
 	idi v;
 	while (std::cin >> u >> v) {
 		weighti dist = WEIGHTI_MAX;
-		// Bit Parallel Check
-		const IndexType &idx_u = L[rank[u]];
-		const IndexType &idx_v = L[rank[v]];
-
-		for (inti i = 0; i < BITPARALLEL_SIZE; ++i) {
-			int td = idx_v.bp_dist[i] + idx_u.bp_dist[i];
-			if (td - 2 <= dist) {
-				td +=
-					(idx_v.bp_sets[i][0] & idx_u.bp_sets[i][0]) ? -2 :
-					((idx_v.bp_sets[i][0] & idx_u.bp_sets[i][1])
-							| (idx_v.bp_sets[i][1] & idx_u.bp_sets[i][0]))
-							? -1 : 0;
-				if (td < dist) {
-					dist = td;
-				}
-			}
-		}
+//		// Bit Parallel Check
+//		const IndexType &idx_u = L[rank[u]];
+//		const IndexType &idx_v = L[rank[v]];
+//
+//		for (inti i = 0; i < BITPARALLEL_SIZE; ++i) {
+//			int td = idx_v.bp_dist[i] + idx_u.bp_dist[i];
+//			if (td - 2 <= dist) {
+//				td +=
+//					(idx_v.bp_sets[i][0] & idx_u.bp_sets[i][0]) ? -2 :
+//					((idx_v.bp_sets[i][0] & idx_u.bp_sets[i][1])
+//							| (idx_v.bp_sets[i][1] & idx_u.bp_sets[i][0]))
+//							? -1 : 0;
+//				if (td < dist) {
+//					dist = td;
+//				}
+//			}
+//		}
 
 		// Normal Index Check
 		const auto &Lu = new_L[u];

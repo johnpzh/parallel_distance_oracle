@@ -12,9 +12,8 @@
 #include "globals.h"
 #include "graph.h"
 //#include "pado_para.h"
-#include "pado_para.tmp.miss_rate_profile.h"
-//#include "pado.tmp.queue_for_once_activated_vertices.h"
-
+//#include "pado_para.tmp.miss_rate_profile.h"
+#include "pado_para.20181106.tmp.scalability.h"
 
 using namespace PADO;
 
@@ -45,12 +44,12 @@ void pado(const char filename[])
 		ParaVertexCentricPLL VCPLL(G);
 //		VCPLL.switch_labels_to_old_id(rank2id, rank);
 	}
-//	{
-//		NUM_THREADS = 40;
-//		omp_set_num_threads(NUM_THREADS);
-//		ParaVertexCentricPLL VCPLL(G);
-////		VCPLL.switch_labels_to_old_id(rank2id, rank);
-//	}
+	{
+		NUM_THREADS = 40;
+		omp_set_num_threads(NUM_THREADS);
+		ParaVertexCentricPLL VCPLL(G);
+//		VCPLL.switch_labels_to_old_id(rank2id, rank);
+	}
 //	VCPLL.print();//test
 
 }
