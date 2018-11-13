@@ -89,7 +89,7 @@ private:
 	inline void bit_parallel_labeling(
 				const Graph &G,
 				vector<IndexType> &L,
-				vector<uint8_t> used_bp_roots);
+				vector<uint8_t> &used_bp_roots);
 //	inline void bit_parallel_labeling(
 //				const Graph &G,
 //				vector<IndexType> &L,
@@ -101,18 +101,18 @@ private:
 				idi roots_start, // start id of roots
 				inti roots_size, // how many roots in the batch
 				vector<IndexType> &L,
-				const vector<uint8_t> used_bp_roots,
+				const vector<uint8_t> &used_bp_roots,
 				vector<idi> &active_queue,
 				idi &end_active_queue,
 				vector<idi> &candidate_queue,
 				idi &end_candidate_queue,
 				vector<ShortIndex> &short_index,
 				vector< vector<smalli> > &dist_matrix,
-				vector<uint8_t> got_candidates,
-				vector<uint8_t> is_active,
+				vector<uint8_t> &got_candidates,
+				vector<uint8_t> &is_active,
 				vector<idi> &once_candidated_queue,
 				idi &end_once_candidated_queue,
-				vector<uint8_t> once_candidated);
+				vector<uint8_t> &once_candidated);
 //	inline void batch_process(
 //			const Graph &G,
 //			idi b_id,
@@ -130,12 +130,12 @@ private:
 				vector<idi> &once_candidated_queue,
 				idi &end_once_candidated_queue,
 //				vector<bool> &once_candidated,
-				vector<uint8_t> once_candidated,
+				vector<uint8_t> &once_candidated,
 				idi b_id,
 				idi roots_start,
 				inti roots_size,
 				vector<IndexType> &L,
-				const vector<uint8_t> used_bp_roots);
+				const vector<uint8_t> &used_bp_roots);
 	inline void push_labels(
 				idi v_head,
 				idi roots_start,
@@ -148,12 +148,12 @@ private:
 				idi &size_tmp_candidate_queue,
 				idi &offset_tmp_candidate_queue,
 //				vector<bool> &got_candidates,
-				vector<uint8_t> got_candidates,
+				vector<uint8_t> &got_candidates,
 				vector<idi> &once_candidated_queue,
 				idi &end_once_candidated_queue,
 //				vector<bool> &once_candidated,
-				vector<uint8_t> once_candidated,
-				const vector<uint8_t> used_bp_roots,
+				vector<uint8_t> &once_candidated,
+				const vector<uint8_t> &used_bp_roots,
 				smalli iter);
 	inline bool distance_query(
 				idi cand_root_id,
@@ -238,7 +238,7 @@ ParaVertexCentricPLL::ParaVertexCentricPLL(const Graph &G)
 inline void ParaVertexCentricPLL::bit_parallel_labeling(
 			const Graph &G,
 			vector<IndexType> &L,
-			vector<uint8_t> used_bp_roots) // CAS needs array
+			vector<uint8_t> &used_bp_roots) // CAS needs array
 {
 	idi num_v = G.get_num_v();
 	idi num_e = G.get_num_e();
@@ -306,6 +306,8 @@ inline void ParaVertexCentricPLL::bit_parallel_labeling(
 								sibling_es[num_sibling_es].first  = v;
 								sibling_es[num_sibling_es].second = tv;
 								++num_sibling_es;
+//								tmp_s[v].second |= tmp_s[tv].first;
+//								tmp_s[tv].second |= tmp_s[v].first;
 							}
 						} else { // d < tmp_d[tv]
 							if (tmp_d[tv] == SMALLI_MAX) {
@@ -315,6 +317,8 @@ inline void ParaVertexCentricPLL::bit_parallel_labeling(
 							child_es[num_child_es].first  = v;
 							child_es[num_child_es].second = tv;
 							++num_child_es;
+//							tmp_s[tv].first  |= tmp_s[v].first;
+//							tmp_s[tv].second |= tmp_s[v].second;
 						}
 					}
 				}
@@ -347,6 +351,12 @@ inline void ParaVertexCentricPLL::bit_parallel_labeling(
 		vector<idi> que(num_v); // active queue
 		vector<uint8_t> is_active(num_v, 0);
 		idi end_que = 0;
+//		vector< pair<idi, idi> > sibling_es(num_e); // the size should be num_e * BITPARALLEL_SIZE, which is too large for large graph.
+//		vector<inti> r_id_sibling_es(num_e);
+//		idi end_sibling_es = 0;
+//		vector< pair<idi, idi> > child_es(num_e);
+//		vector<inti> r_id_child_es(num_e);
+//		idi end_child_es = 0;
 
 		// Select roots and their neighbors
 		{
@@ -403,10 +413,26 @@ inline void ParaVertexCentricPLL::bit_parallel_labeling(
 					offsets_tmp_queue[i_q] = G.out_degrees[que[i_q]];
 				}
 				idi num_neighbors = prefix_sum_for_offsets(offsets_tmp_queue);
+				// que
 				vector<idi> tmp_queue(num_neighbors);
 				vector<idi> sizes_tmp_queue(end_que, 0);
-
+				// Sibling set and Child set
+				vector<idi> offsets_tmp_sets(end_que);
 #pragma omp parallel for
+				for (idi i_q = 0; i_q < end_que; ++i_q) {
+					offsets_tmp_sets[i_q] = offsets_tmp_queue[i_q] * BITPARALLEL_SIZE;
+				}
+				idi num_edges = num_neighbors * BITPARALLEL_SIZE;
+				// Sibling
+				vector< pair<idi, idi> > tmp_sibling_es(num_edges);
+				vector<idi> sizes_tmp_sibling_es(end_que, 0);
+				vector<inti> r_id_tmp_sibling_es(num_edges);
+				// Child
+				vector< pair<idi, idi> > tmp_child_es(num_edges);
+				vector<idi> sizes_tmp_child_es(end_que, 0);
+				vector<inti> r_id_tmp_child_es(num_edges);
+
+//#pragma omp parallel for
 				for (idi i_q = 0; i_q < end_que; ++i_q) {
 					idi v = que[i_q];
 					is_active[v] = 0; // reset is_active
@@ -421,8 +447,13 @@ inline void ParaVertexCentricPLL::bit_parallel_labeling(
 							} else if (d == tmp_d[tv][r_i]) {
 								// Siblings
 								if (v < tv) { // ??? Why need v < tv !!! Because it's a undirected graph.
-									tmp_s[v][r_i].second  |= tmp_s[tv][r_i].first;
-									__sync_or_and_fetch(&tmp_s[tv][r_i].second, &tmp_s[v][r_i].first);
+									idi &size_in_group = sizes_tmp_sibling_es[i_q];
+									tmp_sibling_es[offsets_tmp_sets[i_q] + size_in_group].first = v;
+									tmp_sibling_es[offsets_tmp_sets[i_q] + size_in_group].second = tv;
+									r_id_tmp_sibling_es[offsets_tmp_sets[i_q] + size_in_group] = r_i;
+									++size_in_group;
+//									tmp_s[v][r_i].second  |= tmp_s[tv][r_i].first;
+//									__sync_or_and_fetch(&tmp_s[tv][r_i].second, &tmp_s[v][r_i].first);
 		//							tmp_s[tv][r_i].second |= tmp_s[v][r_i].first;
 								}
 							} else { // d < tmp_d[tv]
@@ -437,18 +468,78 @@ inline void ParaVertexCentricPLL::bit_parallel_labeling(
 		//							que[que_h++] = tv; // Need parallel enqueue
 		//							tmp_d[tv][r_i] = d + 1;
 		//						}
-								__sync_or_and_fetch(&tmp_s[tv][r_i].first, &tmp_s[v][r_i].first);
-								__sync_or_and_fetch(&tmp_s[tv][r_i].second, &tmp_s[v][r_i].second);
+								idi &size_in_group = sizes_tmp_child_es[i_q];
+								tmp_child_es[offsets_tmp_sets[i_q] + size_in_group].first = v;
+								tmp_child_es[offsets_tmp_sets[i_q] + size_in_group].second = tv;
+								r_id_tmp_child_es[offsets_tmp_sets[i_q] + size_in_group] = r_i;
+								++size_in_group;
+//								__sync_or_and_fetch(&tmp_s[tv][r_i].first, &tmp_s[v][r_i].first);
+//								__sync_or_and_fetch(&tmp_s[tv][r_i].second, &tmp_s[v][r_i].second);
 		//						tmp_s[tv][r_i].first  |= tmp_s[v][r_i].first;
 		//						tmp_s[tv][r_i].second |= tmp_s[v][r_i].second;
 							}
 						}
 					}
 				}
+				// Sibling
+				// should directly process tmp_sibling_es and r_id_tmp_sibling_es; otherwise the buffer is too large
+				idi total_new = prefix_sum_for_offsets(sizes_tmp_sibling_es);
+				collect_into_queue(
+						tmp_sibling_es,
+						offsets_tmp_sets,
+						sizes_tmp_sibling_es,
+						total_new,
+						sibling_es,
+						end_sibling_es);
+				end_sibling_es = 0; // end_sibling_es will be increased twice, so settting it to 0 here is okay.
+				collect_into_queue(
+						r_id_tmp_sibling_es,
+						offsets_tmp_sets,
+						sizes_tmp_sibling_es,
+						total_new,
+						r_id_sibling_es,
+						end_sibling_es);
+#pragma omp parallel for
+				for (idi i = 0; i < end_sibling_es; ++i) {
+					idi v = sibling_es[i].first;
+					idi w = sibling_es[i].second;
+					inti r_i = r_id_sibling_es[i];
+					__sync_or_and_fetch(&tmp_s[v][r_i].second, tmp_s[w][r_i].first);
+					__sync_or_and_fetch(&tmp_s[w][r_i].second, tmp_s[v][r_i].first);
+				}
+
+				// Child
+				// should directly process tmp_child_es and r_id_tmp_child_es; otherwise the buffer is too large
+				total_new = prefix_sum_for_offsets(sizes_tmp_child_es);
+				collect_into_queue(
+						tmp_child_es,
+						offsets_tmp_sets,
+						sizes_tmp_child_es,
+						total_new,
+						child_es,
+						end_child_es);
+				end_child_es = 0; // end_child_es will be increased twice, so setting it to 0 here is okay.
+				collect_into_queue(
+						r_id_tmp_child_es,
+						offsets_tmp_sets,
+						sizes_tmp_child_es,
+						total_new,
+						r_id_child_es,
+						end_child_es);
+#pragma omp parallel for
+				for (idi i = 0; i < end_child_es; ++i) {
+					idi v = child_es[i].first;
+					idi c = child_es[i].second;
+					inti r_i = r_id_child_es[i];
+					__sync_or_and_fetch(&tmp_s[c][r_i].first, tmp_s[v][r_i].first);
+					__sync_or_and_fetch(&tmp_s[c][r_i].second, tmp_s[v][r_i].second);
+				}
+
+				// From tmp_queue to que
 				end_que = 0;
 				is_active.swap(tmp_is_active);
 
-				idi total_new = prefix_sum_for_offsets(sizes_tmp_queue);
+				total_new = prefix_sum_for_offsets(sizes_tmp_queue);
 				collect_into_queue(
 						tmp_queue,
 						offsets_tmp_queue,
@@ -461,6 +552,7 @@ inline void ParaVertexCentricPLL::bit_parallel_labeling(
 		}
 
 		// Record into Label L
+#pragma omp parallel for
 		for (idi v = 0; v < num_v; ++v) {
 			for (inti r_i = 0; r_i < BITPARALLEL_SIZE; ++r_i) {
 				L[v].bp_dist[r_i] = tmp_d[v][r_i];
@@ -663,12 +755,12 @@ inline void ParaVertexCentricPLL::initialize(
 			vector<idi> &once_candidated_queue,
 			idi &end_once_candidated_queue,
 //			vector<bool> &once_candidated,
-			vector<uint8_t> once_candidated,
+			vector<uint8_t> &once_candidated,
 			idi b_id,
 			idi roots_start,
 			inti roots_size,
 			vector<IndexType> &L,
-			const vector<uint8_t> used_bp_roots)
+			const vector<uint8_t> &used_bp_roots)
 {
 	idi roots_bound = roots_start + roots_size;
 //	init_start_reset_time -= WallTimer::get_time_mark();
@@ -896,14 +988,14 @@ inline void ParaVertexCentricPLL::push_labels(
 				idi &size_tmp_candidate_queue,
 				idi &offset_tmp_queue,
 //				vector<bool> &got_candidates,
-				vector<uint8_t> got_candidates,
+				vector<uint8_t> &got_candidates,
 //				vector<idi> &once_candidated_queue,
 //				idi &end_once_candidated_queue,
 				vector<idi> &tmp_once_candidated_queue,
 				idi &size_tmp_once_candidated_queue,
 //				vector<bool> &once_candidated,
-				vector<uint8_t> once_candidated,
-				const vector<uint8_t> used_bp_roots,
+				vector<uint8_t> &once_candidated,
+				const vector<uint8_t> &used_bp_roots,
 				smalli iter)
 {
 	const IndexType &Lv = L[v_head];
@@ -1373,18 +1465,18 @@ inline void ParaVertexCentricPLL::batch_process(
 						idi roots_start, // start id of roots
 						inti roots_size, // how many roots in the batch
 						vector<IndexType> &L,
-						const vector<uint8_t> used_bp_roots,
+						const vector<uint8_t> &used_bp_roots,
 						vector<idi> &active_queue,
 						idi &end_active_queue,
 						vector<idi> &candidate_queue,
 						idi &end_candidate_queue,
 						vector<ShortIndex> &short_index,
 						vector< vector<smalli> > &dist_matrix,
-						vector<uint8_t> got_candidates,
-						vector<uint8_t> is_active,
+						vector<uint8_t> &got_candidates,
+						vector<uint8_t> &is_active,
 						vector<idi> &once_candidated_queue,
 						idi &end_once_candidated_queue,
-						vector<uint8_t> once_candidated)
+						vector<uint8_t> &once_candidated)
 //inline void ParaVertexCentricPLL::batch_process(
 //						const Graph &G,
 //						idi b_id,
