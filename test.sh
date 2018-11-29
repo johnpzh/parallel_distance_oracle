@@ -8,6 +8,9 @@
 
 cd tools
 ./run.sh
-
-cd /home/zpeng/pppp/pado_naive_parallel_bp/tools
+cd /home/zpeng/pppp/pado_seq_no_bp/tools
 ./run.sh
+
+#./pado /scratch/ssd0/zpeng/dblp/dblp 2>&1 | tee output.txt
+#cd /home/zpeng/pppp/pado_seq_no_bp
+#./pado /scratch/ssd0/zpeng/dblp/dblp 2>&1 | tee output.txt

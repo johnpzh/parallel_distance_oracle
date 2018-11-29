@@ -11,9 +11,10 @@
 #include <unistd.h>
 #include "globals.h"
 #include "graph.h"
+#include "pado.h"
 //#include "pado_para.h"
 //#include "pado_para.20181106.tmp.scalability.h"
-#include "pado_para.20181115.tmp.parallel_bp.h"
+//#include "pado_para.20181115.tmp.parallel_bp.h"
 
 using namespace PADO;
 
@@ -39,21 +40,22 @@ void pado(const char filename[])
 //	NUM_THREADS = 1;
 //	omp_set_num_threads(NUM_THREADS);
 //	ParaVertexCentricPLL VCPLL(G);
+	VertexCentricPLL VCPLL(G);
 //	VCPLL.switch_labels_to_old_id(rank2id, rank);
 
 
-	for (inti t_num = 1; t_num <= 32; t_num *= 2) {
-		NUM_THREADS = t_num;
-		omp_set_num_threads(NUM_THREADS);
-		ParaVertexCentricPLL VCPLL(G);
-//		VCPLL.switch_labels_to_old_id(rank2id, rank);
-	}
-	{
-		NUM_THREADS = 40;
-		omp_set_num_threads(NUM_THREADS);
-		ParaVertexCentricPLL VCPLL(G);
-//		VCPLL.switch_labels_to_old_id(rank2id, rank);
-	}
+//	for (inti t_num = 1; t_num <= 32; t_num *= 2) {
+//		NUM_THREADS = t_num;
+//		omp_set_num_threads(NUM_THREADS);
+//		ParaVertexCentricPLL VCPLL(G);
+////		VCPLL.switch_labels_to_old_id(rank2id, rank);
+//	}
+//	{
+//		NUM_THREADS = 40;
+//		omp_set_num_threads(NUM_THREADS);
+//		ParaVertexCentricPLL VCPLL(G);
+////		VCPLL.switch_labels_to_old_id(rank2id, rank);
+//	}
 //	VCPLL.print();//test
 
 }

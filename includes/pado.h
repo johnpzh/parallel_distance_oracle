@@ -154,16 +154,19 @@ private:
 
 	// Test only
 //	uint64_t normal_hit_count = 0;
-//	uint64_t bp_hit_count = 0;
-//	uint64_t total_check_count = 0;
-//	double initializing_time = 0;
-//	double candidating_time = 0;
-//	double adding_time = 0;
+	uint64_t bp_hit_count = 0;
+	uint64_t total_check_count = 0;
+	double initializing_time = 0;
+	double candidating_time = 0;
+	double adding_time = 0;
 //	double distance_query_time = 0;
 //	double init_index_time = 0;
 //	double init_dist_matrix_time = 0;
 //	double init_start_reset_time = 0;
 //	double init_indicators_time = 0;
+//	L2CacheMissRate cache_miss;
+	TotalInstructsExe candidating_ins_count;
+	TotalInstructsExe adding_ins_count;
 	// End test
 
 
@@ -456,9 +459,17 @@ inline void VertexCentricPLL::push_labels(
 				// The label is already selected before
 				continue;
 			}
+		    // Record label_root_id as once selected by v_tail
+			SI_v_tail.indicator.set(label_root_id);
+			// Add into once_candidated_queue
+			if (!once_candidated[v_tail]) {
+				// If v_tail is not in the once_candidated_queue yet, add it in
+				once_candidated[v_tail] = true;
+				once_candidated_queue[end_once_candidated_queue++] = v_tail;
+			}
 
 			// Bit Parallel Checking: if label_real_id to v_tail has shorter distance already
-//			++total_check_count;
+			++total_check_count;
 			const IndexType &L_label = L[label_real_id];
 			bool no_need_add = false;
 
@@ -474,7 +485,7 @@ inline void VertexCentricPLL::push_labels(
 		            ? -1 : 0;
 		        if (td <= iter) {
 		        	no_need_add = true;
-//		        	++bp_hit_count;
+		        	++bp_hit_count;
 		        	break;
 		        }
 		      }
@@ -483,17 +494,9 @@ inline void VertexCentricPLL::push_labels(
 		    	continue;
 		    }
 
-		    // Record label_root_id as once selected by v_tail
-			SI_v_tail.indicator.set(label_root_id);
 			// Record vertex label_root_id as v_tail's candidates label
 			SI_v_tail.candidates.set(label_root_id);
 
-			// Add into once_candidated_queue
-			if (!once_candidated[v_tail]) {
-				// If v_tail is not in the once_candidated_queue yet, add it in
-				once_candidated[v_tail] = true;
-				once_candidated_queue[end_once_candidated_queue++] = v_tail;
-			}
 			// Add into candidate_queue
 			if (!got_candidates[v_tail]) {
 				// If v_tail is not in candidate_queue, add it in (prevent duplicate)
@@ -516,11 +519,32 @@ inline bool VertexCentricPLL::distance_query(
 			const vector< vector<smalli> > &dist_matrix,
 			smalli iter)
 {
-//	++total_check_count;
+	++total_check_count;
 //	distance_query_time -= WallTimer::get_time_mark();
 
 	idi cand_real_id = cand_root_id + roots_start;
 	const IndexType &Lv = L[v_id];
+
+//	// Bit Parallel Checking: if label_real_id to v_tail has shorter distance already
+//	++total_check_count;
+//	const IndexType &L_tail = L[cand_real_id];
+//
+//	_mm_prefetch(&Lv.bp_dist[0], _MM_HINT_T0);
+//	_mm_prefetch(&Lv.bp_sets[0][0], _MM_HINT_T0);
+//	for (inti i = 0; i < BITPARALLEL_SIZE; ++i) {
+//		inti td = Lv.bp_dist[i] + L_tail.bp_dist[i];
+//		if (td - 2 <= iter) {
+//			td +=
+//				(Lv.bp_sets[i][0] & L_tail.bp_sets[i][0]) ? -2 :
+//				((Lv.bp_sets[i][0] & L_tail.bp_sets[i][1]) |
+//				 (Lv.bp_sets[i][1] & L_tail.bp_sets[i][0]))
+//				? -1 : 0;
+//			if (td <= iter) {
+//				++bp_hit_count;
+//				return false;
+//			}
+//		}
+//	}
 
 	// Traverse v_id's all existing labels
 	inti b_i_bound = Lv.batches.size();
@@ -657,7 +681,7 @@ inline void VertexCentricPLL::batch_process(
 						const vector<bool> &used_bp_roots)
 {
 
-//	initializing_time -= WallTimer::get_time_mark();
+	initializing_time -= WallTimer::get_time_mark();
 	static const idi num_v = G.get_num_v();
 	static vector<idi> active_queue(num_v);
 	static idi end_active_queue = 0;
@@ -668,7 +692,7 @@ inline void VertexCentricPLL::batch_process(
 	static vector<bool> got_candidates(num_v, false); // got_candidates[v] is true means vertex v is in the queue candidate_queue
 	static vector<bool> is_active(num_v, false);// is_active[v] is true means vertex v is in the active queue.
 
-	static vector<idi> once_candidated_queue(num_v);
+	static vector<idi> once_candidated_queue(num_v); // if short_index[v].indicator.any() is true, v is in the queue.
 	static idi end_once_candidated_queue = 0;
 	static vector<bool> once_candidated(num_v, false);
 
@@ -688,16 +712,18 @@ inline void VertexCentricPLL::batch_process(
 			used_bp_roots);
 
 	smalli iter = 0; // The iterator, also the distance for current iteration
-//	initializing_time += WallTimer::get_time_mark();
+	initializing_time += WallTimer::get_time_mark();
 
 
 	while (0 != end_active_queue) {
-//		candidating_time -= WallTimer::get_time_mark();
+		candidating_time -= WallTimer::get_time_mark();
+		candidating_ins_count.measure_start();
 		++iter;
 		// Traverse active vertices to push their labels as candidates
 		for (idi i_queue = 0; i_queue < end_active_queue; ++i_queue) {
 			idi v_head = active_queue[i_queue];
 			is_active[v_head] = false; // reset is_active
+
 
 			push_labels(
 					v_head,
@@ -715,8 +741,10 @@ inline void VertexCentricPLL::batch_process(
 					iter);
 		}
 		end_active_queue = 0; // Set the active_queue empty
-//		candidating_time += WallTimer::get_time_mark();
-//		adding_time -= WallTimer::get_time_mark();
+		candidating_ins_count.measure_stop();
+		candidating_time += WallTimer::get_time_mark();
+		adding_time -= WallTimer::get_time_mark();
+		adding_ins_count.measure_start();
 
 		// Traverse vertices in the candidate_queue to insert labels
 		for (idi i_queue = 0; i_queue < end_candidate_queue; ++i_queue) {
@@ -766,11 +794,12 @@ inline void VertexCentricPLL::batch_process(
 			}
 		}
 		end_candidate_queue = 0; // Set the candidate_queue empty
-//		adding_time += WallTimer::get_time_mark();
+		adding_ins_count.measure_stop();
+		adding_time += WallTimer::get_time_mark();
 	}
 
 	// Reset the dist_matrix
-//	initializing_time -= WallTimer::get_time_mark();
+	initializing_time -= WallTimer::get_time_mark();
 //	init_dist_matrix_time -= WallTimer::get_time_mark();
 	reset_at_end(
 			roots_start,
@@ -778,7 +807,7 @@ inline void VertexCentricPLL::batch_process(
 			L,
 			dist_matrix);
 //	init_dist_matrix_time += WallTimer::get_time_mark();
-//	initializing_time += WallTimer::get_time_mark();
+	initializing_time += WallTimer::get_time_mark();
 
 
 //	double total_time = time_can + time_add;
@@ -795,6 +824,7 @@ void VertexCentricPLL::construct(const Graph &G)
 	idi remainer = num_v % BATCH_SIZE;
 	idi b_i_bound = num_v / BATCH_SIZE;
 	vector<bool> used_bp_roots(num_v, false);
+//	cache_miss.measure_start();
 	double time_labeling = -WallTimer::get_time_mark();
 
 	double bp_labeling_time = -WallTimer::get_time_mark();
@@ -837,26 +867,32 @@ void VertexCentricPLL::construct(const Graph &G)
 //				L);
 	}
 	time_labeling += WallTimer::get_time_mark();
+//	cache_miss.measure_stop();
 
 	// Test
-//	printf("BP labeling: %f (%f%%)\n", bp_labeling_time, bp_labeling_time / time_labeling * 100);
-//	printf("Initializing: %f (%f%%)\n", initializing_time, initializing_time / time_labeling * 100);
+	setlocale(LC_NUMERIC, "");
+	printf("BP_Size: %u\n", BITPARALLEL_SIZE);
+	printf("BP_labeling: %f %.2f%%\n", bp_labeling_time, bp_labeling_time / time_labeling * 100);
+	printf("Initializing: %f %.2f%%\n", initializing_time, initializing_time / time_labeling * 100);
 //		printf("\tinit_start_reset_time: %f (%f%%)\n", init_start_reset_time, init_start_reset_time / initializing_time * 100);
 //		printf("\tinit_index_time: %f (%f%%)\n", init_index_time, init_index_time / initializing_time * 100);
 //			printf("\t\tinit_indicators_time: %f (%f%%)\n", init_indicators_time, init_indicators_time / init_index_time * 100);
 //		printf("\tinit_dist_matrix_time: %f (%f%%)\n", init_dist_matrix_time, init_dist_matrix_time / initializing_time * 100);
-//	printf("Candidating: %f (%f%%)\n", candidating_time, candidating_time / time_labeling * 100);
-//	printf("Adding: %f (%f%%)\n", adding_time, adding_time / time_labeling * 100);
+	printf("Candidating: %f %.2f%%\n", candidating_time, candidating_time / time_labeling * 100);
+	printf("Adding: %f %.2f%%\n", adding_time, adding_time / time_labeling * 100);
 //		printf("\tdistance_query_time: %f (%f%%)\n", distance_query_time, distance_query_time / adding_time * 100);
-//		printf("\ttotal_check_count: %llu\n", total_check_count);
-//		printf("\tbp_hit_count (to total_check): %llu (%f%%)\n",
-//						bp_hit_count,
-//						bp_hit_count * 100.0 / total_check_count);
+		printf("\ttotal_check_count: %'llu\n", total_check_count);
+		printf("\tbp_hit_count: %'llu %.2f%%\n",
+						bp_hit_count,
+						bp_hit_count * 100.0 / total_check_count);
 //		printf("\tnormal_hit_count (to total_check, to normal_check): %llu (%f%%, %f%%)\n",
 //						normal_hit_count,
 //						normal_hit_count * 100.0 / total_check_count,
 //						normal_hit_count * 100.0 / (total_check_count - bp_hit_count));
-	printf("Labeling: %f\n", time_labeling);
+//	cache_miss.print();
+	printf("Candidating: "); candidating_ins_count.print();
+	printf("Adding: "); adding_ins_count.print();
+	printf("Labeling_time: %.2f\n", time_labeling);
 	// End test
 }
 
@@ -921,53 +957,53 @@ void VertexCentricPLL::switch_labels_to_old_id(
 //		puts("");
 //	}
 
-//	// Try query
-//	idi u;
-//	idi v;
-//	while (std::cin >> u >> v) {
-//		weighti dist = WEIGHTI_MAX;
-//		// Bit Parallel Check
-//		const IndexType &idx_u = L[rank[u]];
-//		const IndexType &idx_v = L[rank[v]];
-//
-//		for (inti i = 0; i < BITPARALLEL_SIZE; ++i) {
-//			int td = idx_v.bp_dist[i] + idx_u.bp_dist[i];
-//			if (td - 2 <= dist) {
-//				td +=
-//					(idx_v.bp_sets[i][0] & idx_u.bp_sets[i][0]) ? -2 :
-//					((idx_v.bp_sets[i][0] & idx_u.bp_sets[i][1])
-//							| (idx_v.bp_sets[i][1] & idx_u.bp_sets[i][0]))
-//							? -1 : 0;
-//				if (td < dist) {
-//					dist = td;
-//				}
-//			}
-//		}
-//
-//		// Normal Index Check
-//		const auto &Lu = new_L[u];
-//		const auto &Lv = new_L[v];
-////		unsorted_map<idi, weighti> markers;
-//		map<idi, weighti> markers;
-//		for (idi i = 0; i < Lu.size(); ++i) {
-//			markers[Lu[i].first] = Lu[i].second;
-//		}
-//		for (idi i = 0; i < Lv.size(); ++i) {
-//			const auto &tmp_l = markers.find(Lv[i].first);
-//			if (tmp_l == markers.end()) {
-//				continue;
-//			}
-//			int d = tmp_l->second + Lv[i].second;
-//			if (d < dist) {
-//				dist = d;
-//			}
-//		}
-//		if (dist == 255) {
-//			printf("2147483647\n");
-//		} else {
-//			printf("%u\n", dist);
-//		}
-//	}
+	// Try query
+	idi u;
+	idi v;
+	while (std::cin >> u >> v) {
+		weighti dist = WEIGHTI_MAX;
+		// Bit Parallel Check
+		const IndexType &idx_u = L[rank[u]];
+		const IndexType &idx_v = L[rank[v]];
+
+		for (inti i = 0; i < BITPARALLEL_SIZE; ++i) {
+			int td = idx_v.bp_dist[i] + idx_u.bp_dist[i];
+			if (td - 2 <= dist) {
+				td +=
+					(idx_v.bp_sets[i][0] & idx_u.bp_sets[i][0]) ? -2 :
+					((idx_v.bp_sets[i][0] & idx_u.bp_sets[i][1])
+							| (idx_v.bp_sets[i][1] & idx_u.bp_sets[i][0]))
+							? -1 : 0;
+				if (td < dist) {
+					dist = td;
+				}
+			}
+		}
+
+		// Normal Index Check
+		const auto &Lu = new_L[u];
+		const auto &Lv = new_L[v];
+//		unsorted_map<idi, weighti> markers;
+		map<idi, weighti> markers;
+		for (idi i = 0; i < Lu.size(); ++i) {
+			markers[Lu[i].first] = Lu[i].second;
+		}
+		for (idi i = 0; i < Lv.size(); ++i) {
+			const auto &tmp_l = markers.find(Lv[i].first);
+			if (tmp_l == markers.end()) {
+				continue;
+			}
+			int d = tmp_l->second + Lv[i].second;
+			if (d < dist) {
+				dist = d;
+			}
+		}
+		if (dist == 255) {
+			printf("2147483647\n");
+		} else {
+			printf("%u\n", dist);
+		}
+	}
 }
 
 }
