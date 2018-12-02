@@ -102,6 +102,6 @@ int main(int argc, char *argv[])
 		exit(EXIT_FAILURE);
 	}
 	pado(argv[1]);
-	printf("Done!\n\n");
+	printf("Done!\n");
 	return EXIT_SUCCESS;
 }

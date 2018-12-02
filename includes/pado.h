@@ -87,6 +87,11 @@ private:
 			const Graph &G,
 			vector<IndexType> &L,
 			vector<bool> &used_bp_roots);
+	inline bool bit_parallel_checking(
+			idi v_id,
+			idi w_id,
+			const vector<IndexType> &L,
+			smalli iter);
 
 	inline void batch_process(
 			const Graph &G,
@@ -155,18 +160,24 @@ private:
 	// Test only
 //	uint64_t normal_hit_count = 0;
 	uint64_t bp_hit_count = 0;
-	uint64_t total_check_count = 0;
+//	uint64_t total_check_count = 0;
+	uint64_t normal_check_count = 0;
+	uint64_t total_candidates_num = 0;
+	uint64_t set_candidates_num = 0;
 	double initializing_time = 0;
 	double candidating_time = 0;
 	double adding_time = 0;
-//	double distance_query_time = 0;
+	double distance_query_time = 0;
 //	double init_index_time = 0;
 //	double init_dist_matrix_time = 0;
 //	double init_start_reset_time = 0;
 //	double init_indicators_time = 0;
 //	L2CacheMissRate cache_miss;
-	TotalInstructsExe candidating_ins_count;
-	TotalInstructsExe adding_ins_count;
+//	TotalInstructsExe candidating_ins_count;
+//	TotalInstructsExe adding_ins_count;
+//	TotalInstructsExe bp_labeling_ins_count;
+//	TotalInstructsExe bp_checking_ins_count;
+//	TotalInstructsExe dist_query_ins_count;
 	// End test
 
 
@@ -296,6 +307,39 @@ inline void VertexCentricPLL::bit_parallel_labeling(
 		}
 	}
 
+}
+
+// Function bit parallel checking:
+// return false if shortest distance exits in bp labels, return true if bp labels cannot cover the distance
+inline bool VertexCentricPLL::bit_parallel_checking(
+			idi v_id,
+			idi w_id,
+			const vector<IndexType> &L,
+			smalli iter)
+{
+	// Bit Parallel Checking: if label_real_id to v_tail has shorter distance already
+	const IndexType &Lv = L[v_id];
+	const IndexType &Lw = L[w_id];
+
+	_mm_prefetch(&Lv.bp_dist[0], _MM_HINT_T0);
+	_mm_prefetch(&Lv.bp_sets[0][0], _MM_HINT_T0);
+	_mm_prefetch(&Lw.bp_dist[0], _MM_HINT_T0);
+	_mm_prefetch(&Lw.bp_sets[0][0], _MM_HINT_T0);
+	for (inti i = 0; i < BITPARALLEL_SIZE; ++i) {
+		inti td = Lv.bp_dist[i] + Lw.bp_dist[i];
+		if (td - 2 <= iter) {
+			td +=
+				(Lv.bp_sets[i][0] & Lw.bp_sets[i][0]) ? -2 :
+				((Lv.bp_sets[i][0] & Lw.bp_sets[i][1]) |
+				 (Lv.bp_sets[i][1] & Lw.bp_sets[i][0]))
+				? -1 : 0;
+			if (td <= iter) {
+				++bp_hit_count;
+				return false;
+			}
+		}
+	}
+	return true;
 }
 
 
@@ -433,9 +477,12 @@ inline void VertexCentricPLL::push_labels(
 	for (idi e_i = e_i_start; e_i < e_i_bound; ++e_i) {
 		idi v_tail = G.out_edges[e_i];
 
-		if (used_bp_roots[v_head]) {
+		if (used_bp_roots[v_tail]) {
 			continue;
 		}
+//		if (used_bp_roots[v_head]) {
+//			continue;
+//		}
 
 		if (v_tail < roots_start) { // v_tail has higher rank than any roots, then no roots can push new labels to it.
 			return;
@@ -469,30 +516,33 @@ inline void VertexCentricPLL::push_labels(
 			}
 
 			// Bit Parallel Checking: if label_real_id to v_tail has shorter distance already
-			++total_check_count;
+			//			++total_check_count;
 			const IndexType &L_label = L[label_real_id];
-			bool no_need_add = false;
 
 			_mm_prefetch(&L_label.bp_dist[0], _MM_HINT_T0);
 			_mm_prefetch(&L_label.bp_sets[0][0], _MM_HINT_T0);
-		    for (inti i = 0; i < BITPARALLEL_SIZE; ++i) {
-		      inti td = L_label.bp_dist[i] + L_tail.bp_dist[i];
-		      if (td - 2 <= iter) {
-		        td +=
-		            (L_label.bp_sets[i][0] & L_tail.bp_sets[i][0]) ? -2 :
-		            ((L_label.bp_sets[i][0] & L_tail.bp_sets[i][1]) |
-		             (L_label.bp_sets[i][1] & L_tail.bp_sets[i][0]))
-		            ? -1 : 0;
-		        if (td <= iter) {
-		        	no_need_add = true;
-		        	++bp_hit_count;
-		        	break;
-		        }
-		      }
-		    }
-		    if (no_need_add) {
-		    	continue;
-		    }
+//			bp_checking_ins_count.measure_start();
+			bool no_need_add = false;
+			for (inti i = 0; i < BITPARALLEL_SIZE; ++i) {
+				inti td = L_label.bp_dist[i] + L_tail.bp_dist[i];
+				if (td - 2 <= iter) {
+					td +=
+						(L_label.bp_sets[i][0] & L_tail.bp_sets[i][0]) ? -2 :
+						((L_label.bp_sets[i][0] & L_tail.bp_sets[i][1]) |
+						 (L_label.bp_sets[i][1] & L_tail.bp_sets[i][0]))
+						? -1 : 0;
+					if (td <= iter) {
+						no_need_add = true;
+						++bp_hit_count;
+						break;
+					}
+				}
+			}
+			if (no_need_add) {
+//				bp_checking_ins_count.measure_stop();
+				continue;
+			}
+//			bp_checking_ins_count.measure_stop();
 
 			// Record vertex label_root_id as v_tail's candidates label
 			SI_v_tail.candidates.set(label_root_id);
@@ -509,7 +559,6 @@ inline void VertexCentricPLL::push_labels(
 
 // Function for distance query;
 // traverse vertex v_id's labels;
-// return the distance between v_id and cand_root_id based on existing labels.
 // return false if shorter distance exists already, return true if the cand_root_id can be added into v_id's label.
 inline bool VertexCentricPLL::distance_query(
 			idi cand_root_id,
@@ -519,8 +568,10 @@ inline bool VertexCentricPLL::distance_query(
 			const vector< vector<smalli> > &dist_matrix,
 			smalli iter)
 {
-	++total_check_count;
-//	distance_query_time -= WallTimer::get_time_mark();
+//	++total_check_count;
+	++normal_check_count;
+	distance_query_time -= WallTimer::get_time_mark();
+//	dist_query_ins_count.measure_start();
 
 	idi cand_real_id = cand_root_id + roots_start;
 	const IndexType &Lv = L[v_id];
@@ -575,14 +626,15 @@ inline bool VertexCentricPLL::distance_query(
 				}
 				inti d_tmp = dist + dist_matrix[cand_root_id][v];
 				if (d_tmp <= iter) {
-//					distance_query_time += WallTimer::get_time_mark();
-//					++normal_hit_count;
+					distance_query_time += WallTimer::get_time_mark();
+//					dist_query_ins_count.measure_stop();
 					return false;
 				}
 			}
 		}
 	}
-//	distance_query_time += WallTimer::get_time_mark();
+	distance_query_time += WallTimer::get_time_mark();
+//	dist_query_ins_count.measure_stop();
 	return true;
 }
 
@@ -717,13 +769,12 @@ inline void VertexCentricPLL::batch_process(
 
 	while (0 != end_active_queue) {
 		candidating_time -= WallTimer::get_time_mark();
-		candidating_ins_count.measure_start();
+//		candidating_ins_count.measure_start();
 		++iter;
 		// Traverse active vertices to push their labels as candidates
 		for (idi i_queue = 0; i_queue < end_active_queue; ++i_queue) {
 			idi v_head = active_queue[i_queue];
 			is_active[v_head] = false; // reset is_active
-
 
 			push_labels(
 					v_head,
@@ -741,10 +792,10 @@ inline void VertexCentricPLL::batch_process(
 					iter);
 		}
 		end_active_queue = 0; // Set the active_queue empty
-		candidating_ins_count.measure_stop();
+//		candidating_ins_count.measure_stop();
 		candidating_time += WallTimer::get_time_mark();
 		adding_time -= WallTimer::get_time_mark();
-		adding_ins_count.measure_start();
+//		adding_ins_count.measure_start();
 
 		// Traverse vertices in the candidate_queue to insert labels
 		for (idi i_queue = 0; i_queue < end_candidate_queue; ++i_queue) {
@@ -752,11 +803,13 @@ inline void VertexCentricPLL::batch_process(
 			inti inserted_count = 0; //recording number of v_id's truly inserted candidates
 			got_candidates[v_id] = false; // reset got_candidates
 			// Traverse v_id's all candidates
+			total_candidates_num += roots_size;
 			for (inti cand_root_id = 0; cand_root_id < roots_size; ++cand_root_id) {
 				if (!short_index[v_id].candidates[cand_root_id]) {
 					// Root cand_root_id is not vertex v_id's candidate
 					continue;
 				}
+				++set_candidates_num;
 				short_index[v_id].candidates.reset(cand_root_id);
 				// Only insert cand_root_id into v_id's label if its distance to v_id is shorter than existing distance
 				if ( distance_query(
@@ -794,7 +847,7 @@ inline void VertexCentricPLL::batch_process(
 			}
 		}
 		end_candidate_queue = 0; // Set the candidate_queue empty
-		adding_ins_count.measure_stop();
+//		adding_ins_count.measure_stop();
 		adding_time += WallTimer::get_time_mark();
 	}
 
@@ -828,10 +881,12 @@ void VertexCentricPLL::construct(const Graph &G)
 	double time_labeling = -WallTimer::get_time_mark();
 
 	double bp_labeling_time = -WallTimer::get_time_mark();
+//	bp_labeling_ins_count.measure_start();
 	bit_parallel_labeling(
 				G,
 				L,
 				used_bp_roots);
+//	bp_labeling_ins_count.measure_stop();
 	bp_labeling_time += WallTimer::get_time_mark();
 
 	for (idi b_i = 0; b_i < b_i_bound; ++b_i) {
@@ -871,6 +926,7 @@ void VertexCentricPLL::construct(const Graph &G)
 
 	// Test
 	setlocale(LC_NUMERIC, "");
+	printf("BATCH_SIZE: %u\n", BATCH_SIZE);
 	printf("BP_Size: %u\n", BITPARALLEL_SIZE);
 	printf("BP_labeling: %f %.2f%%\n", bp_labeling_time, bp_labeling_time / time_labeling * 100);
 	printf("Initializing: %f %.2f%%\n", initializing_time, initializing_time / time_labeling * 100);
@@ -880,18 +936,27 @@ void VertexCentricPLL::construct(const Graph &G)
 //		printf("\tinit_dist_matrix_time: %f (%f%%)\n", init_dist_matrix_time, init_dist_matrix_time / initializing_time * 100);
 	printf("Candidating: %f %.2f%%\n", candidating_time, candidating_time / time_labeling * 100);
 	printf("Adding: %f %.2f%%\n", adding_time, adding_time / time_labeling * 100);
-//		printf("\tdistance_query_time: %f (%f%%)\n", distance_query_time, distance_query_time / adding_time * 100);
-		printf("\ttotal_check_count: %'llu\n", total_check_count);
-		printf("\tbp_hit_count: %'llu %.2f%%\n",
+		printf("distance_query_time: %f %.2f%%\n", distance_query_time, distance_query_time / time_labeling * 100);
+		uint64_t total_check_count = bp_hit_count + normal_check_count;
+		printf("total_check_count: %'llu\n", total_check_count);
+		printf("bp_hit_count: %'llu %.2f%%\n",
 						bp_hit_count,
 						bp_hit_count * 100.0 / total_check_count);
+		printf("normal_check_count: %'llu %.2f%%\n", normal_check_count, normal_check_count * 100.0 / total_check_count);
+		printf("total_candidates_num: %'llu set_candidates_num: %'llu %.2f%%\n",
+							total_candidates_num,
+							set_candidates_num,
+							set_candidates_num * 100.0 / total_candidates_num);
 //		printf("\tnormal_hit_count (to total_check, to normal_check): %llu (%f%%, %f%%)\n",
 //						normal_hit_count,
 //						normal_hit_count * 100.0 / total_check_count,
 //						normal_hit_count * 100.0 / (total_check_count - bp_hit_count));
 //	cache_miss.print();
-	printf("Candidating: "); candidating_ins_count.print();
-	printf("Adding: "); adding_ins_count.print();
+//	printf("Candidating: "); candidating_ins_count.print();
+//	printf("Adding: "); adding_ins_count.print();
+//	printf("BP_Labeling: "); bp_labeling_ins_count.print();
+//	printf("BP_Checking: "); bp_checking_ins_count.print();
+//	printf("distance_query: "); dist_query_ins_count.print();
 	printf("Labeling_time: %.2f\n", time_labeling);
 	// End test
 }

@@ -13,9 +13,9 @@ echo "--------------------------------------------------"
 echo "PADO:"
 echo "-----"
 $pado $fin
-echo ""
-
-echo "PLL:"
-echo "----"
-$pll $fin pll.label
+#echo ""
+#
+#echo "PLL:"
+#echo "----"
+#$pll $fin pll.label
 echo "--------------------------------------------------"
