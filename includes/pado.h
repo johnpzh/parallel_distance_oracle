@@ -78,7 +78,13 @@ private:
 		// The v.indicator[BATCH_SIZE] is set if in current batch v has got any new labels already.
 		// In this way, when do initialization, only initialize those short_index[v] whose indicator[BATCH_SIZE] is set.
 		bitset<BATCH_SIZE + 1> indicator; // Global indicator, indicator[r] (0 <= r < BATCH_SIZE) is set means root r once selected as candidate already
-		bitset<BATCH_SIZE> candidates; // Candidates one iteration, candidates[r] is set means root r is candidate in this iteration
+//		bitset<BATCH_SIZE> candidates; // Candidates one iteration, candidates[r] is set means root r is candidate in this iteration
+
+		// Use a queue to store candidates
+		vector<inti> candidates_que = vector<inti>(BATCH_SIZE);
+		inti end_candidates_que = 0;
+		vector<bool> is_candidate = vector<bool>(BATCH_SIZE, false);
+
 	} __attribute__((aligned(64)));
 
 	vector<IndexType> L;
@@ -162,8 +168,8 @@ private:
 	uint64_t bp_hit_count = 0;
 //	uint64_t total_check_count = 0;
 	uint64_t normal_check_count = 0;
-	uint64_t total_candidates_num = 0;
-	uint64_t set_candidates_num = 0;
+//	uint64_t total_candidates_num = 0;
+//	uint64_t set_candidates_num = 0;
 	double initializing_time = 0;
 	double candidating_time = 0;
 	double adding_time = 0;
@@ -172,7 +178,7 @@ private:
 //	double init_dist_matrix_time = 0;
 //	double init_start_reset_time = 0;
 //	double init_indicators_time = 0;
-//	L2CacheMissRate cache_miss;
+	L2CacheMissRate cache_miss;
 //	TotalInstructsExe candidating_ins_count;
 //	TotalInstructsExe adding_ins_count;
 //	TotalInstructsExe bp_labeling_ins_count;
@@ -545,7 +551,11 @@ inline void VertexCentricPLL::push_labels(
 //			bp_checking_ins_count.measure_stop();
 
 			// Record vertex label_root_id as v_tail's candidates label
-			SI_v_tail.candidates.set(label_root_id);
+//			SI_v_tail.candidates.set(label_root_id);
+			if (!SI_v_tail.is_candidate[label_root_id]) {
+				SI_v_tail.is_candidate[label_root_id] = true;
+				SI_v_tail.candidates_que[SI_v_tail.end_candidates_que++] = label_root_id;
+			}
 
 			// Add into candidate_queue
 			if (!got_candidates[v_tail]) {
@@ -803,14 +813,18 @@ inline void VertexCentricPLL::batch_process(
 			inti inserted_count = 0; //recording number of v_id's truly inserted candidates
 			got_candidates[v_id] = false; // reset got_candidates
 			// Traverse v_id's all candidates
-			total_candidates_num += roots_size;
-			for (inti cand_root_id = 0; cand_root_id < roots_size; ++cand_root_id) {
-				if (!short_index[v_id].candidates[cand_root_id]) {
-					// Root cand_root_id is not vertex v_id's candidate
-					continue;
-				}
-				++set_candidates_num;
-				short_index[v_id].candidates.reset(cand_root_id);
+//			total_candidates_num += roots_size;
+//			for (inti cand_root_id = 0; cand_root_id < roots_size; ++cand_root_id) {
+//				if (!short_index[v_id].candidates[cand_root_id]) {
+//					// Root cand_root_id is not vertex v_id's candidate
+//					continue;
+//				}
+//				++set_candidates_num;
+//				short_index[v_id].candidates.reset(cand_root_id);
+			inti bound_cand_i = short_index[v_id].end_candidates_que;
+			for (inti cand_i = 0; cand_i < bound_cand_i; ++cand_i) {
+				inti cand_root_id = short_index[v_id].candidates_que[cand_i];
+				short_index[v_id].is_candidate[cand_root_id] = false;
 				// Only insert cand_root_id into v_id's label if its distance to v_id is shorter than existing distance
 				if ( distance_query(
 								cand_root_id,
@@ -835,6 +849,8 @@ inline void VertexCentricPLL::batch_process(
 							iter);
 				}
 			}
+			short_index[v_id].end_candidates_que = 0;
+//			}
 			if (0 != inserted_count) {
 				// Update other arrays in L[v_id] if new labels were inserted in this iteration
 				update_label_indices(
@@ -877,7 +893,7 @@ void VertexCentricPLL::construct(const Graph &G)
 	idi remainer = num_v % BATCH_SIZE;
 	idi b_i_bound = num_v / BATCH_SIZE;
 	vector<bool> used_bp_roots(num_v, false);
-//	cache_miss.measure_start();
+	cache_miss.measure_start();
 	double time_labeling = -WallTimer::get_time_mark();
 
 	double bp_labeling_time = -WallTimer::get_time_mark();
@@ -922,7 +938,7 @@ void VertexCentricPLL::construct(const Graph &G)
 //				L);
 	}
 	time_labeling += WallTimer::get_time_mark();
-//	cache_miss.measure_stop();
+	cache_miss.measure_stop();
 
 	// Test
 	setlocale(LC_NUMERIC, "");
@@ -943,15 +959,15 @@ void VertexCentricPLL::construct(const Graph &G)
 						bp_hit_count,
 						bp_hit_count * 100.0 / total_check_count);
 		printf("normal_check_count: %'llu %.2f%%\n", normal_check_count, normal_check_count * 100.0 / total_check_count);
-		printf("total_candidates_num: %'llu set_candidates_num: %'llu %.2f%%\n",
-							total_candidates_num,
-							set_candidates_num,
-							set_candidates_num * 100.0 / total_candidates_num);
+//		printf("total_candidates_num: %'llu set_candidates_num: %'llu %.2f%%\n",
+//							total_candidates_num,
+//							set_candidates_num,
+//							set_candidates_num * 100.0 / total_candidates_num);
 //		printf("\tnormal_hit_count (to total_check, to normal_check): %llu (%f%%, %f%%)\n",
 //						normal_hit_count,
 //						normal_hit_count * 100.0 / total_check_count,
 //						normal_hit_count * 100.0 / (total_check_count - bp_hit_count));
-//	cache_miss.print();
+	cache_miss.print();
 //	printf("Candidating: "); candidating_ins_count.print();
 //	printf("Adding: "); adding_ins_count.print();
 //	printf("BP_Labeling: "); bp_labeling_ins_count.print();

@@ -5,7 +5,7 @@ if [[ $# -lt 1 ]]; then
 	exit
 fi
 fin=$1
-pado="/home/zpeng/pppp/pado/pado"
+pado="../pado"
 pll="/home/zpeng/pppp/pruned-landmark-labeling/bin/construct_index"
 
 echo $fin
