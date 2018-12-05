@@ -74,6 +74,19 @@ public:
 	// Remap vertex id according to its rank, 1 is the highest rank;
 	vector<idi> id_transfer(const vector<idi> &rank);
 	void print();
+	
+	// Test for Prof. Jin: how many vertices have degree 1 or 2 (and the proportion)
+	void count_low_degrees()
+	{
+		idi count = 0;
+		for (idi v_i = 0; v_i < num_v; ++v_i) {
+			if (1 == out_degrees[v_i] || 2 == out_degrees[v_i]) {
+				++count;
+			}
+		}
+		printf("Num_of_V: %u Degree_1_or_2: %u %f%%\n\n", num_v, count, count * 100.0 / num_v);
+		exit(EXIT_FAILURE);
+	}
 }; // class Graph
 
 // construcgt the graph from the edge list file
@@ -111,6 +124,7 @@ Graph::Graph(vector< pair<idi, idi> > &edge_list)
 void Graph::construct(const vector< pair<idi, idi> > &edge_list)
 {
 	num_e = 2 * edge_list.size(); // Undirected Graph
+//	num_e = edge_list.size(); // Directed Graph
 	for (const auto &edge: edge_list) {
 		num_v = max(num_v, max(edge.first, edge.second) + 1);
 	}
@@ -122,7 +136,7 @@ void Graph::construct(const vector< pair<idi, idi> > &edge_list)
 	vector< vector<idi> > edge_tmp(num_v);
 	for (const auto &edge: edge_list) {
 		edge_tmp[edge.first].push_back(edge.second);
-		edge_tmp[edge.second].push_back(edge.first);
+		edge_tmp[edge.second].push_back(edge.first); // Undirected Graph
 	}
 	// Get vertices and outEdges
 	idi loc = 0;

@@ -33,7 +33,7 @@ using std::fill;
 namespace PADO {
 inti NUM_THREADS = 4;
 const inti BATCH_SIZE = 1024; // The size for regular batch and bit array.
-const inti BITPARALLEL_SIZE = 50;
+const inti BITPARALLEL_SIZE = 0;
 const inti THRESHOLD_PARALLEL = 80;
 
 
@@ -67,8 +67,8 @@ private:
 			}
 		};
 
-	    smalli bp_dist[BITPARALLEL_SIZE];
-	    uint64_t bp_sets[BITPARALLEL_SIZE][2];  // [0]: S^{-1}, [1]: S^{0}
+	    //smalli bp_dist[BITPARALLEL_SIZE];
+	    //uint64_t bp_sets[BITPARALLEL_SIZE][2];  // [0]: S^{-1}, [1]: S^{0}
 
 		vector<Batch> batches; // Batch info
 		vector<DistanceIndexType> distances; // Distance info
@@ -86,10 +86,10 @@ private:
 
 	vector<IndexType> L;
 	void construct(const Graph &G);
-	inline void bit_parallel_labeling(
-				const Graph &G,
-				vector<IndexType> &L,
-				vector<bool> &used_bp_roots);
+//	inline void bit_parallel_labeling(
+//				const Graph &G,
+//				vector<IndexType> &L,
+//				vector<bool> &used_bp_roots);
 
 	inline void batch_process(
 				const Graph &G,
@@ -231,185 +231,185 @@ ParaVertexCentricPLL::ParaVertexCentricPLL(const Graph &G)
 	construct(G);
 }
 
-inline void ParaVertexCentricPLL::bit_parallel_labeling(
-			const Graph &G,
-			vector<IndexType> &L,
-			vector<bool> &used_bp_roots)
-{
-	idi num_v = G.get_num_v();
-	idi num_e = G.get_num_e();
-
-//	std::vector<smalli> tmp_d(num_v); // distances from the root to every v
-	smalli *tmp_d = (smalli *) malloc(num_v * sizeof(smalli));
-	std::vector<std::pair<uint64_t, uint64_t> > tmp_s(num_v); // first is S_r^{-1}, second is S_r^{0}
-	std::vector<idi> que(num_v); // active queue
-	std::vector< std::pair<idi, idi> > sibling_es(num_e); // siblings, their distances to the root are equal (have difference of 0)
-	std::vector< std::pair<idi, idi> > child_es(num_e); // child and father, their distances to the root have difference of 1.
-
-	idi r = 0; // root r
-	for (inti i_bpspt = 0; i_bpspt < BITPARALLEL_SIZE; ++i_bpspt) {
-		while (r < num_v && used_bp_roots[r]) {
-			++r;
-		}
-		if (r == num_v) {
-			for (idi v = 0; v < num_v; ++v) {
-				L[v].bp_dist[i_bpspt] = SMALLI_MAX;
-			}
-			continue;
-		}
-		used_bp_roots[r] = true;
-
-//		fill(tmp_d.begin(), tmp_d.end(), SMALLI_MAX);
-		memset(tmp_d, (uint8_t) -1, num_v * sizeof(smalli));
-		fill(tmp_s.begin(), tmp_s.end(), std::make_pair(0, 0));
-
-		idi que_t0 = 0, que_t1 = 0, que_h = 0;
-		que[que_h++] = r;
-		tmp_d[r] = 0;
-		que_t1 = que_h;
-
-		int ns = 0; // number of selected neighbor, default 64
-		// the edge of one vertex in G is ordered decreasingly to rank, lower rank first, so here need to traverse edges backward
-		idi i_bound = G.vertices[r] - 1;
-		idi i_start = i_bound + G.out_degrees[r];
-		for (idi i = i_start; i > i_bound; --i) {
-			idi v = G.out_edges[i];
-			if (!used_bp_roots[v]) {
-				used_bp_roots[v] = true;
-				// Algo3:line4: for every v in S_r, (dist[v], S_r^{-1}[v], S_r^{0}[v]) <- (1, {v}, empty_set)
-				que[que_h++] = v;
-				tmp_d[v] = 1;
-				tmp_s[v].first = 1ULL << ns;
-				if (++ns == 64) break;
-			}
-		}
-
-		for (smalli d = 0; que_t0 < que_h; ++d) {
-			idi num_sibling_es = 0, num_child_es = 0;
-
-			// For parallel adding to que
-			idi que_size = que_t1 - que_t0;
-			vector<idi> offsets_tmp_queue(que_size);
-#pragma omp parallel for
-			for (idi i_q = 0; i_q < que_size; ++i_q) {
-				offsets_tmp_queue[i_q] = G.out_degrees[que[que_t0 + i_q]];
-			}
-			idi num_neighbors = prefix_sum_for_offsets(offsets_tmp_queue);
-			vector<idi> tmp_que(num_neighbors);
-			vector<idi> sizes_tmp_que(que_size, 0);
-			// For parallel adding to sibling_es
-			vector< pair<idi, idi> > tmp_sibling_es(num_neighbors);
-			vector<idi> sizes_tmp_sibling_es(que_size, 0);
-			// For parallel adding to child_es
-			vector< pair<idi, idi> > tmp_child_es(num_neighbors);
-			vector<idi> sizes_tmp_child_es(que_size, 0);
-
-#pragma omp parallel for
-			for (idi que_i = que_t0; que_i < que_t1; ++que_i) {
-				idi tmp_que_i = que_i - que_t0; // location in the tmp_que
-				idi v = que[que_i];
-				idi i_start = G.vertices[v];
-				idi i_bound = i_start + G.out_degrees[v];
-				for (idi i = i_start; i < i_bound; ++i) {
-					idi tv = G.out_edges[i];
-					smalli td = d + 1;
-
-					if (d > tmp_d[tv]) {
-						;
-					}
-					else if (d == tmp_d[tv]) {
-						if (v < tv) { // ??? Why need v < tv !!! Because it's a undirected graph.
-							idi &size_in_group = sizes_tmp_sibling_es[tmp_que_i];
-							tmp_sibling_es[offsets_tmp_queue[tmp_que_i] + size_in_group].first = v;
-							tmp_sibling_es[offsets_tmp_queue[tmp_que_i] + size_in_group].second = tv;
-							++size_in_group;
-//							sibling_es[num_sibling_es].first  = v;
-//							sibling_es[num_sibling_es].second = tv;
-//							++num_sibling_es;
-						}
-					} else { // d < tmp_d[tv]
-						if (tmp_d[tv] == SMALLI_MAX) {
-							if (CAS(tmp_d + tv, SMALLI_MAX, td)) { // tmp_d[tv] = td
-								tmp_que[offsets_tmp_queue[tmp_que_i] + sizes_tmp_que[tmp_que_i]++] = tv;
-							}
-						}
-//						if (tmp_d[tv] == SMALLI_MAX) {
-//							que[que_h++] = tv;
-//							tmp_d[tv] = td;
+//inline void ParaVertexCentricPLL::bit_parallel_labeling(
+//			const Graph &G,
+//			vector<IndexType> &L,
+//			vector<bool> &used_bp_roots)
+//{
+//	idi num_v = G.get_num_v();
+//	idi num_e = G.get_num_e();
+//
+////	std::vector<smalli> tmp_d(num_v); // distances from the root to every v
+//	smalli *tmp_d = (smalli *) malloc(num_v * sizeof(smalli));
+//	std::vector<std::pair<uint64_t, uint64_t> > tmp_s(num_v); // first is S_r^{-1}, second is S_r^{0}
+//	std::vector<idi> que(num_v); // active queue
+//	std::vector< std::pair<idi, idi> > sibling_es(num_e); // siblings, their distances to the root are equal (have difference of 0)
+//	std::vector< std::pair<idi, idi> > child_es(num_e); // child and father, their distances to the root have difference of 1.
+//
+//	idi r = 0; // root r
+//	for (inti i_bpspt = 0; i_bpspt < BITPARALLEL_SIZE; ++i_bpspt) {
+//		while (r < num_v && used_bp_roots[r]) {
+//			++r;
+//		}
+//		if (r == num_v) {
+//			for (idi v = 0; v < num_v; ++v) {
+//				L[v].bp_dist[i_bpspt] = SMALLI_MAX;
+//			}
+//			continue;
+//		}
+//		used_bp_roots[r] = true;
+//
+////		fill(tmp_d.begin(), tmp_d.end(), SMALLI_MAX);
+//		memset(tmp_d, (uint8_t) -1, num_v * sizeof(smalli));
+//		fill(tmp_s.begin(), tmp_s.end(), std::make_pair(0, 0));
+//
+//		idi que_t0 = 0, que_t1 = 0, que_h = 0;
+//		que[que_h++] = r;
+//		tmp_d[r] = 0;
+//		que_t1 = que_h;
+//
+//		int ns = 0; // number of selected neighbor, default 64
+//		// the edge of one vertex in G is ordered decreasingly to rank, lower rank first, so here need to traverse edges backward
+//		idi i_bound = G.vertices[r] - 1;
+//		idi i_start = i_bound + G.out_degrees[r];
+//		for (idi i = i_start; i > i_bound; --i) {
+//			idi v = G.out_edges[i];
+//			if (!used_bp_roots[v]) {
+//				used_bp_roots[v] = true;
+//				// Algo3:line4: for every v in S_r, (dist[v], S_r^{-1}[v], S_r^{0}[v]) <- (1, {v}, empty_set)
+//				que[que_h++] = v;
+//				tmp_d[v] = 1;
+//				tmp_s[v].first = 1ULL << ns;
+//				if (++ns == 64) break;
+//			}
+//		}
+//
+//		for (smalli d = 0; que_t0 < que_h; ++d) {
+//			idi num_sibling_es = 0, num_child_es = 0;
+//
+//			// For parallel adding to que
+//			idi que_size = que_t1 - que_t0;
+//			vector<idi> offsets_tmp_queue(que_size);
+//#pragma omp parallel for
+//			for (idi i_q = 0; i_q < que_size; ++i_q) {
+//				offsets_tmp_queue[i_q] = G.out_degrees[que[que_t0 + i_q]];
+//			}
+//			idi num_neighbors = prefix_sum_for_offsets(offsets_tmp_queue);
+//			vector<idi> tmp_que(num_neighbors);
+//			vector<idi> sizes_tmp_que(que_size, 0);
+//			// For parallel adding to sibling_es
+//			vector< pair<idi, idi> > tmp_sibling_es(num_neighbors);
+//			vector<idi> sizes_tmp_sibling_es(que_size, 0);
+//			// For parallel adding to child_es
+//			vector< pair<idi, idi> > tmp_child_es(num_neighbors);
+//			vector<idi> sizes_tmp_child_es(que_size, 0);
+//
+//#pragma omp parallel for
+//			for (idi que_i = que_t0; que_i < que_t1; ++que_i) {
+//				idi tmp_que_i = que_i - que_t0; // location in the tmp_que
+//				idi v = que[que_i];
+//				idi i_start = G.vertices[v];
+//				idi i_bound = i_start + G.out_degrees[v];
+//				for (idi i = i_start; i < i_bound; ++i) {
+//					idi tv = G.out_edges[i];
+//					smalli td = d + 1;
+//
+//					if (d > tmp_d[tv]) {
+//						;
+//					}
+//					else if (d == tmp_d[tv]) {
+//						if (v < tv) { // ??? Why need v < tv !!! Because it's a undirected graph.
+//							idi &size_in_group = sizes_tmp_sibling_es[tmp_que_i];
+//							tmp_sibling_es[offsets_tmp_queue[tmp_que_i] + size_in_group].first = v;
+//							tmp_sibling_es[offsets_tmp_queue[tmp_que_i] + size_in_group].second = tv;
+//							++size_in_group;
+////							sibling_es[num_sibling_es].first  = v;
+////							sibling_es[num_sibling_es].second = tv;
+////							++num_sibling_es;
 //						}
-						idi &size_in_group = sizes_tmp_child_es[tmp_que_i];
-						tmp_child_es[offsets_tmp_queue[tmp_que_i] + size_in_group].first = v;
-						tmp_child_es[offsets_tmp_queue[tmp_que_i] + size_in_group].second = tv;
-						++size_in_group;
-//						child_es[num_child_es].first  = v;
-//						child_es[num_child_es].second = tv;
-//						++num_child_es;
-					}
-				}
-			}
-
-			// From tmp_sibling_es to sibling_es
-			idi total_sizes_tmp_queue = prefix_sum_for_offsets(sizes_tmp_sibling_es);
-			collect_into_queue(
-						tmp_sibling_es,
-						offsets_tmp_queue,
-						sizes_tmp_sibling_es,
-						total_sizes_tmp_queue,
-						sibling_es,
-						num_sibling_es);
-
-#pragma omp parallel for
-			for (idi i = 0; i < num_sibling_es; ++i) {
-				idi v = sibling_es[i].first, w = sibling_es[i].second;
-				__sync_or_and_fetch(&tmp_s[v].second, tmp_s[w].first);
-				__sync_or_and_fetch(&tmp_s[w].second, tmp_s[v].first);
-//				tmp_s[v].second |= tmp_s[w].first;
-//				tmp_s[w].second |= tmp_s[v].first;
-			}
-
-			// From tmp_child_es to child_es
-			total_sizes_tmp_queue = prefix_sum_for_offsets(sizes_tmp_child_es);
-			collect_into_queue(
-						tmp_child_es,
-						offsets_tmp_queue,
-						sizes_tmp_child_es,
-						total_sizes_tmp_queue,
-						child_es,
-						num_child_es);
-
-#pragma omp parallel for
-			for (idi i = 0; i < num_child_es; ++i) {
-				idi v = child_es[i].first, c = child_es[i].second;
-				__sync_or_and_fetch(&tmp_s[c].first, tmp_s[v].first);
-				__sync_or_and_fetch(&tmp_s[c].second, tmp_s[v].second);
-//				tmp_s[c].first  |= tmp_s[v].first;
-//				tmp_s[c].second |= tmp_s[v].second;
-			}
-
-			// From tmp_que to que
-			total_sizes_tmp_queue = prefix_sum_for_offsets(sizes_tmp_que);
-			collect_into_queue(
-						tmp_que,
-						offsets_tmp_queue,
-						sizes_tmp_que,
-						total_sizes_tmp_queue,
-						que,
-						que_h);
-
-			que_t0 = que_t1;
-			que_t1 = que_h;
-		}
-
-#pragma omp parallel for
-		for (idi v = 0; v < num_v; ++v) {
-			L[v].bp_dist[i_bpspt] = tmp_d[v];
-			L[v].bp_sets[i_bpspt][0] = tmp_s[v].first; // S_r^{-1}
-			L[v].bp_sets[i_bpspt][1] = tmp_s[v].second & ~tmp_s[v].first; // Only need those r's neighbors who are not already in S_r^{-1}
-		}
-	}
-
-	free(tmp_d);
-}
+//					} else { // d < tmp_d[tv]
+//						if (tmp_d[tv] == SMALLI_MAX) {
+//							if (CAS(tmp_d + tv, SMALLI_MAX, td)) { // tmp_d[tv] = td
+//								tmp_que[offsets_tmp_queue[tmp_que_i] + sizes_tmp_que[tmp_que_i]++] = tv;
+//							}
+//						}
+////						if (tmp_d[tv] == SMALLI_MAX) {
+////							que[que_h++] = tv;
+////							tmp_d[tv] = td;
+////						}
+//						idi &size_in_group = sizes_tmp_child_es[tmp_que_i];
+//						tmp_child_es[offsets_tmp_queue[tmp_que_i] + size_in_group].first = v;
+//						tmp_child_es[offsets_tmp_queue[tmp_que_i] + size_in_group].second = tv;
+//						++size_in_group;
+////						child_es[num_child_es].first  = v;
+////						child_es[num_child_es].second = tv;
+////						++num_child_es;
+//					}
+//				}
+//			}
+//
+//			// From tmp_sibling_es to sibling_es
+//			idi total_sizes_tmp_queue = prefix_sum_for_offsets(sizes_tmp_sibling_es);
+//			collect_into_queue(
+//						tmp_sibling_es,
+//						offsets_tmp_queue,
+//						sizes_tmp_sibling_es,
+//						total_sizes_tmp_queue,
+//						sibling_es,
+//						num_sibling_es);
+//
+//#pragma omp parallel for
+//			for (idi i = 0; i < num_sibling_es; ++i) {
+//				idi v = sibling_es[i].first, w = sibling_es[i].second;
+//				__sync_or_and_fetch(&tmp_s[v].second, tmp_s[w].first);
+//				__sync_or_and_fetch(&tmp_s[w].second, tmp_s[v].first);
+////				tmp_s[v].second |= tmp_s[w].first;
+////				tmp_s[w].second |= tmp_s[v].first;
+//			}
+//
+//			// From tmp_child_es to child_es
+//			total_sizes_tmp_queue = prefix_sum_for_offsets(sizes_tmp_child_es);
+//			collect_into_queue(
+//						tmp_child_es,
+//						offsets_tmp_queue,
+//						sizes_tmp_child_es,
+//						total_sizes_tmp_queue,
+//						child_es,
+//						num_child_es);
+//
+//#pragma omp parallel for
+//			for (idi i = 0; i < num_child_es; ++i) {
+//				idi v = child_es[i].first, c = child_es[i].second;
+//				__sync_or_and_fetch(&tmp_s[c].first, tmp_s[v].first);
+//				__sync_or_and_fetch(&tmp_s[c].second, tmp_s[v].second);
+////				tmp_s[c].first  |= tmp_s[v].first;
+////				tmp_s[c].second |= tmp_s[v].second;
+//			}
+//
+//			// From tmp_que to que
+//			total_sizes_tmp_queue = prefix_sum_for_offsets(sizes_tmp_que);
+//			collect_into_queue(
+//						tmp_que,
+//						offsets_tmp_queue,
+//						sizes_tmp_que,
+//						total_sizes_tmp_queue,
+//						que,
+//						que_h);
+//
+//			que_t0 = que_t1;
+//			que_t1 = que_h;
+//		}
+//
+//#pragma omp parallel for
+//		for (idi v = 0; v < num_v; ++v) {
+//			L[v].bp_dist[i_bpspt] = tmp_d[v];
+//			L[v].bp_sets[i_bpspt][0] = tmp_s[v].first; // S_r^{-1}
+//			L[v].bp_sets[i_bpspt][1] = tmp_s[v].second & ~tmp_s[v].first; // Only need those r's neighbors who are not already in S_r^{-1}
+//		}
+//	}
+//
+//	free(tmp_d);
+//}
 
 
 // Function for initializing at the begin of a batch
@@ -688,8 +688,8 @@ inline void ParaVertexCentricPLL::push_labels(
 			return;
 		}
 		const IndexType &L_tail = L[v_tail];
-		_mm_prefetch(&L_tail.bp_dist[0], _MM_HINT_T0);
-		_mm_prefetch(&L_tail.bp_sets[0][0], _MM_HINT_T0);
+//		_mm_prefetch(&L_tail.bp_dist[0], _MM_HINT_T0);
+//		_mm_prefetch(&L_tail.bp_sets[0][0], _MM_HINT_T0);
 		// Traverse v_head's last inserted labels
 		for (idi l_i = l_i_start; l_i < l_i_bound; ++l_i) {
 			idi label_root_id = Lv.vertices[l_i];
@@ -706,28 +706,28 @@ inline void ParaVertexCentricPLL::push_labels(
 
 			// Bit Parallel Checking: if label_real_id to v_tail has shorter distance already
 //			++total_check_count;
-			const IndexType &L_label = L[label_real_id];
-			bool no_need_add = false;
-			_mm_prefetch(&L_label.bp_dist[0], _MM_HINT_T0);
-			_mm_prefetch(&L_label.bp_sets[0][0], _MM_HINT_T0);
-		    for (inti i = 0; i < BITPARALLEL_SIZE; ++i) {
-		      inti td = L_label.bp_dist[i] + L_tail.bp_dist[i];
-		      if (td - 2 <= iter) {
-		        td +=
-		            (L_label.bp_sets[i][0] & L_tail.bp_sets[i][0]) ? -2 :
-		            ((L_label.bp_sets[i][0] & L_tail.bp_sets[i][1]) |
-		             (L_label.bp_sets[i][1] & L_tail.bp_sets[i][0]))
-		            ? -1 : 0;
-		        if (td <= iter) {
-		        	no_need_add = true;
-//		        	++bp_hit_count;
-		        	break;
-		        }
-		      }
-		    }
-		    if (no_need_add) {
-		    	continue;
-		    }
+//			const IndexType &L_label = L[label_real_id];
+//			bool no_need_add = false;
+//			_mm_prefetch(&L_label.bp_dist[0], _MM_HINT_T0);
+//			_mm_prefetch(&L_label.bp_sets[0][0], _MM_HINT_T0);
+//		    for (inti i = 0; i < BITPARALLEL_SIZE; ++i) {
+//		      inti td = L_label.bp_dist[i] + L_tail.bp_dist[i];
+//		      if (td - 2 <= iter) {
+//		        td +=
+//		            (L_label.bp_sets[i][0] & L_tail.bp_sets[i][0]) ? -2 :
+//		            ((L_label.bp_sets[i][0] & L_tail.bp_sets[i][1]) |
+//		             (L_label.bp_sets[i][1] & L_tail.bp_sets[i][0]))
+//		            ? -1 : 0;
+//		        if (td <= iter) {
+//		        	no_need_add = true;
+////		        	++bp_hit_count;
+//		        	break;
+//		        }
+//		      }
+//		    }
+//		    if (no_need_add) {
+//		    	continue;
+//		    }
 
 		    // Record label_root_id as once selected by v_tail
 			SI_v_tail.indicator.set(label_root_id);
@@ -967,63 +967,128 @@ inline void ParaVertexCentricPLL::reset_at_end(
 inline idi ParaVertexCentricPLL::prefix_sum_for_offsets(
 									vector<idi> &offsets)
 {
-//	vector<idi> tmp_offsets(offsets);
-	// Get the offset as the prefix sum of out degrees
-	idi offset_sum = 0;
-	idi size = offsets.size();
-//	printf("size: %u\n", size);//test
-	for (idi i = 0; i < size; ++i) {
-		idi tmp = offsets[i];
-		offsets[i] = offset_sum;
-		offset_sum += tmp;
-	}
-	return offset_sum;
+	idi size_offsets = offsets.size();
+	if (1 == size_offsets) {
+		idi tmp = offsets[0];
+		offsets[0] = 0;
+		return tmp;
+	} else if (size_offsets < 2048) {
+		idi offset_sum = 0;
+		idi size = size_offsets;
+		for (idi i = 0; i < size; ++i) {
+			idi tmp = offsets[i];
+			offsets[i] = offset_sum;
+			offset_sum += tmp;
+		}
+		return offset_sum;
+	} else {
+		// Parallel Prefix Sum, based on Guy E. Blelloch's Prefix Sums and Their Applications
+		idi last_element = offsets[size_offsets - 1];
+		//	idi size = 1 << ((idi) log2(size_offsets - 1) + 1);
+		idi size = 1 << ((idi) log2(size_offsets));
+		//	vector<idi> nodes(size, 0);
+		idi tmp_element = offsets[size - 1];
+		//#pragma omp parallel for
+		//	for (idi i = 0; i < size_offsets; ++i) {
+		//		nodes[i] = offsets[i];
+		//	}
 
-	
-//	{
-////		vector<idi> offsets(tmp_offsets);
-//		// Parallel Prefix Sum, based on Guy E. Blelloch's Prefix Sums and Their Applications
-//		idi size_offsets = offsets.size();
-//		idi size = 1 << ((idi) log2(size_offsets - 1) + 1);
-//		printf("size_offsets: %u size: %u\n", size_offsets, size);//test
-//		vector<idi> nodes(size, 0);
-//		//	copy(offsets.begin(), offsets.end(), nodes.begin());
-//#pragma omp parallel for
-//		for (idi i = 0; i < size_offsets; ++i) {
-//			nodes[i] = offsets[i];
-//		}
-//
-//		// Up-Sweep (Reduce) Phase
-//		for (idi d = 0; d < log2(size); ++d) {
-//			idi by = 1 << (d + 1);
-//#pragma omp parallel for
-//			for (idi k = 0; k < size; k += by) {
-//				nodes[k + (1 << (d + 1)) - 1] += nodes[k + (1 << d) - 1];
-//			}
-//		}
-//
-//		// Down-Sweep Phase
-//		*nodes.rbegin() = 0;
-//		for (idi d = log2(size) - 1; d != (idi) -1 ; --d) {
-//			idi by = 1 << (d + 1);
-//#pragma omp parallel for
-//			for (idi k = 0; k < size; k += by) {
-//				idi t = nodes[k + (1 << d) - 1];
-//				nodes[k + (1 << d) - 1] = nodes[k + (1 << (d + 1)) - 1];
-//				nodes[k + (1 << (d + 1)) - 1] += t;
-//			}
-//		}
-//
-//
-//#pragma omp parallel for
-//		for (idi i = 2; i < size_offsets; ++i) {
-//			offsets[i - 1] = nodes[i];
-//		}
-//		offsets[size_offsets - 1] += offsets[size_offsets - 2];
-//
-//		return offsets[size_offsets - 1];
+		// Up-Sweep (Reduce) Phase
+		idi log2size = log2(size);
+		for (idi d = 0; d < log2size; ++d) {
+			idi by = 1 << (d + 1);
+#pragma omp parallel for
+			for (idi k = 0; k < size; k += by) {
+				offsets[k + (1 << (d + 1)) - 1] += offsets[k + (1 << d) - 1];
+			}
+		}
+
+		// Down-Sweep Phase
+		offsets[size - 1] = 0;
+		for (idi d = log2(size) - 1; d != (idi) -1 ; --d) {
+			idi by = 1 << (d + 1);
+#pragma omp parallel for
+			for (idi k = 0; k < size; k += by) {
+				idi t = offsets[k + (1 << d) - 1];
+				offsets[k + (1 << d) - 1] = offsets[k + (1 << (d + 1)) - 1];
+				offsets[k + (1 << (d + 1)) - 1] += t;
+			}
+		}
+
+		//#pragma omp parallel for
+		//	for (idi i = 0; i < size_offsets; ++i) {
+		//		offsets[i] = nodes[i];
+		//	}
+		if (size != size_offsets) {
+			idi tmp_sum = offsets[size - 1] + tmp_element;
+			for (idi i = size; i < size_offsets; ++i) {
+				idi t = offsets[i];
+				offsets[i] = tmp_sum;
+				tmp_sum += t;
+			}
+		}
+
+		return offsets[size_offsets - 1] + last_element;
+	}
+//	// Get the offset as the prefix sum of out degrees
+//	idi offset_sum = 0;
+//	idi size = offsets.size();
+//	for (idi i = 0; i < size; ++i) {
+//		idi tmp = offsets[i];
+//		offsets[i] = offset_sum;
+//		offset_sum += tmp;
 //	}
 //	return offset_sum;
+
+//// Parallel Prefix Sum, based on Guy E. Blelloch's Prefix Sums and Their Applications
+//	idi size_offsets = offsets.size();
+//	idi last_element = offsets[size_offsets - 1];
+////	idi size = 1 << ((idi) log2(size_offsets - 1) + 1);
+//	idi size = 1 << ((idi) log2(size_offsets));
+////	vector<idi> nodes(size, 0);
+//	idi tmp_element = offsets[size - 1];
+////#pragma omp parallel for
+////	for (idi i = 0; i < size_offsets; ++i) {
+////		nodes[i] = offsets[i];
+////	}
+//
+//	// Up-Sweep (Reduce) Phase
+//	idi log2size = log2(size);
+//	for (idi d = 0; d < log2size; ++d) {
+//		idi by = 1 << (d + 1);
+//#pragma omp parallel for
+//		for (idi k = 0; k < size; k += by) {
+//			offsets[k + (1 << (d + 1)) - 1] += offsets[k + (1 << d) - 1];
+//		}
+//	}
+//
+//	// Down-Sweep Phase
+//	offsets[size - 1] = 0;
+//	for (idi d = log2(size) - 1; d != (idi) -1 ; --d) {
+//		idi by = 1 << (d + 1);
+//#pragma omp parallel for
+//		for (idi k = 0; k < size; k += by) {
+//			idi t = offsets[k + (1 << d) - 1];
+//			offsets[k + (1 << d) - 1] = offsets[k + (1 << (d + 1)) - 1];
+//			offsets[k + (1 << (d + 1)) - 1] += t;
+//		}
+//	}
+//
+////#pragma omp parallel for
+////	for (idi i = 0; i < size_offsets; ++i) {
+////		offsets[i] = nodes[i];
+////	}
+//	if (size != offsets.size()) {
+//		idi tmp_sum = offsets[size - 1] + tmp_element;
+//		idi i_bound = offsets.size();
+//		for (idi i = size; i < i_bound; ++i) {
+//			idi t = offsets[i];
+//			offsets[i] = tmp_sum;
+//			tmp_sum += t;
+//		}
+//	}
+//
+//	return offsets[size_offsets - 1] + last_element;
 }
 
 // Collect elements in the tmp_queue into the queue
@@ -1365,10 +1430,10 @@ void ParaVertexCentricPLL::construct(const Graph &G)
 
 	double bp_labeling_time = -WallTimer::get_time_mark();
 //	printf("BP labeling...\n"); //test
-	bit_parallel_labeling(
-						G,
-						L,
-						used_bp_roots);
+//	bit_parallel_labeling(
+//						G,
+//						L,
+//						used_bp_roots);
 	bp_labeling_time += WallTimer::get_time_mark();
 
 
@@ -1548,23 +1613,23 @@ void ParaVertexCentricPLL::switch_labels_to_old_id(
 	idi v;
 	while (std::cin >> u >> v) {
 		weighti dist = WEIGHTI_MAX;
-		// Bit Parallel Check
-		const IndexType &idx_u = L[rank[u]];
-		const IndexType &idx_v = L[rank[v]];
-
-		for (inti i = 0; i < BITPARALLEL_SIZE; ++i) {
-			int td = idx_v.bp_dist[i] + idx_u.bp_dist[i];
-			if (td - 2 <= dist) {
-				td +=
-					(idx_v.bp_sets[i][0] & idx_u.bp_sets[i][0]) ? -2 :
-					((idx_v.bp_sets[i][0] & idx_u.bp_sets[i][1])
-							| (idx_v.bp_sets[i][1] & idx_u.bp_sets[i][0]))
-							? -1 : 0;
-				if (td < dist) {
-					dist = td;
-				}
-			}
-		}
+//		// Bit Parallel Check
+//		const IndexType &idx_u = L[rank[u]];
+//		const IndexType &idx_v = L[rank[v]];
+//
+//		for (inti i = 0; i < BITPARALLEL_SIZE; ++i) {
+//			int td = idx_v.bp_dist[i] + idx_u.bp_dist[i];
+//			if (td - 2 <= dist) {
+//				td +=
+//					(idx_v.bp_sets[i][0] & idx_u.bp_sets[i][0]) ? -2 :
+//					((idx_v.bp_sets[i][0] & idx_u.bp_sets[i][1])
+//							| (idx_v.bp_sets[i][1] & idx_u.bp_sets[i][0]))
+//							? -1 : 0;
+//				if (td < dist) {
+//					dist = td;
+//				}
+//			}
+//		}
 
 		// Normal Index Check
 		const auto &Lu = new_L[u];
