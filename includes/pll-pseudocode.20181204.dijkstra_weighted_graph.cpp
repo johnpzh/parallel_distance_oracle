@@ -366,8 +366,11 @@ bool PrunedLandmarkLabeling<kNumBitParallelRoots>
       que.push_back(make_pair(0, r));
       while (que is not empty) {
         int v = vertex in que with min dst_r[v];
-        uint8_t v_dist = dst_r[v];
+        uint8_t v_dist = distance of v in que; // need to check later
         que.pop(); // remove v from que
+        if (v_dist > dst_r[v]) {
+          continue; // In case some vertices are added twice into que
+        }
         std::pair<std::vector<int>, std::vector<uint8_t> >
               &tmp_idx_v = tmp_idx[v];
           index_t &idx_v = index_[inv[v]];
