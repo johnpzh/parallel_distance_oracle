@@ -32,13 +32,15 @@ void sending_message(
 			if (tmp_dist < dist_table[r][w]) {
 				// Mark r as a candidate of w
 				cand_dist_table[w][r] = tmp_dist;
-				has_candidates_queue.enqueue(w); // Here needs a bitmap to ensure that w is only added once.
+				has_candidates_queue.enqueue(w); 
+					// Here needs a bitmap to ensure that w is only added once.
 			}
 		}
 	}
 }
 
-// Function: return false if shortest distance is covered by other path, return true if the shortest distance is obtained at first time.
+// Function: return false if shortest distance is covered by other path, 
+// return true if the shortest distance is obtained at first time.
 bool distance_query(
 		candidate c,
 		vertex v,
@@ -59,15 +61,18 @@ bool distance_query(
 }
 
 // Function: vertex-centric labeling for weighted graphs;
-// Activate all vertices at the beginning, build a distance table at first, then build the index according to the distance table.
+// Activate all vertices at the beginning, build a distance table at first, 
+// then build the index according to the distance table.
 void vertex_centric_labeling(
 		Graph G,
 		vector<IndexType> &L)
 {
 	An active queue is vector<idi> active_queue(num_v);
 	An queue storing all vertices which have candidates is vector<idi> has_candidates_queue(num_v);
-	The distance table is vector< vector<weighti> > dist_table(num_v, vector<weighti>(num_v, INF)); // The distance table is N by N, recording the shortest distance so far from every root to every vertex.
-	The distance candidate table is vector< vector<weighti> > cand_dist_table(num_v, vector<weighti>(num_v, INF)); // Temporary distance table, recording in the current iteration the traversing distancefrom a vertex to a root
+	The distance table is vector< vector<weighti> > dist_table(num_v, vector<weighti>(num_v, INF)); 
+		// The distance table is N by N, recording the shortest distance so far from every root to every vertex.
+	The distance candidate table is vector< vector<weighti> > cand_dist_table(num_v, vector<weighti>(num_v, INF)); 
+		// Temporary distance table, recording in the current iteration the traversing distancefrom a vertex to a root
 
 	/*
 	First, use vertex-centric method, all vertices are sending messages
