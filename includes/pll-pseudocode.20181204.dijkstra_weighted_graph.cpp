@@ -364,6 +364,7 @@ bool PrunedLandmarkLabeling<kNumBitParallelRoots>
       using dist_vid_pair = pair<uint8_t, int>;
       priority_queue< dist_vid_pair, vector<dist_vid_pair> , greater<dist_vid_pair> > que;
       que.push_back(make_pair(0, r));
+	  dst_r[r] = 0;
       while (que is not empty) {
         int v = vertex in que with min dst_r[v];
         uint8_t v_dist = distance of v in que; // need to check later
