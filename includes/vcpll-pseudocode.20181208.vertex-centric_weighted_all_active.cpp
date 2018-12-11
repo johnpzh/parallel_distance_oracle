@@ -1,5 +1,5 @@
-// Structure for the type of label
-// As for weighted graph, the previous 3-level-index label structure is
+// Structure for the type of label.
+// For weighted graph, the previous 3-level-index label structure is
 // not helpful, because the distance is not the same in every iteration.
 struct IndexType {
 	vector<idi> vertices;
@@ -18,21 +18,18 @@ void sending_message(
 	for (vertex w = every neighbor of v) {
 		weighti dist_v_w = weight(v, w); // weight of edge (v, w).
 		// Check every source
-		for (idi r = 0; r < num_v; ++r) {
-			if (w <= r) {
-				// r should only access to a lower rank vertex
-				break;
-			}
+		for (idi r = 0; r < w; ++r) {
+			// r should only access to a lower rank vertex
 			weighti dist_r_v = dist_table[r][v]; // distance of (r, v)
 			if (dist_r_v == INF) {
 				// vertex r and vertex v has no path between them yet.
 				continue;
 			}
 			weighti tmp_dist = dist_r_v + dist_v_w;
-			if (tmp_dist < dist_table[r][w]) {
+			if (tmp_dist < dist_table[r][w] && tmp_dist < cand_dist_table[w][r]) {
 				// Mark r as a candidate of w
 				cand_dist_table[w][r] = tmp_dist;
-				has_candidates_queue.enqueue(w); 
+				has_candidates_queue.enqueue(w); //
 					// Here needs a bitmap to ensure that w is only added once.
 			}
 		}
@@ -72,7 +69,7 @@ void vertex_centric_labeling(
 	The distance table is vector< vector<weighti> > dist_table(num_v, vector<weighti>(num_v, INF)); 
 		// The distance table is N by N, recording the shortest distance so far from every root to every vertex.
 	The distance candidate table is vector< vector<weighti> > cand_dist_table(num_v, vector<weighti>(num_v, INF)); 
-		// Temporary distance table, recording in the current iteration the traversing distancefrom a vertex to a root
+		// Temporary distance table, recording in the current iteration the traversing distancefrom a vertex to a root. The table probably could replaced by a queue and bitmap.
 
 	/*
 	First, use vertex-centric method, all vertices are sending messages
@@ -92,7 +89,7 @@ void vertex_centric_labeling(
 	while (!active_queue.empty()) {
 		for (every vertex v in the active_queue) {
 			// vertex v send distance messages to all its neighbors;
-			// every neighbor get its candidates.
+			// every neighbor gets its candidates.
 			sending_message(
 					active vertex v,
 					Graph G,
@@ -137,11 +134,11 @@ void vertex_centric_labeling(
 	*/
 	for (idi r = 0; r < num_v; ++r) {
 		// From every root
-		Insert (r, 0) into L[r];
+		Insert label (r, 0) into L[r];
 		// To every vertex (with lower rank)
 		for (idi v = r + 1; v < num_v; ++v) {
 			if (dist_table[r][v] != INF) {
-				Insert (r, dist_table[r][v]) into L[v];
+				Insert label (r, dist_table[r][v]) into L[v];
 			}
 		}
 	}
