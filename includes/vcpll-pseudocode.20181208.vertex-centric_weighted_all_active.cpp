@@ -87,6 +87,7 @@ void vertex_centric_labeling(
 	// Active vertices sending messages.
 	// Those vertices received messages are put into has_candidates_queue.
 	while (!active_queue.empty()) {
+		// Traverse all active vertex and send distances
 		for (every vertex v in the active_queue) {
 			// vertex v send distance messages to all its neighbors;
 			// every neighbor gets its candidates.
