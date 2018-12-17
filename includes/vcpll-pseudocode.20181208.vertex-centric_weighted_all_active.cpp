@@ -200,13 +200,13 @@ void vertex_centric_labeling(
 				// Distance check for pruning
 				weighti query_dist_v_c;
 				if (INF == (query_dist_v_c = distance_query(
-													vertex v,
-													candidate c,
-													distance table dist_table,
-													labels table labels_table,
-													candidate distance table cand_dist_table,
-													number of vertices num_v,
-													distance tmp_dist_v_c))) {
+							vertex v,
+							candidate c,
+							distance table dist_table,
+							labels table labels_table,
+							candidate distance table cand_dist_table,
+							number of vertices num_v,
+							distance tmp_dist_v_c))) {
 					// Record the new distance in the label table
 					labels_table[v][c] = tmp_dist_v_c;
 					need_activate = true;
