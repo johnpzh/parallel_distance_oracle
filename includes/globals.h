@@ -119,11 +119,11 @@ public:
 	{
 		setlocale(LC_NUMERIC, "");
 		if (metrics == (unsigned) -1) {
-			printf("L3_cache_access: %'llu cache_misses: %'llu miss_rate: %.2f%%\n", values[0], values[1], values[1] * 100.0 / values[0]);
-			printf("Total_instructions_executed: %'llu\n", values[2]);
+			printf("L3_cache_access: %'lu cache_misses: %'lu miss_rate: %.2f%%\n", values[0], values[1], values[1] * 100.0 / values[0]);
+			printf("Total_instructions_executed: %'lu\n", values[2]);
 		} else {
 			printf("%u %.2f\n", metrics, 1.0 * values[1]/values[0]);
-			printf("%u %'llu\n", metrics, values[2]);
+			printf("%u %'lu\n", metrics, values[2]);
 		}
 	}
 
@@ -177,9 +177,9 @@ public:
 	{
 		setlocale(LC_NUMERIC, "");
 		if (metrics == (unsigned) -1) {
-			printf("total_instructions_executed: %'llu\n", value);
+			printf("total_instructions_executed: %'lu\n", value);
 		} else {
-			printf("%u %llu\n", metrics, value);
+			printf("%u %lu\n", metrics, value);
 		}
 	}
 

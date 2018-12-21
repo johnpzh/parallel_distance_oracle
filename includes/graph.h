@@ -112,7 +112,6 @@ Graph::Graph(const char *filename)
 		edge_list.push_back(make_pair(head, tail));
 	}
 	construct(edge_list);
-	edge_list.clear();
 }
 
 // construct the graph from edge_list
@@ -145,12 +144,10 @@ void Graph::construct(const vector< pair<idi, idi> > &edge_list)
 		idi degree = edge_tmp[head].size();
 		out_degrees[head] = degree;
 		for (idi ei = 0; ei < degree; ++ei) {
-			idi tail = edge_tmp[head][ei];
-			out_edges[loc + ei] = tail;
+			out_edges[loc + ei] = edge_tmp[head][ei];
 		}
 		loc += degree;
 	}
-	edge_tmp.clear();
 }
 
 // Rank according to degrees
@@ -188,8 +185,7 @@ vector<idi> Graph::id_transfer(const vector<idi> &rank)
 		idi degree = edge_list[head].size();
 		out_degrees[head] = degree;
 		for (idi ei = 0; ei < degree; ++ei) {
-			idi tail = edge_list[head][ei];
-			out_edges[loc + ei] = tail;
+			out_edges[loc + ei] = edge_list[head][ei];
 		}
 		loc += degree;
 	}
@@ -214,6 +210,204 @@ void Graph::print()
 		}
 	}
 }
+// End: class Graph
+
+class WeightedGraph final {
+//private:
+public:
+	idi num_v = 0;
+	idi num_e = 0;
+	idi *vertices = nullptr;
+	idi *out_edges = nullptr;
+	idi *out_degrees = nullptr;
+	weighti *out_weights = nullptr;
+
+	void construct(
+			const vector< pair<idi, idi> > &edge_list, 
+			const vector<weighti> &weight_list);
+
+//public:
+	// Constructor
+	WeightedGraph() = default;
+	explicit WeightedGraph(const char *filename);
+	explicit WeightedGraph(
+			const vector< pair<idi, idi> > &edge_list,
+			const vector<weighti> &weight_list);
+	~WeightedGraph()
+	{
+		free(vertices);
+		free(out_edges);
+		free(out_degrees);
+		free(out_weights);
+	}
+	idi get_num_v() const
+	{
+		return num_v;
+	}
+	idi get_num_e() const
+	{
+		return num_e;
+	}
+	idi ith_get_edge(idi i, idi e) const
+	{
+		return out_edges[vertices[i] + e];
+	}
+	idi ith_get_out_degree(idi i) const
+	{
+		return out_degrees[i];
+	}
+
+	// Rank according to degrees (right now)
+	vector<idi> make_rank();
+	// Remap vertex id according to its rank, 1 is the highest rank;
+	vector<idi> id_transfer(const vector<idi> &rank);
+	void print();
+	
+}; // class WeightedGraph
+
+// construcgt the graph from the edge list file
+WeightedGraph::WeightedGraph(const char *filename)
+{
+//	construct(filename);
+
+	ifstream ifin(filename);
+	if (ifin.bad()) {
+		fprintf(stderr, "Error: cannot open file %s.\n", filename);
+		exit(EXIT_FAILURE);
+	}
+	string line;
+	idi head;
+	idi tail;
+	inti weight;
+	vector < pair<idi, idi> > edge_list;
+	vector <weighti> weight_list;
+
+	while (getline(ifin, line)) {
+		if (line[0] == '#' || line[0] == '%') {
+			continue;
+		}
+		istringstream lin(line);
+		lin >> head >> tail >> weight;
+		edge_list.push_back(make_pair(head, tail));
+		weight_list.push_back(static_cast<weighti>(weight));
+	}
+	construct(edge_list, weight_list);
+}
+
+// construct the WeightedGraph from edge_list
+WeightedGraph::WeightedGraph(
+		const vector< pair<idi, idi> > &edge_list,
+		const vector<weighti> &weight_list)
+{
+	construct(edge_list, weight_list);
+}
+
+void WeightedGraph::construct(
+		const vector< pair<idi, idi> > &edge_list,
+		const vector<weighti> &weight_list)
+{
+	num_e = 2 * edge_list.size(); // Undirected Graph
+//	num_e = edge_list.size(); // Directed Graph
+	for (const auto &edge: edge_list) {
+		num_v = max(num_v, max(edge.first, edge.second) + 1);
+	}
+	vertices = (idi *) malloc(num_v * sizeof(idi));
+	out_edges = (idi *) malloc(num_e * sizeof(idi));
+	out_degrees = (idi *) malloc(num_v * sizeof(idi));
+	out_weights = (weighti *) malloc(num_e * sizeof(weighti));
+
+	// Sort edge_list according to heads
+	vector< vector<idi> > edge_tmp(num_v);
+	vector< vector<weighti> > weights_tmp(num_v);
+	idi w_i = 0;
+	for (const auto &edge: edge_list) {
+		edge_tmp[edge.first].push_back(edge.second);
+		edge_tmp[edge.second].push_back(edge.first); // Undirected Graph
+		weights_tmp[edge.first].push_back(weight_list[w_i]);
+		weights_tmp[edge.second].push_back(weight_list[w_i]); // Undirected Graph
+		++w_i;
+	}
+	// Get vertices and outEdges
+	idi loc = 0;
+	for (idi head = 0; head < num_v; ++head) {
+		vertices[head] = loc;
+		idi degree = edge_tmp[head].size();
+		out_degrees[head] = degree;
+		for (idi ei = 0; ei < degree; ++ei) {
+			out_edges[loc + ei] = edge_tmp[head][ei];
+			out_weights[loc + ei] = weights_tmp[head][ei];
+		}
+		loc += degree;
+	}
+}
+
+// Rank according to degrees
+vector<idi> WeightedGraph::make_rank()
+{
+	vector< pair<idi, idi> > degree2id;
+	for (idi v = 0; v < num_v; ++v) {
+		degree2id.push_back(make_pair(out_degrees[v], v));
+	}
+	stable_sort(degree2id.rbegin(), degree2id.rend());
+	vector<idi> rank(num_v);
+	for (idi r = 0; r < num_v; ++r) {
+		rank[degree2id[r].second] = r;
+	}
+	return rank;
+}
+
+// Function: transfer vertex IDs according to their ranks
+vector<idi> WeightedGraph::id_transfer(const vector<idi> &rank)
+{
+	// The new edge list
+//	vector< vector<idi> > edge_list(num_v);
+	vector< vector< pair<idi, weighti> > > edge_list(num_v); // pair of (vertex id, edge weight)
+	for (idi v = 0; v < num_v; ++v) {
+		idi new_v = rank[v];
+		idi ei_start = vertices[v];
+		idi ei_bound = ei_start + out_degrees[v];
+		for (idi ei = ei_start; ei < ei_bound; ++ei) {
+			idi new_w = rank[out_edges[ei]];
+//			edge_list[new_v].push_back(new_w);
+			edge_list[new_v].push_back(make_pair(new_w, out_weights[ei]));
+		}
+	}
+	idi loc = 0;
+	for (idi head = 0; head < num_v; ++head) {
+		vertices[head] = loc;
+		sort(edge_list[head].rbegin(), edge_list[head].rend()); // sort neighbors: lower rank first.
+		idi degree = edge_list[head].size();
+		out_degrees[head] = degree;
+		for (idi ei = 0; ei < degree; ++ei) {
+			out_edges[loc + ei] = edge_list[head][ei].first;
+//			out_edges[loc + ei] = edge_list[head][ei];
+			out_weights[loc + ei] = edge_list[head][ei].second;
+		}
+		loc += degree;
+	}
+
+	vector<idi> rank2id(num_v);
+	for (idi v = 0; v < num_v; ++v) {
+		rank2id[rank[v]] = v;
+	}
+	return rank2id;
+}
+
+// print every edge of the graph
+void WeightedGraph::print()
+{
+	printf("num_v: %u, num_e: %u\n", num_v, num_e / 2);
+	for (idi head = 0; head < num_v; ++head) {
+		idi start_e = vertices[head];
+		idi bound_e = start_e + out_degrees[head];
+		for (idi e = start_e; e < bound_e; ++e) {
+			idi tail = out_edges[e];
+			weighti wt = out_weights[e];
+			printf("%u %u %u\n", head, tail, wt);
+		}
+	}
+}
+// End: class WeightedGraph
 
 } // namespace PADO
 

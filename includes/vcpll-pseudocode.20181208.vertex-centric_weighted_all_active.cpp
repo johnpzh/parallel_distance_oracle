@@ -152,7 +152,8 @@ void vertex_centric_labeling(
 		// TODO: need other data structure to record those last inserted distances in the last iteration, then an active vertex will only send its new inserted distances.
 	The distance candidate table is vector< vector<weighti> > cand_dist_table(num_v, vector<weighti>(num_v, INF)); 
 		// Temporary distance table, recording in the current iteration the traversing distancefrom a vertex to a root.
-		// TODO: The candidate table probably could replaced by a queue and bitmap.
+		// TODO: The candidate table probably could replaced by a queue and a distance array; the distance array
+		// acts like a bitmap but restores distances.
 
 	/*
 	First, use vertex-centric method, all vertices are sending messages

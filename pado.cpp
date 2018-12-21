@@ -11,7 +11,8 @@
 #include <unistd.h>
 #include "globals.h"
 #include "graph.h"
-#include "pado.h"
+//#include "pado.h"
+#include "pado_weighted.20181218.beginning.h"
 //#include "pado_para.h"
 //#include "pado_para.20181106.tmp.scalability.h"
 //#include "pado_para.20181115.tmp.parallel_bp.h"
@@ -21,26 +22,29 @@ using namespace PADO;
 void pado(const char filename[])
 {
 //	printf("Reading...\n");//test
-	Graph G(filename);
+	WeightedGraph G(filename);
+//	Graph G(filename);
 
 //	// Test
 //	G.count_low_degrees();
 
 //	G.print();
 //	printf("Ranking...\n");//test
-	vector<idi> rank = G.make_rank();
+	vector<idi> rank = {0, 1, 2, 3};
+	//vector<idi> rank = G.make_rank();
 //	for (idi v = 0; v < rank.size(); ++v) {
 //		printf("vertices %u: rank %u\n", v, rank[v]);//test
 //	}
 	vector<idi> rank2id = G.id_transfer(rank);
-//	G.print();
+	//G.print();
+
 //	printf("Labeling...\n");//test
-//	VertexCentricPLL(G, rank);
+	WeightedVertexCentricPLL VCPLL(G);
 
 //	NUM_THREADS = 1;
 //	omp_set_num_threads(NUM_THREADS);
 //	ParaVertexCentricPLL VCPLL(G);
-	VertexCentricPLL VCPLL(G);
+//	VertexCentricPLL VCPLL(G);
 //	VCPLL.switch_labels_to_old_id(rank2id, rank);
 
 

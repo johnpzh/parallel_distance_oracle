@@ -493,9 +493,9 @@ inline void VertexCentricPLL::push_labels(
 		if (v_tail < roots_start) { // v_tail has higher rank than any roots, then no roots can push new labels to it.
 			return;
 		}
-		if (v_tail <= Lv.vertices[l_i_start] + roots_start) { // v_tail has higher rank than any v_head's labels
-			return;
-		}
+//		if (v_tail <= Lv.vertices[l_i_start] + roots_start) { // v_tail has higher rank than any v_head's labels
+//			return;
+//		} // This condition cannot be used anymore since v_head's last inserted labels are not ordered from higher rank to lower rank now, because v_head's candidate set is a queue now rather than a bitmap. For a queue, its order of candidates are not ordered by ranks.
 		const IndexType &L_tail = L[v_tail];
 		_mm_prefetch(&L_tail.bp_dist[0], _MM_HINT_T0);
 		_mm_prefetch(&L_tail.bp_sets[0][0], _MM_HINT_T0);
