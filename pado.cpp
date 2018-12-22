@@ -21,25 +21,18 @@ using namespace PADO;
 
 void pado(const char filename[])
 {
-//	printf("Reading...\n");//test
+	printf("Reading...\n"); fflush(stdout);//test
 	WeightedGraph G(filename);
-//	Graph G(filename);
-
-//	// Test
-//	G.count_low_degrees();
-
-//	G.print();
-//	printf("Ranking...\n");//test
-	vector<idi> rank = {0, 1, 2, 3};
-	//vector<idi> rank = G.make_rank();
+	printf("Ranking...\n"); fflush(stdout);//test
+	vector<idi> rank = G.make_rank();
 //	for (idi v = 0; v < rank.size(); ++v) {
 //		printf("vertices %u: rank %u\n", v, rank[v]);//test
 //	}
 	vector<idi> rank2id = G.id_transfer(rank);
 	//G.print();
-
-//	printf("Labeling...\n");//test
+	printf("Labeling...\n"); fflush(stdout);//test
 	WeightedVertexCentricPLL VCPLL(G);
+	VCPLL.switch_labels_to_old_id(rank2id, rank);
 
 //	NUM_THREADS = 1;
 //	omp_set_num_threads(NUM_THREADS);

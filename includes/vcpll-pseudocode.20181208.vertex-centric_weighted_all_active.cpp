@@ -51,6 +51,7 @@ weighti distance_query(
 {
 	// Traverse all available hops of v, to see if they reach c
 	for (idi hop_i = 0; hop_i < c, ++hop_i) {
+		// Check label distances
 		if (labels_table[v][hop_i] == INF || labels_table[c][hop_i] == INF) {
 			continue;
 		}
@@ -59,12 +60,23 @@ weighti distance_query(
 			return label_v_c;
 		}
 
+		// Check candidate distances
 		if (cand_dist_table[v][hop_i] == INF || cand_dist_table[c][hop_i] == INF) {
 			continue;
 		}
 		weighti cand_dist_v_c = cand_dist_table[v][hop_i] + cand_dist_table[c][hop_i];
 		if (cand_dist_v_c <= tmp_dist_v_c) {
 			return cand_dist_v_c;
+		}
+
+		// Cross check
+		weighti label_v_cand_c = labels_table[v][hop_i] + cand_dist_table[c][hop_i];
+		if (label_v_cand_c <= tmp_dist_v_c) {
+			return label_v_cand_c;
+		}
+		weighti cand_v_label_c = cand_dist_table[v][hop_i] + labels_table[c][hop_i];
+		if (cand_v_label_c <= tmp_dist_v_c) {
+			return cand_v_label_c;
 		}
 	}
 
