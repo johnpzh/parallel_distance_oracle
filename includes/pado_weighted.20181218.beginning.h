@@ -155,6 +155,13 @@ private:
 			idi roots_start,
 			inti roots_size,
 			idi num_v);
+	inline void send_back(
+			idi s,
+			idi r_root_id,
+			const WeightedGraph &G,
+			vector< vector<weighti> > &dists_table,
+			vector< vector<weighti> > &labels_table,
+			idi roots_start);
 //	inline void insert_label_only(
 //			idi cand_root_id,
 //			idi v_id,
@@ -511,6 +518,8 @@ inline weighti WeightedVertexCentricPLL::distance_query(
 //	return true;
 //}
 
+// Function: after finishing the labels_table, build the index according to it.
+// If labels_table[v][r] != INF, then label (r, labels_table[v][r]) should be added into L[v].
 inline void WeightedVertexCentricPLL::update_index(
 		vector<IndexType> &L,
 		vector< vector<weighti> > &labels_table,
@@ -531,6 +540,58 @@ inline void WeightedVertexCentricPLL::update_index(
 	for (idi r = roots_start; r < roots_bound; ++r) {
 		L[r].vertices.push_back(r);
 		L[r].distances.push_back(0);
+	}
+}
+
+inline void WeightedVertexCentricPLL::send_back(
+		idi s,
+		idi r_root_id,
+		const WeightedGraph &G,
+		vector< vector<weighti> > &dists_table,
+		vector< vector<weighti> > &labels_table,
+		idi roots_start)
+{
+	idi r_real_id = r_root_id + roots_start;
+	idi num_v = G.get_num_v();
+	// Active queue
+	vector<idi> active_queue(num_v);
+	idi end_active_queue = 0;
+	vector<bool> is_active(num_v, false);
+	// Temporary Active queue
+	vector<idi> tmp_active_queue(num_v);
+	idi end_tmp_active_queue = 0;
+	vector<bool> tmp_is_active(num_v, false);
+
+	active_queue[end_active_queue++] = s;
+	while (0 != end_active_queue) {
+		// Traverse active queue, get every vertex and its distance to the target
+		for (idi i_q = 0; i_q < end_active_queue; ++i_q) {
+			idi v = active_queue[i_q];
+			is_active[v] = false; // reset flag
+			weighti dist_r_v = dists_table[r_root_id][v];
+			// Traverse all neighbors of vertex v
+			idi e_i_start = G.vertices[v];
+			idi e_i_bound = e_i_start + G.out_degrees[v];
+			for (idi e_i = e_i_start; e_i < e_i_bound; ++e_i) {
+				idi w = G.out_edges[e_i];
+				if (w < r_real_id) {
+					// Neighbors are ordered by ranks from low to high
+					break;
+				}
+				weighti tmp_dist_r_w = dist_r_v + G.out_weights[e_i];
+				if (tmp_dist_r_w <= dists_table[r_root_id][w]) {
+					dists_table[r_root_id][w] = tmp_dist_r_w;
+					labels_table[w][r_root_id] = WEIGHTI_MAX;
+					if (!tmp_is_active[w]) {
+						tmp_is_active[w] = true;
+						tmp_active_queue[end_tmp_active_queue++] = w;
+					}
+				}
+			}
+		}
+		end_active_queue = end_tmp_active_queue;
+		end_tmp_active_queue = 0;
+		active_queue.swap(tmp_active_queue);
 	}
 }
 
@@ -627,7 +688,6 @@ inline void WeightedVertexCentricPLL::batch_process(
 						inti roots_size, // how many roots in the batch
 						vector<IndexType> &L)
 {
-	printf("@630 batch_process\n"); fflush(stdout);//test
 	initializing_time -= WallTimer::get_time_mark();
 	static const idi num_v = G.get_num_v();
 	// Active queue
@@ -643,16 +703,13 @@ inline void WeightedVertexCentricPLL::batch_process(
 //	static idi end_once_candidated_queue = 0;
 //	static vector<bool> once_candidated(num_v, false);
 	// Every vertex has its candidate set and queue.
-	printf("@646 batch_process\n"); fflush(stdout);//test
 	static vector<ShortIndex> short_index(num_v, ShortIndex(roots_size));
-	printf("@648 batch_process\n"); fflush(stdout);//test
 	// Distance table of shortest distance from roots to other vertices.
 	static vector< vector<weighti> > dists_table(BATCH_SIZE, vector<weighti>(num_v, WEIGHTI_MAX)); // dists_table[r][v]: shortest distances from r to v.
 	// Labels distance table only record distances of labels.
 	static vector< vector<weighti> > labels_table(num_v, vector<weighti>(BATCH_SIZE, WEIGHTI_MAX)); // labels_table[v][r]: if smaller than INF, label (r, labels-table[v][r]) should be added into L[v].
 
 	// At the beginning of a batch, initialize the labels L and distance buffer dist_matrix;
-	printf("initilizing...\n"); fflush(stdout);//test
 	initialize(
 			short_index,
 			dists_table,
@@ -671,9 +728,7 @@ inline void WeightedVertexCentricPLL::batch_process(
 	initializing_time += WallTimer::get_time_mark();
 
 
-	idi iter = 0;//test
 	while (0 != end_active_queue) {
-		printf("iter: %u\n", iter++); fflush(stdout);//test
 		candidating_time -= WallTimer::get_time_mark();
 //		candidating_ins_count.measure_start();
 		// Traverse the active queue, every active vertex sends distances to its neighbors
@@ -727,7 +782,13 @@ inline void WeightedVertexCentricPLL::batch_process(
 					// Update the dists_table
 					dists_table[cand_root_id][v_id] = query_dist_v_c;
 					// Need to send back the distance
-					sending_back();
+					send_back(
+							v_id,
+							cand_root_id,
+							G,
+							dists_table,
+							labels_table,
+							roots_start);
 				}
 			}
 			if (need_activate) {
@@ -789,7 +850,6 @@ inline void WeightedVertexCentricPLL::batch_process(
 //				}
 //			}
 //		}
-//
 //	}
 
 	// Update the index according to labels_table
@@ -831,7 +891,6 @@ void WeightedVertexCentricPLL::construct(const WeightedGraph &G)
 	BATCH_SIZE = num_v;
 
 	double time_labeling = -WallTimer::get_time_mark();
-	printf("batch_processing...\n"); fflush(stdout);//test
 	batch_process(
 			G,
 			0 * BATCH_SIZE,
@@ -954,36 +1013,36 @@ void WeightedVertexCentricPLL::switch_labels_to_old_id(
 //		puts("");
 //	}
 
-//	// Try query
-//	idi u;
-//	idi v;
-//	while (std::cin >> u >> v) {
-//		weighti dist = WEIGHTI_MAX;
-//
-//		// Normal Index Check
-//		const auto &Lu = new_L[u];
-//		const auto &Lv = new_L[v];
-////		unsorted_map<idi, weighti> markers;
-//		map<idi, weighti> markers;
-//		for (idi i = 0; i < Lu.size(); ++i) {
-//			markers[Lu[i].first] = Lu[i].second;
-//		}
-//		for (idi i = 0; i < Lv.size(); ++i) {
-//			const auto &tmp_l = markers.find(Lv[i].first);
-//			if (tmp_l == markers.end()) {
-//				continue;
-//			}
-//			int d = tmp_l->second + Lv[i].second;
-//			if (d < dist) {
-//				dist = d;
-//			}
-//		}
-//		if (dist == 255) {
-//			printf("2147483647\n");
-//		} else {
-//			printf("%u\n", dist);
-//		}
-//	}
+	// Try query
+	idi u;
+	idi v;
+	while (std::cin >> u >> v) {
+		weighti dist = WEIGHTI_MAX;
+
+		// Normal Index Check
+		const auto &Lu = new_L[u];
+		const auto &Lv = new_L[v];
+//		unsorted_map<idi, weighti> markers;
+		map<idi, weighti> markers;
+		for (idi i = 0; i < Lu.size(); ++i) {
+			markers[Lu[i].first] = Lu[i].second;
+		}
+		for (idi i = 0; i < Lv.size(); ++i) {
+			const auto &tmp_l = markers.find(Lv[i].first);
+			if (tmp_l == markers.end()) {
+				continue;
+			}
+			int d = tmp_l->second + Lv[i].second;
+			if (d < dist) {
+				dist = d;
+			}
+		}
+		if (dist == 255) {
+			printf("2147483647\n");
+		} else {
+			printf("%u\n", dist);
+		}
+	}
 }
 
 }

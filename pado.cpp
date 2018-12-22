@@ -25,9 +25,9 @@ void pado(const char filename[])
 	WeightedGraph G(filename);
 	printf("Ranking...\n"); fflush(stdout);//test
 	vector<idi> rank = G.make_rank();
-//	for (idi v = 0; v < rank.size(); ++v) {
-//		printf("vertices %u: rank %u\n", v, rank[v]);//test
-//	}
+////	for (idi v = 0; v < rank.size(); ++v) {
+////		printf("vertices %u: rank %u\n", v, rank[v]);//test
+////	}
 	vector<idi> rank2id = G.id_transfer(rank);
 	//G.print();
 	printf("Labeling...\n"); fflush(stdout);//test
