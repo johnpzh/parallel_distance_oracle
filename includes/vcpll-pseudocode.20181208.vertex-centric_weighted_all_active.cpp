@@ -161,11 +161,9 @@ void vertex_centric_labeling(
 		// The distance table is N by N, recording the shortest distance so far from every root to every vertex.
 	The label table is vector< vector<weighti> > labels_table(num_v, vector<weighti>(num_v, INF));
 		// The label table records label distance for every vertex.
-		// TODO: need other data structure to record those last inserted distances in the last iteration, then an active vertex will only send its new inserted distances.
+		// TODO: need other data structure to record those last inserted distances in the last iteration, then an active vertex will only send 
+		// its new inserted distances.
 	The distance candidate table is vector< vector<weighti> > cand_dist_table(num_v, vector<weighti>(num_v, INF)); 
-		// Temporary distance table, recording in the current iteration the traversing distancefrom a vertex to a root.
-		// TODO: The candidate table probably could replaced by a queue and a distance array; the distance array
-		// acts like a bitmap but restores distances.
 
 	/*
 	First, use vertex-centric method, all vertices are sending messages
