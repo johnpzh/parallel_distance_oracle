@@ -14,7 +14,7 @@ struct ShortIndex {
 	vector<weighti> candidates_dists; // record the distances to candidates. If candidates_dists[c] = INF, then c is NOT a candidate
 		// The candidates_dists is also used for distance query.
 	// Use a queue to store last inserted labels (IDs); distances are stored in distances_array.
-	vector<idi> last_inserted_roots;
+	vector<idi> last_new_roots;
 
 	// Use a queue to store temporary labels in this batch
 	vector<idi> vertices_que; 
@@ -53,7 +53,7 @@ void initialize_tables(
 		for (every root r_real_id) {
 			short_index[r_real_id].vertices_que.enqueue(r_real_id - roots_start);
 			short_index[r_real_id].distances_array[r_real_id - roots_start] = 0;
-			short_index[r_real_id].last_inserted_roots.enqueue(r_real_id - roots_start);
+			short_index[r_real_id].last_new_roots.enqueue(r_real_id - roots_start);
 		}
 	}
 
@@ -75,9 +75,13 @@ void sending_message(
 {
 	// Traverse all neighbors of vertex v
 	for (vertex w = every neighbor of v) {
+		if (w < roots_start) {
+			// Neighbors are sorted from low ranks to high ranks; w needs labels with higher ranks
+			break;
+		}
 		weighti dist_v_w = weight(v, w); // weight of edge (v, w).
 		// Check all last inserted labels of vertex v
-		for (every label ID r in short_index[v].last_inserted_roots) {
+		for (every label ID r in short_index[v].last_new_roots) {
 			// r should only access to a lower rank vertex.
 			weighti dist_r_v = short_index[v].distances_array[r]; // distance of (r, v)
 			weighti tmp_dist_r_w = dist_r_v + dist_v_w;
@@ -98,7 +102,7 @@ void sending_message(
 			}
 		}
 	}
-	short_index[v].last_inserted_roots.clear();
+	short_index[v].last_new_roots.clear();
 }
 
 // Function: return a distance (less than INF) if shortest distance is covered by other path
@@ -107,6 +111,7 @@ weighti distance_query(
 		vertex v,
 		candidate c,
 		The candidate distances data structure vector<ShortIndex> short_index,
+		The distance table dists_table,
 		number of vertices num_v,
 		distance tmp_dist_v_c)
 {
@@ -289,7 +294,7 @@ void vertex_centric_labeling_in_batches(
 	A bitmap array vector<bool> is_active(num_v, false); // Flag array: is_active[v] is true means v is in active queue.
 	An queue storing all vertices which have candidates is vector<idi> has_candidates_queue(num_v);
 	A bitmap array vector<bool> has_candidates(num_v, false); // Flag array: has_candidates[v] is true means v is in has_candidates_queue.
-	The the distance table is is vector< vector<weighti> > dists_table(roots_size, vector<weighti>(num_v, INF)); 
+	The the distance table is vector< vector<weighti> > dists_table(roots_size, vector<weighti>(num_v, INF)); 
 		// The distance table is roots_sizes by N. 1. record the shortest distance so far from every root to every vertex;
 		// 2. The distance buffer, recording label distances of every roots. It needs to be initialized every batch by labels of roots.
 //	The label table is vector< vector<weighti> > labels_table(num_v, vector<weighti>(roots_size, INF));
@@ -300,6 +305,7 @@ void vertex_centric_labeling_in_batches(
 		// The candidate table is replaced by the ShortIndex structure: every vertex has a queue and a distance array;
    		// 1. the queue records last inserted labels.
 		// 2. the distance array acts like a bitmap but restores distances.
+
 
 	/*
 	First, use vertex-centric method, all vertices are sending messages
@@ -356,7 +362,7 @@ void vertex_centric_labeling_in_batches(
 						short_index[v].vertices_que.enqueue(c);
 					}
 					short_index[v].distances_array[c] = tmp_dist_v_c;
-					short_index[v].last_inserted_roots.enqueue(c);
+					short_index[v].last_new_roots.enqueue(c);
 					need_activate = true;
 				} else {
 					dists_table[c][v] = query_dist_v_c;
