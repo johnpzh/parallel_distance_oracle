@@ -16,7 +16,7 @@ struct ShortIndex {
 	// Use a queue to store last inserted labels (IDs); distances are stored in distances_array.
 	vector<idi> last_new_roots;
 
-	// Use a queue to store temporary labels in this batch
+	// Use a queue to store temporary labels in this batch; use it so don't need to traverse distances_array.
 	vector<idi> vertices_que; 
 	// Use an array to store distances to roots; length of roots_size
 	vector<weighti> distances_array; // labels_table
@@ -65,8 +65,9 @@ void initialize_tables(
 	}
 }
 // Function: vertex v send distance messages to all its neighbors.
-void sending_message(
+void send_messages(
 		active vertex v,
+		The beginning ID of roots roots_start,
 		Graph G,
 		distance table dists_table,
 		the temporary data of candidates vector<ShortIndex> short_index,
@@ -75,7 +76,7 @@ void sending_message(
 {
 	// Traverse all neighbors of vertex v
 	for (vertex w = every neighbor of v) {
-		if (w < roots_start) {
+		if (w <= roots_start) {
 			// Neighbors are sorted from low ranks to high ranks; w needs labels with higher ranks
 			break;
 		}
@@ -296,12 +297,12 @@ void vertex_centric_labeling_in_batches(
 	A bitmap array vector<bool> has_candidates(num_v, false); // Flag array: has_candidates[v] is true means v is in has_candidates_queue.
 	The the distance table is vector< vector<weighti> > dists_table(roots_size, vector<weighti>(num_v, INF)); 
 		// The distance table is roots_sizes by N. 1. record the shortest distance so far from every root to every vertex;
-		// 2. The distance buffer, recording label distances of every roots. It needs to be initialized every batch by labels of roots.
+		// 2. The distance buffer, recording label distances of every root. It needs to be initialized every batch by labels of roots.
 //	The label table is vector< vector<weighti> > labels_table(num_v, vector<weighti>(roots_size, INF));
 		// The label table records label distance for every vertex.
 		// This is replaced by the distances_array in the short_index.
 	The temporary data structure for storing candidates of vertices vector<ShortIndex> short_index(num_v);
-		// Temporary distance table, recording in the current iteration the traversing distancefrom a vertex to a root.
+		// Temporary distance table, recording in the current iteration the traversing distance from a vertex to a root.
 		// The candidate table is replaced by the ShortIndex structure: every vertex has a queue and a distance array;
    		// 1. the queue records last inserted labels.
 		// 2. the distance array acts like a bitmap but restores distances.
@@ -331,8 +332,9 @@ void vertex_centric_labeling_in_batches(
 			// vertex v send distance messages to all its neighbors;
 			// every neighbor gets its candidates.
 			is_active[v] = false; // reset is_active
-			sending_message(
+			send_messages(
 					active vertex v,
+					The beginning ID of roots roots_start,
 					Graph G,
 					distance table dists_table,
 					the temporary data of candidates vector<ShortIndex> short_index,
@@ -357,10 +359,10 @@ void vertex_centric_labeling_in_batches(
 							The Short Index short_index,
 							number of vertices num_v,
 							distance tmp_dist_v_c))) {
-					// Record the new distance in the label table
 					if (INF == short_index[v].distances_array[c]) {
 						short_index[v].vertices_que.enqueue(c);
 					}
+					// Record the new distance in the label table
 					short_index[v].distances_array[c] = tmp_dist_v_c;
 					short_index[v].last_new_roots.enqueue(c);
 					need_activate = true;
@@ -379,6 +381,7 @@ void vertex_centric_labeling_in_batches(
 			short_index[v].candidates_que.clear();
 			if (need_activate) {
 				if (!is_active[v]) {
+					is_active[v] = true;
 					active_queue.enqueue(v); // Here needs a bitmap to ensure v is added only once
 				}
 			}
@@ -417,7 +420,7 @@ int main()
 	The number of remaining vertices remainder = num_v % BATCH_SIZE;
 
 	for (inti b_i = 0; b_i < num_batches; ++b_i) {
-		vertex_centric_labeling(
+		vertex_centric_labeling_in_batches(
 				The start ID of vertex b_i * BATCH_SIZE; // roots_start
 				The number of roots in this batch BATCH_SIZE; // roots_size
 				Graph G,
