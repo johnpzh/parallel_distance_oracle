@@ -13,13 +13,13 @@ struct ShortIndex {
 	// Use a array to store distances of candidates; length of roots_size
 	vector<weighti> candidates_dists; // record the distances to candidates. If candidates_dists[c] = INF, then c is NOT a candidate
 		// The candidates_dists is also used for distance query.
-	// Use a queue to store last inserted labels (IDs); distances are stored in distances_array.
+	// Use a queue to store last inserted labels (IDs); distances are stored in vertices_dists.
 	vector<idi> last_new_roots;
 
-	// Use a queue to store temporary labels in this batch; use it so don't need to traverse distances_array.
+	// Use a queue to store temporary labels in this batch; use it so don't need to traverse vertices_dists.
 	vector<idi> vertices_que; 
 	// Use an array to store distances to roots; length of roots_size
-	vector<weighti> distances_array; // labels_table
+	vector<weighti> vertices_dists; // labels_table
 
 	// Usa a queue to record which roots have reached this vertex in this batch.
 	// It is used for reset the dists_table
@@ -52,7 +52,7 @@ void initialize_tables(
 	{
 		for (every root r_real_id) {
 			short_index[r_real_id].vertices_que.enqueue(r_real_id - roots_start);
-			short_index[r_real_id].distances_array[r_real_id - roots_start] = 0;
+			short_index[r_real_id].vertices_dists[r_real_id - roots_start] = 0;
 			short_index[r_real_id].last_new_roots.enqueue(r_real_id - roots_start);
 		}
 	}
@@ -84,7 +84,10 @@ void send_messages(
 		// Check all last inserted labels of vertex v
 		for (every label ID r in short_index[v].last_new_roots) {
 			// r should only access to a lower rank vertex.
-			weighti dist_r_v = short_index[v].distances_array[r]; // distance of (r, v)
+			if (w < r + roots_start) {
+				continue;
+			}
+			weighti dist_r_v = short_index[v].vertices_dists[r]; // distance of (r, v)
 			weighti tmp_dist_r_w = dist_r_v + dist_v_w;
 			if (tmp_dist_r_w < dists_table[r][w] && tmp_dist_r_w < short_index[w].candidates_dists[r]) {
 				// Mark r as a candidate of w
@@ -111,55 +114,57 @@ void send_messages(
 weighti distance_query(
 		vertex v,
 		candidate c,
-		The candidate distances data structure vector<ShortIndex> short_index,
 		The distance table dists_table,
-		number of vertices num_v,
+		The candidate distances data structure vector<ShortIndex> short_index,
+		The index L,
+		The beginning ID of roots_start,
 		distance tmp_dist_v_c)
 {
+	c_real_id = c + roots_start;
 	// Traverse all available hops of v, to see if they reach c
 	// 1. Labels in L[v]
 	for (every label (r, dist_v_r) in L[v]) {
-		if (c < r || INF == dists_table[c][r]) {
+		if (c_real_id < r || INF == dists_table[c][r]) {
 			continue;
 		}
 		weighti label_dist_v_c = dist_v_r + dists_table[c][r];
-		if (label_dist_v_c < tmp_dist_v_c) {
+		if (label_dist_v_c <= tmp_dist_v_c) {
 			return label_dist_v_c;
 		}
 	}
 	// 2. Labels in short_index[v].vertices_que
 	for (every label r in short_index[v].vertices_que) {
-		if (c < r || INF == short_index[c].distances_array[r]) {
+		if (c_real_id < r || INF == short_index[c_real_id].vertices_dists[r]) {
 			continue;
 		}
-		int label_dist_v_c = short_index[v].distances_array[r] + short_index[c].distances_array[r];
-		if (label_dist_v_c < tmp_dist_v_c) {
+		int label_dist_v_c = short_index[v].vertices_dists[r] + short_index[c_real_id].vertices_dists[r];
+		if (label_dist_v_c <= tmp_dist_v_c) {
 			return label_dist_v_c;
 		}
 
-		if (INF == short_index[c].candidates_dists[r]) {
+		if (INF == short_index[c_real_id].candidates_dists[r]) {
 			continue;
 		}
-		label_dist_v_c = short_index[v].distances_array[r] + short_index[c].candidates_dists[r];
-		if (label_dist_v_c < tmp_dist_v_c) {
+		label_dist_v_c = short_index[v].vertices_dists[r] + short_index[c_real_id].candidates_dists[r];
+		if (label_dist_v_c <= tmp_dist_v_c) {
 			return label_dist_v_c;
 		}
 	}
 	// 3. Labels in short_index[v].candidates_que
 	for (every label r in short_index[v].candidates_que) {
-		if (c < r || INF == short_index[c].distances_array[r]) {
+		if (c_real_id < r || INF == short_index[c_real_id].vertices_dists[r]) {
 			continue;
 		}
-		int label_dist_v_c = short_index[v].candidates_dists[r] + short_index[c].distances_array[r];
-		if (label_dist_v_c < tmp_dist_v_c) {
+		int label_dist_v_c = short_index[v].candidates_dists[r] + short_index[c_real_id].vertices_dists[r];
+		if (label_dist_v_c <= tmp_dist_v_c) {
 			return label_dist_v_c;
 		}
 
-		if (INF == short_index[c].candidates_dists[r]) {
+		if (INF == short_index[c_real_id].candidates_dists[r]) {
 			continue;
 		}
-		label_dist_v_c = short_index[v].candidates_dists[r] + short_index[c].candidates_dists[r];
-		if (label_dist_v_c < tmp_dist_v_c) {
+		label_dist_v_c = short_index[v].candidates_dists[r] + short_index[c_real_id].candidates_dists[r];
+		if (label_dist_v_c <= tmp_dist_v_c) {
 			return label_dist_v_c;
 		}
 	}
@@ -200,7 +205,7 @@ void sending_back(
 				distance tmp_dist_r_w = dist_r_v + weight(v, w);
 				if (tmp_dist_r_w <= dists_table[r][w]) {
 					dists_table[r][w] = tmp_dist_r_w; // Update distance table
-					short_index[w].distances_array[r] = INF; // Reset label table
+					short_index[w].vertices_dists[r] = INF; // Reset label table
 					if (!tmp_is_active[w]) {
 						tmp_is_active[w] = true;
 						tmp_active_queue.enqueue(w);
@@ -224,9 +229,9 @@ void update_index(
 		// Traverse the vertices_que in short_index[v]
 		for (every r in short_index[v].vertices_que) {
 			r_real_id = r + roots_start;
-			if (INF != short_index[v].distances_array[r]) {
-				Insert label (r_real_id, short_index[v].distances_array[r]) into L[v];
-				short_index[v].distances_array[r] = INF; // Reset distances_array
+			if (INF != short_index[v].vertices_dists[r]) {
+				Insert label (r_real_id, short_index[v].vertices_dists[r]) into L[v];
+				short_index[v].vertices_dists[r] = INF; // Reset vertices_dists
 			}
 		}
 	}
@@ -300,7 +305,7 @@ void vertex_centric_labeling_in_batches(
 		// 2. The distance buffer, recording label distances of every root. It needs to be initialized every batch by labels of roots.
 //	The label table is vector< vector<weighti> > labels_table(num_v, vector<weighti>(roots_size, INF));
 		// The label table records label distance for every vertex.
-		// This is replaced by the distances_array in the short_index.
+		// This is replaced by the vertices_dists in the short_index.
 	The temporary data structure for storing candidates of vertices vector<ShortIndex> short_index(num_v);
 		// Temporary distance table, recording in the current iteration the traversing distance from a vertex to a root.
 		// The candidate table is replaced by the ShortIndex structure: every vertex has a queue and a distance array;
@@ -356,14 +361,16 @@ void vertex_centric_labeling_in_batches(
 				if (INF == (query_dist_v_c = distance_query(
 							vertex v,
 							candidate c,
-							The Short Index short_index,
-							number of vertices num_v,
+							The distance table dists_table,
+							The candidate distances data structure vector<ShortIndex> short_index,
+							The index L,
+							The beginning ID of roots_start,
 							distance tmp_dist_v_c))) {
-					if (INF == short_index[v].distances_array[c]) {
+					if (INF == short_index[v].vertices_dists[c]) {
 						short_index[v].vertices_que.enqueue(c);
 					}
 					// Record the new distance in the label table
-					short_index[v].distances_array[c] = tmp_dist_v_c;
+					short_index[v].vertices_dists[c] = tmp_dist_v_c;
 					short_index[v].last_new_roots.enqueue(c);
 					need_activate = true;
 				} else {

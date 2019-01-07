@@ -70,7 +70,7 @@ public:
 	}
 
 	// Rank according to degrees (right now)
-	vector<idi> make_rank();
+	vector<idi> make_rank() const;
 	// Remap vertex id according to its rank, 1 is the highest rank;
 	vector<idi> id_transfer(const vector<idi> &rank);
 	void print();
@@ -151,7 +151,7 @@ void Graph::construct(const vector< pair<idi, idi> > &edge_list)
 }
 
 // Rank according to degrees
-vector<idi> Graph::make_rank()
+vector<idi> Graph::make_rank() const
 {
 	vector< pair<idi, idi> > degree2id;
 	for (idi v = 0; v < num_v; ++v) {
