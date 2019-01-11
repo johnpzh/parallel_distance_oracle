@@ -134,38 +134,38 @@ weighti distance_query(
 	}
 	// 2. Labels in short_index[v].vertices_que
 	for (every label r in short_index[v].vertices_que) {
-		if (c_real_id < r || INF == short_index[c_real_id].vertices_dists[r]) {
+		if (c_real_id < r) {
 			continue;
 		}
-		int label_dist_v_c = short_index[v].vertices_dists[r] + short_index[c_real_id].vertices_dists[r];
-		if (label_dist_v_c <= tmp_dist_v_c) {
-			return label_dist_v_c;
+		if (INF != short_index[c_real_id].vertices_dists[r]) {
+			int label_dist_v_c = short_index[v].vertices_dists[r] + short_index[c_real_id].vertices_dists[r];
+			if (label_dist_v_c <= tmp_dist_v_c) {
+				return label_dist_v_c;
+			}
 		}
-
-		if (INF == short_index[c_real_id].candidates_dists[r]) {
-			continue;
-		}
-		label_dist_v_c = short_index[v].vertices_dists[r] + short_index[c_real_id].candidates_dists[r];
-		if (label_dist_v_c <= tmp_dist_v_c) {
-			return label_dist_v_c;
+		if (INF != short_index[c_real_id].candidates_dists[r]) {
+			int label_dist_v_c = short_index[v].vertices_dists[r] + short_index[c_real_id].candidates_dists[r];
+			if (label_dist_v_c <= tmp_dist_v_c) {
+				return label_dist_v_c;
+			}
 		}
 	}
 	// 3. Labels in short_index[v].candidates_que
 	for (every label r in short_index[v].candidates_que) {
-		if (c_real_id < r || INF == short_index[c_real_id].vertices_dists[r]) {
+		if (c_real_id < r) {
 			continue;
 		}
-		int label_dist_v_c = short_index[v].candidates_dists[r] + short_index[c_real_id].vertices_dists[r];
-		if (label_dist_v_c <= tmp_dist_v_c) {
-			return label_dist_v_c;
+		if (INF != short_index[c_real_id].vertices_dists[r]) {
+			int label_dist_v_c = short_index[v].candidates_dists[r] + short_index[c_real_id].vertices_dists[r];
+			if (label_dist_v_c <= tmp_dist_v_c) {
+				return label_dist_v_c;
+			}
 		}
-
-		if (INF == short_index[c_real_id].candidates_dists[r]) {
-			continue;
-		}
-		label_dist_v_c = short_index[v].candidates_dists[r] + short_index[c_real_id].candidates_dists[r];
-		if (label_dist_v_c <= tmp_dist_v_c) {
-			return label_dist_v_c;
+		if (INF != short_index[c_real_id].candidates_dists[r]) {
+			int label_dist_v_c = short_index[v].candidates_dists[r] + short_index[c_real_id].candidates_dists[r];
+			if (label_dist_v_c <= tmp_dist_v_c) {
+				return label_dist_v_c;
+			}
 		}
 	}
 
@@ -351,7 +351,6 @@ void vertex_centric_labeling_in_batches(
 		// Second stage, checking candidates.
 		// Traverse has_candidates_queue, check all candidates of every vertex
 		for (every vertex v in the has_candidates_queue) {
-			has_candidates[v] = false; // reset has_candidates
 			flag need_activate = false; // Flag: if v should be a new active vertex in the next iteration
 			// Traverse all candidates of v
 			for (every candidate c in short_index[v].candidates_que) {
@@ -373,7 +372,7 @@ void vertex_centric_labeling_in_batches(
 					short_index[v].vertices_dists[c] = tmp_dist_v_c;
 					short_index[v].last_new_roots.enqueue(c);
 					need_activate = true;
-				} else {
+				} else if (query_dist_v_c < tmp_dist_v_c){
 					dists_table[c][v] = query_dist_v_c;
 					// First correcting option:
 					// v needs to send message back to its neighbor to change potential wrong distance from root c
@@ -383,15 +382,23 @@ void vertex_centric_labeling_in_batches(
 							distance table dists_table,
 							labels table labels_table);
 				}
-				short_index[v].candidates_dists[c] = INF; // Reset candidates_dists after using in distance_query.
+				//short_index[v].candidates_dists[c] = INF; // DEPRECATED! // Reset candidates_dists after using in distance_query.
 			}
-			short_index[v].candidates_que.clear();
+			//short_index[v].candidates_que.clear(); // DEPRECATED!
 			if (need_activate) {
 				if (!is_active[v]) {
 					is_active[v] = true;
 					active_queue.enqueue(v); // Here needs a bitmap to ensure v is added only once
 				}
 			}
+		}
+		// Reset vertices' candidates_que and candidates_dists
+		for (every vertex v in the has_candidates_queue) {
+			has_candidates[v] = false; // reset has_candidates
+			for (every candidate c in short_index[v].candidates_que) {
+				short_index[v].candidates_dists[c] = INF; // Reset candidates_dists
+			}
+			short_index[v].candidates_que.clear(); // Clear candidates_que
 		}
 		has_candidates_queue.clear();
 	}
