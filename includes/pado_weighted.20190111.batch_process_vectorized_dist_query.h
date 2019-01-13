@@ -340,76 +340,76 @@ inline weighti WeightedVertexCentricPLL::distance_query(
 	idi cand_real_id = cand_root_id + roots_start;
 	const IndexType &Lv = L[v_id];
 
-//	__m512i cand_real_id_v = _mm512_set1_epi32(cand_real_id);
-//	__m512i tmp_dist_v_c_v = _mm512_set1_epi32(tmp_dist_v_c);
-//	const __m512i INF_v = _mm512_set1_epi32(WEIGHTI_MAX);
-//	const __m512i UNDEF_i32_v = _mm512_undefined_epi32();
-//	inti NUM_P_INT = 16;
-//	inti remainder_simd = Lv.vertices.size() % NUM_P_INT;
-//	idi bound_i_l = Lv.vertices.size() - remainder_simd;
-//	for (idi i_l = 0; i_l < bound_i_l; i_l += NUM_P_INT) {
-//		// Labels IDs
-//		__m512i r_v = _mm512_loadu_epi32(&Lv.vertices[i_l]);
-//		__mmask16 is_r_higher_ranked_m = _mm512_cmplt_epi32_mask(r_v, cand_real_id_v);
-//		if (!is_r_higher_ranked_m) {
-//			continue;
-//		}
-//		// Labels dists
-//		__m512i dists_c_r_v = _mm512_mask_i32gather_epi32(INF_v, is_r_higher_ranked_m, r_v, &dists_table[cand_root_id], sizeof(weighti));
-//		__mmask16 is_not_INF_m = _mm512_cmpneq_epi32_mask(dists_c_r_v, INF_v);
-//		if (!is_not_INF_m) {
-//			continue;
-//		}
-//
-//		// Dist from v to c through label r
-//		__mmask16 valid_lanes_m = is_not_INF_m;
-//		__m512i dists_v_r_v = _mm512_mask_loadu_epi32(INF_v, valid_lanes_m, &Lv.distances[i_l]);
-//		__m512i label_dist_v_c_v = _mm512_mask_add_epi32(INF_v, valid_lanes_m, dists_c_r_v, dists_v_r_v);
-//		__mmask16 is_label_dist_shorter_m = _mm512_mask_cmple_epi32_mask(valid_lanes_m, label_dist_v_c_v, tmp_dist_v_c_v);
-//		if (is_label_dist_shorter_m) {
-//			// Need to return the shorter distance (might be equal)
-//			inti index = (inti) (log2( (double) ((uint16_t) is_label_dist_shorter_m) ) ); // Get the index as the most significant bit which is set as 1. Every "1" is okay actually.
-//			return ((int *) &label_dist_v_c_v)[index]; // Return the distance
-//		}
-//	}
-//	if (remainder_simd) {
-//		__mmask16 in_m = (__mmask16) ((uint16_t) 0xFFFF >> (NUM_P_INT - remainder_simd));
-//		// Labels IDs
-//		__m512i r_v = _mm512_mask_loadu_epi32(UNDEF_i32_v, in_m, &Lv.vertices[bound_i_l]);
-//		__mmask16 is_r_higher_ranked_m = _mm512_mask_cmplt_epi32_mask(in_m, r_v, cand_real_id_v);
-//		if (is_r_higher_ranked_m) {
-//			// Labels dists
-//			__m512i dists_c_r_v = _mm512_mask_i32gather_epi32(INF_v, is_r_higher_ranked_m, r_v, &dists_table[cand_root_id], sizeof(weighti));
-//			__mmask16 is_not_INF_m = _mm512_cmpneq_epi32_mask(dists_c_r_v, INF_v);
-//			if (is_not_INF_m) {
-//				// Dist from v to c through label r
-//				__mmask16 valid_lanes_m = is_not_INF_m;
-//				__m512i dists_v_r_v = _mm512_mask_loadu_epi32(INF_v, valid_lanes_m, &Lv.distances[bound_i_l]);
-//				__m512i label_dist_v_c_v = _mm512_mask_add_epi32(INF_v, valid_lanes_m, dists_c_r_v, dists_v_r_v);
-//				__mmask16 is_label_dist_shorter_m = _mm512_mask_cmple_epi32_mask(valid_lanes_m, label_dist_v_c_v, tmp_dist_v_c_v);
-//				if (is_label_dist_shorter_m) {
-//					// Need to return the shorter distance (might be equal)
-//					inti index = (inti) (log2( (double) ((uint16_t) is_label_dist_shorter_m) ) ); // Get the index as the most significant bit which is set as 1. Every "1" is okay actually.
-//					return ((int *) &label_dist_v_c_v)[index]; // Return the distance
-//				}
-//			}
-//
-//		}
-//	}
-
-	idi bound_i_l = Lv.vertices.size();
-	for (idi i_l = 0; i_l < bound_i_l; ++i_l) {
-		idi r = Lv.vertices[i_l];
-		if (cand_real_id <= r || WEIGHTI_MAX == dists_table[cand_root_id][r]) {
+	__m512i cand_real_id_v = _mm512_set1_epi32(cand_real_id);
+	__m512i tmp_dist_v_c_v = _mm512_set1_epi32(tmp_dist_v_c);
+	const __m512i INF_v = _mm512_set1_epi32(WEIGHTI_MAX);
+	const __m512i UNDEF_i32_v = _mm512_undefined_epi32();
+	inti NUM_P_INT = 16;
+	inti remainder_simd = Lv.vertices.size() % NUM_P_INT;
+	idi bound_i_l = Lv.vertices.size() - remainder_simd;
+	for (idi i_l = 0; i_l < bound_i_l; i_l += NUM_P_INT) {
+		// Labels IDs
+		__m512i r_v = _mm512_loadu_epi32(&Lv.vertices[i_l]);
+		__mmask16 is_r_higher_ranked_m = _mm512_cmplt_epi32_mask(r_v, cand_real_id_v);
+		if (!is_r_higher_ranked_m) {
 			continue;
 		}
-		weighti label_dist_v_c = Lv.distances[i_l] + dists_table[cand_root_id][r];
-		if (label_dist_v_c <= tmp_dist_v_c) {
-			distance_query_time += WallTimer::get_time_mark();
-			++l_l_hit_count;
-			return label_dist_v_c;
+		// Labels dists
+		__m512i dists_c_r_v = _mm512_mask_i32gather_epi32(INF_v, is_r_higher_ranked_m, r_v, &dists_table[cand_root_id], sizeof(weighti));
+		__mmask16 is_not_INF_m = _mm512_cmpneq_epi32_mask(dists_c_r_v, INF_v);
+		if (!is_not_INF_m) {
+			continue;
+		}
+
+		// Dist from v to c through label r
+		__mmask16 valid_lanes_m = is_not_INF_m;
+		__m512i dists_v_r_v = _mm512_mask_loadu_epi32(INF_v, valid_lanes_m, &Lv.distances[i_l]);
+		__m512i label_dist_v_c_v = _mm512_mask_add_epi32(INF_v, valid_lanes_m, dists_c_r_v, dists_v_r_v);
+		__mmask16 is_label_dist_shorter_m = _mm512_mask_cmple_epi32_mask(valid_lanes_m, label_dist_v_c_v, tmp_dist_v_c_v);
+		if (is_label_dist_shorter_m) {
+			// Need to return the shorter distance (might be equal)
+			inti index = (inti) (log2( (double) ((uint16_t) is_label_dist_shorter_m) ) ); // Get the index as the most significant bit which is set as 1. Every "1" is okay actually.
+			return ((int *) &label_dist_v_c_v)[index]; // Return the distance
 		}
 	}
+	if (remainder_simd) {
+		__mmask16 in_m = (__mmask16) ((uint16_t) 0xFFFF >> (NUM_P_INT - remainder_simd));
+		// Labels IDs
+		__m512i r_v = _mm512_mask_loadu_epi32(UNDEF_i32_v, in_m, &Lv.vertices[bound_i_l]);
+		__mmask16 is_r_higher_ranked_m = _mm512_mask_cmplt_epi32_mask(in_m, r_v, cand_real_id_v);
+		if (is_r_higher_ranked_m) {
+			// Labels dists
+			__m512i dists_c_r_v = _mm512_mask_i32gather_epi32(INF_v, is_r_higher_ranked_m, r_v, &dists_table[cand_root_id], sizeof(weighti));
+			__mmask16 is_not_INF_m = _mm512_cmpneq_epi32_mask(dists_c_r_v, INF_v);
+			if (is_not_INF_m) {
+				// Dist from v to c through label r
+				__mmask16 valid_lanes_m = is_not_INF_m;
+				__m512i dists_v_r_v = _mm512_mask_loadu_epi32(INF_v, valid_lanes_m, &Lv.distances[bound_i_l]);
+				__m512i label_dist_v_c_v = _mm512_mask_add_epi32(INF_v, valid_lanes_m, dists_c_r_v, dists_v_r_v);
+				__mmask16 is_label_dist_shorter_m = _mm512_mask_cmple_epi32_mask(valid_lanes_m, label_dist_v_c_v, tmp_dist_v_c_v);
+				if (is_label_dist_shorter_m) {
+					// Need to return the shorter distance (might be equal)
+					inti index = (inti) (log2( (double) ((uint16_t) is_label_dist_shorter_m) ) ); // Get the index as the most significant bit which is set as 1. Every "1" is okay actually.
+					return ((int *) &label_dist_v_c_v)[index]; // Return the distance
+				}
+			}
+
+		}
+	}
+
+//	idi bound_i_l = Lv.vertices.size();
+//	for (idi i_l = 0; i_l < bound_i_l; ++i_l) {
+//		idi r = Lv.vertices[i_l];
+//		if (cand_real_id <= r || WEIGHTI_MAX == dists_table[cand_root_id][r]) {
+//			continue;
+//		}
+//		weighti label_dist_v_c = Lv.distances[i_l] + dists_table[cand_root_id][r];
+//		if (label_dist_v_c <= tmp_dist_v_c) {
+//			distance_query_time += WallTimer::get_time_mark();
+//			++l_l_hit_count;
+//			return label_dist_v_c;
+//		}
+//	}
 	// 2. Labels in short_index[v_id].vertices_que
 	const ShortIndex &SI_v = short_index[v_id];
 	const ShortIndex &SI_c = short_index[cand_root_id];
@@ -694,9 +694,7 @@ inline void WeightedVertexCentricPLL::vertex_centric_labeling_in_batches(
 
 		// Traverse vertices in the has_cand_queue to insert labels
 		for (idi i_queue = 0; i_queue < end_has_cand_queue; ++i_queue) {
-			//printf("end_has_cand_queue: %u\n", end_has_cand_queue);//test
 			idi v_id = has_cand_queue[i_queue];
-			//has_candidates[v_id] = false; // reset has_candidates
 			bool need_activate = false;
 			ShortIndex &SI_v = short_index[v_id];
 			// Traverse v_id's all candidates
@@ -706,6 +704,7 @@ inline void WeightedVertexCentricPLL::vertex_centric_labeling_in_batches(
 				weighti tmp_dist_v_c = SI_v.candidates_dists[cand_root_id];
 				// Distance check for pruning
 				weighti query_dist_v_c;
+				printf("v: %u cand_root_id: %u cand_real_id: %u\n", v_id, cand_root_id, cand_root_id + roots_start);//test
 				if (WEIGHTI_MAX == 
 						(query_dist_v_c = distance_query(
 										 v_id,
@@ -739,9 +738,8 @@ inline void WeightedVertexCentricPLL::vertex_centric_labeling_in_batches(
 //							short_index,
 //							roots_start);
 				}
-				//SI_v.candidates_dists[cand_root_id] = WEIGHTI_MAX; // Reset candidates_dists after using in distance_query.
+				printf("query_dist_v_c: %u\n", query_dist_v_c);//test
 			}
-			//SI_v.end_candidates_que = 0; // Clear v_id's candidates_que
 			if (need_activate) {
 				if (!is_active[v_id]) {
 					is_active[v_id] = true;
@@ -950,35 +948,35 @@ void WeightedVertexCentricPLL::switch_labels_to_old_id(
 //	}
 
 	// Try query
-	idi u;
-	idi v;
-	while (std::cin >> u >> v) {
-		weighti dist = WEIGHTI_MAX;
-
-		// Normal Index Check
-		const auto &Lu = new_L[u];
-		const auto &Lv = new_L[v];
-//		unsorted_map<idi, weighti> markers;
-		map<idi, weighti> markers;
-		for (idi i = 0; i < Lu.size(); ++i) {
-			markers[Lu[i].first] = Lu[i].second;
-		}
-		for (idi i = 0; i < Lv.size(); ++i) {
-			const auto &tmp_l = markers.find(Lv[i].first);
-			if (tmp_l == markers.end()) {
-				continue;
-			}
-			int d = tmp_l->second + Lv[i].second;
-			if (d < dist) {
-				dist = d;
-			}
-		}
-		if (dist == 255) {
-			printf("2147483647\n");
-		} else {
-			printf("%u\n", dist);
-		}
-	}
+//	idi u;
+//	idi v;
+//	while (std::cin >> u >> v) {
+//		weighti dist = WEIGHTI_MAX;
+//
+//		// Normal Index Check
+//		const auto &Lu = new_L[u];
+//		const auto &Lv = new_L[v];
+////		unsorted_map<idi, weighti> markers;
+//		map<idi, weighti> markers;
+//		for (idi i = 0; i < Lu.size(); ++i) {
+//			markers[Lu[i].first] = Lu[i].second;
+//		}
+//		for (idi i = 0; i < Lv.size(); ++i) {
+//			const auto &tmp_l = markers.find(Lv[i].first);
+//			if (tmp_l == markers.end()) {
+//				continue;
+//			}
+//			int d = tmp_l->second + Lv[i].second;
+//			if (d < dist) {
+//				dist = d;
+//			}
+//		}
+//		if (dist == 255) {
+//			printf("2147483647\n");
+//		} else {
+//			printf("%u\n", dist);
+//		}
+//	}
 }
 
 }
