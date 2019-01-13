@@ -12,7 +12,7 @@
 #include "globals.h"
 #include "graph.h"
 //#include "pado.h"
-#include "pado_weighted.20181228.batch_process.h"
+#include "pado_weighted.20190111.batch_process_vectorized_dist_query.h"
 //#include "pado_para.h"
 //#include "pado_para.20181106.tmp.scalability.h"
 //#include "pado_para.20181115.tmp.parallel_bp.h"

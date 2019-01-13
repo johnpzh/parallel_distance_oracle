@@ -19,3 +19,4 @@ echo "PLL:"
 echo "----"
 $pll $fin pll.label
 echo "--------------------------------------------------"
+rm pll.label
