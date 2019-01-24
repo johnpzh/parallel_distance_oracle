@@ -923,9 +923,9 @@ inline void WeightedVertexCentricPLL::filter_out_labels(
 		for (inti i_c = 0; i_c < bound_label_i; ++i_c) {
 			idi c_root_id = SI_v.vertices_que[i_c];
 			weighti dist_v_c = SI_v.vertices_dists[c_root_id];
-			if (WEIGHTI_MAX == dist_v_c) {
-				continue;
-			}
+//			if (WEIGHTI_MAX == dist_v_c) {
+//				continue;
+//			}
 			ShortIndex &SI_c = short_index[c_root_id + roots_start];
 
 //			static inti NUM_P_INT = 16;
@@ -948,29 +948,18 @@ inline void WeightedVertexCentricPLL::filter_out_labels(
 //				__m512i dists_v_r_v = _mm512_mask_i32gather_epi32(INF_v, is_r_higher_ranked_m, r_root_id_v, &SI_v.vertices_dists[0], sizeof(weighti));
 //				dists_v_r_v = _mm512_mask_and_epi32(INF_v, is_r_higher_ranked_m, dists_v_r_v, LOWEST_BYTE_MASK);
 //				__mmask16 is_shorter_m = _mm512_cmple_epi32_mask(dists_v_r_v, dist_v_c_v);
-//				//__mmask16 is_not_INF_m = _mm512_cmpneq_epi32_mask(dists_v_r_v, INF_v);
 //				if (!is_shorter_m) {
 //					continue;
 //				}
-////				if (!is_not_INF_m) {
-////					continue;
-////				}
 //				// Distance c to r
 //				__m512i dists_c_r_v = _mm512_mask_i32gather_epi32(INF_v, is_shorter_m, r_root_id_v, &SI_c.vertices_dists[0], sizeof(weighti));
 //				dists_c_r_v = _mm512_mask_and_epi32(INF_v, is_shorter_m, dists_c_r_v, LOWEST_BYTE_MASK);
-//				//__m512i dists_c_r_v = _mm512_mask_i32gather_epi32(INF_v, is_not_INF_m, r_root_id_v, &SI_c.vertices_dists[0], sizeof(weighti));
-//				//dists_c_r_v = _mm512_mask_and_epi32(INF_v, is_not_INF_m, dists_c_r_v, LOWEST_BYTE_MASK);
 //				is_shorter_m = _mm512_cmple_epi32_mask(dists_c_r_v, dist_v_c_v);
-//				//is_not_INF_m = _mm512_cmpneq_epi32_mask(dists_c_r_v, INF_v);
 //				if (!is_shorter_m) {
 //					continue;
 //				}
-////				if (!is_not_INF_m) {
-////					continue;
-////				}
 //				// Distance compare
 //				is_shorter_m = _mm512_mask_cmple_epi32_mask(is_shorter_m, _mm512_mask_add_epi32(INF_v, is_shorter_m, dists_v_r_v, dists_c_r_v), dist_v_c_v);
-//				//is_shorter_m = _mm512_mask_cmple_epi32_mask(is_not_INF_m, _mm512_mask_add_epi32(INF_v, is_not_INF_m, dists_v_r_v, dists_c_r_v),dist_v_c_v);
 //				if (is_shorter_m) {
 //					int_mask_i32scatter_epi8(
 //							&SI_v.vertices_dists[0], 
@@ -992,29 +981,18 @@ inline void WeightedVertexCentricPLL::filter_out_labels(
 //				__m512i dists_v_r_v = _mm512_mask_i32gather_epi32(INF_v, is_r_higher_ranked_m, r_root_id_v, &SI_v.vertices_dists[0], sizeof(weighti));
 //				dists_v_r_v = _mm512_mask_and_epi32(INF_v, is_r_higher_ranked_m, dists_v_r_v, LOWEST_BYTE_MASK);
 //				__mmask16 is_shorter_m = _mm512_cmple_epi32_mask(dists_v_r_v, dist_v_c_v);
-//				//__mmask16 is_not_INF_m = _mm512_cmpneq_epi32_mask(dists_v_r_v, INF_v);
 //				if (!is_shorter_m) {
 //					continue;
 //				}
-////				if (!is_not_INF_m) {
-////					continue;
-////				}
 //				// Distance c to r
 //				__m512i dists_c_r_v = _mm512_mask_i32gather_epi32(INF_v, is_shorter_m, r_root_id_v, &SI_c.vertices_dists[0], sizeof(weighti));
 //				dists_c_r_v = _mm512_mask_and_epi32(INF_v, is_shorter_m, dists_c_r_v, LOWEST_BYTE_MASK);
-//				//__m512i dists_c_r_v = _mm512_mask_i32gather_epi32(INF_v, is_not_INF_m, r_root_id_v, &SI_c.vertices_dists[0], sizeof(weighti));
-//				//dists_c_r_v = _mm512_mask_and_epi32(INF_v, is_not_INF_m, dists_c_r_v, LOWEST_BYTE_MASK);
 //				is_shorter_m = _mm512_cmple_epi32_mask(dists_c_r_v, dist_v_c_v);
-//				//is_not_INF_m = _mm512_cmpneq_epi32_mask(dists_c_r_v, INF_v);
 //				if (!is_shorter_m) {
 //					continue;
 //				}
-////				if (!is_not_INF_m) {
-////					continue;
-////				}
 //				// Distance compare
 //				is_shorter_m = _mm512_mask_cmple_epi32_mask(is_shorter_m, _mm512_mask_add_epi32(INF_v, is_shorter_m, dists_v_r_v, dists_c_r_v), dist_v_c_v);
-//				//is_shorter_m = _mm512_mask_cmple_epi32_mask(is_not_INF_m, _mm512_mask_add_epi32(INF_v, is_not_INF_m, dists_v_r_v, dists_c_r_v),dist_v_c_v);
 //				if (is_shorter_m) {
 //					int_mask_i32scatter_epi8(
 //							&SI_v.vertices_dists[0], 
@@ -1027,9 +1005,7 @@ inline void WeightedVertexCentricPLL::filter_out_labels(
 			// Sequential Version
 			// Traverse v_id's other new label to see if has shorter distance
 			for (inti i_r = 0; i_r < bound_label_i; ++i_r) {
-//				if (i_r == i_c) {
-//					continue;
-//				}
+			//for (inti i_r = i_c + 1; i_r < bound_label_i; ++i_r) {}
 				// r_root_id is the middle hop.
 				idi r_root_id = SI_v.vertices_que[i_r];
 				if (c_root_id <= r_root_id) {
@@ -1481,35 +1457,35 @@ void WeightedVertexCentricPLL::switch_labels_to_old_id(
 //	}
 
 	// Try query
-	idi u;
-	idi v;
-	while (std::cin >> u >> v) {
-		weighti dist = WEIGHTI_MAX;
-
-		// Normal Index Check
-		const auto &Lu = new_L[u];
-		const auto &Lv = new_L[v];
-//		unsorted_map<idi, weighti> markers;
-		map<idi, weighti> markers;
-		for (idi i = 0; i < Lu.size(); ++i) {
-			markers[Lu[i].first] = Lu[i].second;
-		}
-		for (idi i = 0; i < Lv.size(); ++i) {
-			const auto &tmp_l = markers.find(Lv[i].first);
-			if (tmp_l == markers.end()) {
-				continue;
-			}
-			int d = tmp_l->second + Lv[i].second;
-			if (d < dist) {
-				dist = d;
-			}
-		}
-		if (dist == 255) {
-			printf("2147483647\n");
-		} else {
-			printf("%u\n", dist);
-		}
-	}
+//	idi u;
+//	idi v;
+//	while (std::cin >> u >> v) {
+//		weighti dist = WEIGHTI_MAX;
+//
+//		// Normal Index Check
+//		const auto &Lu = new_L[u];
+//		const auto &Lv = new_L[v];
+////		unsorted_map<idi, weighti> markers;
+//		map<idi, weighti> markers;
+//		for (idi i = 0; i < Lu.size(); ++i) {
+//			markers[Lu[i].first] = Lu[i].second;
+//		}
+//		for (idi i = 0; i < Lv.size(); ++i) {
+//			const auto &tmp_l = markers.find(Lv[i].first);
+//			if (tmp_l == markers.end()) {
+//				continue;
+//			}
+//			int d = tmp_l->second + Lv[i].second;
+//			if (d < dist) {
+//				dist = d;
+//			}
+//		}
+//		if (dist == 255) {
+//			printf("2147483647\n");
+//		} else {
+//			printf("%u\n", dist);
+//		}
+//	}
 }
 
 }
