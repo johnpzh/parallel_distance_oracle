@@ -2,11 +2,11 @@
 #CXXFLAGS =	-O0 -g -Wall -Wextra -fmessage-length=0 -std=c++14 -fopenmp
 
 CXX = icpc
-CXXFLAGS =	-O3 -w2 -fmessage-length=0 -std=c++14 -fopenmp
+CXXFLAGS =	-O3 -g -w2 -fmessage-length=0 -std=c++14 -fopenmp
 
 OBJS =		pado.o
 
-LIBS = /usr/local/lib/libpapi.a
+#LIBS = /usr/local/lib/libpapi.a
 
 INCLUDES_DIR = includes
 INCLUDES = -I$(INCLUDES_DIR)
@@ -25,3 +25,5 @@ pado.o: pado.cpp $(INCLUDES_DIR)/*.h
 
 clean:
 	rm -f $(OBJS) $(TARGET)
+
+# -qopt-report -qopt-report-phase=vec

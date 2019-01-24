@@ -6,7 +6,7 @@ if [[ $# -lt 1 ]]; then
 fi
 fin=$1
 pado="../pado"
-pll="/home/zpeng/pppp/pll_dijkstra/bin/construct_index"
+pll="/home/zpeng/pppp/pll_dijkstra_simd/bin/construct_index"
 
 echo $fin
 echo "--------------------------------------------------"
@@ -18,5 +18,5 @@ $pado $fin
 #echo "PLL:"
 #echo "----"
 #$pll $fin pll.label
-#echo "--------------------------------------------------"
-#rm pll.label
+echo "--------------------------------------------------"
+##rm pll.label
