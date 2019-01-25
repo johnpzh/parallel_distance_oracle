@@ -70,6 +70,10 @@ private:
 		vector<inti> last_new_roots;
 		idi end_last_new_roots = 0;
 
+		// Monotone checker
+		bool are_dists_monotone = true;
+		weighti max_dist_batch = 0;
+
 		ShortIndex() = default;
 		explicit ShortIndex(idi num_roots) {
 			candidates_que.resize(num_roots);
@@ -175,6 +179,8 @@ private:
 	//uint64_t vc_cc_hit_count = 0;
 //	uint64_t total_candidates_num = 0;
 //	uint64_t set_candidates_num = 0;
+	uint64_t monotone_count = 0;
+	uint64_t checked_count = 0;
 	double initializing_time = 0;
 	double candidating_time = 0;
 	double adding_time = 0;
@@ -918,6 +924,17 @@ inline void WeightedVertexCentricPLL::filter_out_labels(
 		idi v_id = has_new_labels_queue[i_q];
 		IndexType &Lv = L[v_id];
 		ShortIndex &SI_v = short_index[v_id];
+
+		// Monotone check
+		++checked_count;
+		if (SI_v.are_dists_monotone) {
+			++monotone_count;
+			continue;
+		} else {
+			SI_v.are_dists_monotone = true;
+		}
+		SI_v.max_dist_batch = 0;
+
 		inti bound_label_i = SI_v.end_vertices_que;
 		// Traverse v_id's every new label
 		for (inti i_c = 0; i_c < bound_label_i; ++i_c) {
@@ -1129,6 +1146,9 @@ inline void WeightedVertexCentricPLL::vertex_centric_labeling_in_batches(
 				weighti tmp_dist_v_c = SI_v.candidates_dists[cand_root_id];
 				// Distance check for pruning
 				weighti query_dist_v_c;
+				//if (0 != b_id) {
+					//printf("v: %u cand_root_id: %u cand_real_id: %u\n", v_id, cand_root_id, cand_root_id + roots_start);//test
+				//}
 				if (WEIGHTI_MAX == 
 						(query_dist_v_c = distance_query(
 										 v_id,
@@ -1141,6 +1161,15 @@ inline void WeightedVertexCentricPLL::vertex_centric_labeling_in_batches(
 					if (WEIGHTI_MAX == SI_v.vertices_dists[cand_root_id]) {
 						// Record cand_root_id as v_id's label
 						SI_v.vertices_que[SI_v.end_vertices_que++] = cand_root_id;
+						
+					}
+					// Monotone check
+					if (SI_v.are_dists_monotone) {
+						if (tmp_dist_v_c > SI_v.max_dist_batch) {
+							SI_v.max_dist_batch = tmp_dist_v_c;
+						} else if (tmp_dist_v_c < SI_v.max_dist_batch) {
+							SI_v.are_dists_monotone = false;
+						}
 					}
 					// Record the new distance in the label table
 					SI_v.vertices_dists[cand_root_id] = tmp_dist_v_c;
@@ -1150,7 +1179,8 @@ inline void WeightedVertexCentricPLL::vertex_centric_labeling_in_batches(
 					// Update the dists_table
 					dists_table[cand_root_id][v_id] = query_dist_v_c;
 					// Need to send back the distance
-					// DEPRECATED! The correction should not be done here, because some shorter distance does not mean wrong label distances.
+
+					// The correction should not be done here, because some shorter distance does not mean wrong label distances.
 //					send_back(
 //							v_id,
 //							cand_root_id,
@@ -1159,6 +1189,9 @@ inline void WeightedVertexCentricPLL::vertex_centric_labeling_in_batches(
 //							short_index,
 //							roots_start);
 				}
+				//if (0 != b_id) {
+					//printf("query_dist_v_c: %u\n", query_dist_v_c);//test
+				//}
 			}
 			if (need_activate) {
 				if (!is_active[v_id]) {
@@ -1207,11 +1240,11 @@ inline void WeightedVertexCentricPLL::vertex_centric_labeling_in_batches(
 
 	// Filter out wrong and redundant labels in this batch
 	correction_time -= WallTimer::get_time_mark();
-//	filter_out_labels(
-//			has_new_labels_queue,
-//			end_has_new_labels_queue,
-//			short_index,
-//			roots_start);
+	filter_out_labels(
+			has_new_labels_queue,
+			end_has_new_labels_queue,
+			short_index,
+			roots_start);
 	correction_time += WallTimer::get_time_mark();
 
 	// Reset dists_table and short_index
@@ -1369,6 +1402,7 @@ void WeightedVertexCentricPLL::construct(const WeightedGraph &G)
 //	printf("BP_Checking: "); bp_checking_ins_count.print();
 //	printf("distance_query: "); dist_query_ins_count.print();
 	printf("Correction: %f %.2f%%\n", correction_time, 100.0 * correction_time / time_labeling);
+	printf("Monotone_count: %'lu %.2f%%\n", monotone_count, 100.0 * monotone_count / checked_count);
 	printf("Total_labeling_time: %.2f seconds\n", time_labeling);
 }
 
@@ -1449,7 +1483,7 @@ void WeightedVertexCentricPLL::switch_labels_to_old_id(
 //		puts("");
 //	}
 
-	// Try query
+//	// Try query
 //	idi u;
 //	idi v;
 //	while (std::cin >> u >> v) {
