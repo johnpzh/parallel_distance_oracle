@@ -13,12 +13,12 @@
 #include <map>
 #include <algorithm>
 #include <iostream>
-#include <limits.h>
+#include <climits>
 #include <xmmintrin.h>
 #include <bitset>
+#include <cmath>
 #include "globals.h"
 #include "graph.h"
-//#include "index.h"
 
 using std::vector;
 using std::unordered_map;
@@ -32,8 +32,6 @@ namespace PADO {
 
 const inti BATCH_SIZE = 1024; // The size for regular batch and bit array.
 const inti BITPARALLEL_SIZE = 50;
-
-
 
 //// Batch based processing, 09/11/2018
 class VertexCentricPLL {
@@ -99,13 +97,31 @@ private:
 			const vector<IndexType> &L,
 			smalli iter);
 
+//	inline void batch_process(
+//			const Graph &G,
+//			idi b_id,
+//			idi root_start,
+//			inti roots_size,
+//			vector<IndexType> &L,
+//			const vector<bool> &used_bp_roots);
 	inline void batch_process(
 			const Graph &G,
 			idi b_id,
 			idi root_start,
 			inti roots_size,
 			vector<IndexType> &L,
-			const vector<bool> &used_bp_roots);
+			const vector<bool> &used_bp_roots,
+			vector<idi> &active_queue,
+			idi &end_active_queue,
+			vector<idi> &candidate_queue,
+			idi &end_candidate_queue,
+			vector<ShortIndex> &short_index,
+			vector< vector<smalli> > &dist_matrix,
+			vector<bool> &got_candidates,
+			vector<bool> &is_active,
+			vector<idi> &once_candidated_queue,
+			idi &end_once_candidated_queue,
+			vector<bool> &once_candidated);
 
 
 	inline void initialize(
@@ -178,7 +194,7 @@ private:
 //	double init_dist_matrix_time = 0;
 //	double init_start_reset_time = 0;
 //	double init_indicators_time = 0;
-	L2CacheMissRate cache_miss;
+	//L2CacheMissRate cache_miss;
 //	TotalInstructsExe candidating_ins_count;
 //	TotalInstructsExe adding_ins_count;
 //	TotalInstructsExe bp_labeling_ins_count;
@@ -740,23 +756,34 @@ inline void VertexCentricPLL::batch_process(
 						idi roots_start, // start id of roots
 						inti roots_size, // how many roots in the batch
 						vector<IndexType> &L,
-						const vector<bool> &used_bp_roots)
+						const vector<bool> &used_bp_roots,
+						vector<idi> &active_queue,
+						idi &end_active_queue,
+						vector<idi> &candidate_queue,
+						idi &end_candidate_queue,
+						vector<ShortIndex> &short_index,
+						vector< vector<smalli> > &dist_matrix,
+						vector<bool> &got_candidates,
+						vector<bool> &is_active,
+						vector<idi> &once_candidated_queue,
+						idi &end_once_candidated_queue,
+						vector<bool> &once_candidated)
 {
 
 	initializing_time -= WallTimer::get_time_mark();
-	static const idi num_v = G.get_num_v();
-	static vector<idi> active_queue(num_v);
-	static idi end_active_queue = 0;
-	static vector<idi> candidate_queue(num_v);
-	static idi end_candidate_queue = 0;
-	static vector<ShortIndex> short_index(num_v);
-	static vector< vector<smalli> > dist_matrix(roots_size, vector<smalli>(num_v, SMALLI_MAX));
-	static vector<bool> got_candidates(num_v, false); // got_candidates[v] is true means vertex v is in the queue candidate_queue
-	static vector<bool> is_active(num_v, false);// is_active[v] is true means vertex v is in the active queue.
-
-	static vector<idi> once_candidated_queue(num_v); // if short_index[v].indicator.any() is true, v is in the queue.
-	static idi end_once_candidated_queue = 0;
-	static vector<bool> once_candidated(num_v, false);
+//	static const idi num_v = G.get_num_v();
+//	static vector<idi> active_queue(num_v);
+//	static idi end_active_queue = 0;
+//	static vector<idi> candidate_queue(num_v);
+//	static idi end_candidate_queue = 0;
+//	static vector<ShortIndex> short_index(num_v);
+//	static vector< vector<smalli> > dist_matrix(roots_size, vector<smalli>(num_v, SMALLI_MAX));
+//	static vector<bool> got_candidates(num_v, false); // got_candidates[v] is true means vertex v is in the queue candidate_queue
+//	static vector<bool> is_active(num_v, false);// is_active[v] is true means vertex v is in the active queue.
+//
+//	static vector<idi> once_candidated_queue(num_v); // if short_index[v].indicator.any() is true, v is in the queue.
+//	static idi end_once_candidated_queue = 0;
+//	static vector<bool> once_candidated(num_v, false);
 
 	// At the beginning of a batch, initialize the labels L and distance buffer dist_matrix;
 	initialize(
@@ -893,7 +920,7 @@ void VertexCentricPLL::construct(const Graph &G)
 	idi remainer = num_v % BATCH_SIZE;
 	idi b_i_bound = num_v / BATCH_SIZE;
 	vector<bool> used_bp_roots(num_v, false);
-	cache_miss.measure_start();
+	//cache_miss.measure_start();
 	double time_labeling = -WallTimer::get_time_mark();
 
 	double bp_labeling_time = -WallTimer::get_time_mark();
@@ -905,6 +932,19 @@ void VertexCentricPLL::construct(const Graph &G)
 //	bp_labeling_ins_count.measure_stop();
 	bp_labeling_time += WallTimer::get_time_mark();
 
+	vector<idi> active_queue(num_v);
+	idi end_active_queue = 0;
+	vector<idi> candidate_queue(num_v);
+	idi end_candidate_queue = 0;
+	vector<ShortIndex> short_index(num_v);
+	vector< vector<smalli> > dist_matrix(BATCH_SIZE, vector<smalli>(num_v, SMALLI_MAX));
+	vector<bool> got_candidates(num_v, false); // got_candidates[v] is true means vertex v is in the queue candidate_queue
+	vector<bool> is_active(num_v, false);// is_active[v] is true means vertex v is in the active queue.
+
+	vector<idi> once_candidated_queue(num_v); // if short_index[v].indicator.any() is true, v is in the queue.
+	idi end_once_candidated_queue = 0;
+	vector<bool> once_candidated(num_v, false);
+
 	for (idi b_i = 0; b_i < b_i_bound; ++b_i) {
 //		printf("b_i: %u\n", b_i);//test
 		batch_process(
@@ -913,7 +953,18 @@ void VertexCentricPLL::construct(const Graph &G)
 				b_i * BATCH_SIZE,
 				BATCH_SIZE,
 				L,
-				used_bp_roots);
+				used_bp_roots,
+				active_queue,
+				end_active_queue,
+				candidate_queue,
+				end_candidate_queue,
+				short_index,
+				dist_matrix,
+				got_candidates,
+				is_active,
+				once_candidated_queue,
+				end_once_candidated_queue,
+				once_candidated);
 //		batch_process(
 //				G,
 //				b_i,
@@ -929,7 +980,18 @@ void VertexCentricPLL::construct(const Graph &G)
 				b_i_bound * BATCH_SIZE,
 				remainer,
 				L,
-				used_bp_roots);
+				used_bp_roots,
+				active_queue,
+				end_active_queue,
+				candidate_queue,
+				end_candidate_queue,
+				short_index,
+				dist_matrix,
+				got_candidates,
+				is_active,
+				once_candidated_queue,
+				end_once_candidated_queue,
+				once_candidated);
 //		batch_process(
 //				G,
 //				b_i_bound,
@@ -938,7 +1000,7 @@ void VertexCentricPLL::construct(const Graph &G)
 //				L);
 	}
 	time_labeling += WallTimer::get_time_mark();
-	cache_miss.measure_stop();
+	//cache_miss.measure_stop();
 
 	// Test
 	setlocale(LC_NUMERIC, "");
@@ -967,7 +1029,7 @@ void VertexCentricPLL::construct(const Graph &G)
 //						normal_hit_count,
 //						normal_hit_count * 100.0 / total_check_count,
 //						normal_hit_count * 100.0 / (total_check_count - bp_hit_count));
-	cache_miss.print();
+	//cache_miss.print();
 //	printf("Candidating: "); candidating_ins_count.print();
 //	printf("Adding: "); adding_ins_count.print();
 //	printf("BP_Labeling: "); bp_labeling_ins_count.print();

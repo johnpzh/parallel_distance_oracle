@@ -69,20 +69,23 @@ void filter_out_labels(
 // 3. Put roots into active_queue;
 void initialize_tables(
 		The candidate distances data structure vector<ShortIndex> short_index,
-		The distance table vector<weighti> dists_table,
+		The distance table vector<weighti> roots_labels_buffer,
+		//The distance table vector<weighti> dists_table,
 		The active queue vector<idi> active_queue,
 		The ID of beginning vertex of this batch idi roots_start,
 		The number of vertices in this batch inti roots_size,
-		The index vector<IndexType> L)
+		The index vector<IndexType> L,
+		The queue of all vertices which has new labels in this batch vector<idi> has_new_labels_queue,
+		The flags array of all vertices vector<bool> has_new_labels)
 {
-	// Distance Table dists_table
+	// Distance Table roots_labels_buffer
 	{
 		for (every root r_real_id) {
 			// Traverse labels of r
 			for (every label (v_id, dist) in L[r_real_id]) {
-				dists_table[r_real_id - roots_start][v_id] = dist; // Note the ID transfer
+				roots_labels_buffer[r_real_id - roots_start][v_id] = dist; // Note the ID transfer
 			}
-			dists_table[r_real_id - roots_start][r_real_id] = 0; // r to itself
+			roots_labels_buffer[r_real_id - roots_start][r_real_id] = 0; // r to itself
 		}
 	}
 
@@ -99,6 +102,14 @@ void initialize_tables(
 	{
 		for (every root r_real_id) {
 			active_queue.enqueue(r_real_id);
+		}
+	}
+
+	// has_new_labels_queue: Put all roots into the has_new_labels_queue
+	{
+		for (idi r_real_id = roots_start; r_real_id < roots_bound; ++r_real_id) {
+			has_new_labels_queue.enque(r_real_id);
+			has_new_labels[r_real_id] = true;
 		}
 	}
 }
@@ -127,16 +138,16 @@ void send_messages(
 			}
 			weighti dist_r_v = short_index[v].vertices_dists[r]; // distance of (r, v)
 			weighti tmp_dist_r_w = dist_r_v + dist_v_w;
-			if (tmp_dist_r_w < dists_table[r][w] && tmp_dist_r_w < short_index[w].candidates_dists[r]) {
+			if (tmp_dist_r_w < dists_table[w][r] && tmp_dist_r_w < short_index[w].candidates_dists[r]) {
 				// Mark r as a candidate of w
 				if (INF == short_index[w].candidates_dists[r]) {
 					short_index[w].candidates_que.enqueue(r);
 				}
 				short_index[w].candidates_dists[r] = tmp_dist_r_w;
-				if (INF == dists_table[r][w]) {
+				if (INF == dists_table[w][r]) {
 					short_index[w].reached_roots_que.enqueue(r);
 				}
-				dists_table[r][w] = tmp_dist_r_w; // This is for filtering out future longer distance.
+				dists_table[w][r] = tmp_dist_r_w; // This is for filtering out future longer distance.
 				if (!has_candidates[w]) {
 					has_candidates[w] = true;
 					has_candidates_queue.enqueue(w); //
@@ -152,7 +163,8 @@ void send_messages(
 weighti distance_query(
 		vertex v,
 		candidate c,
-		The distance table dists_table,
+		The distance table roots_labels_buffer,
+		//The distance table dists_table,
 		The candidate distances data structure vector<ShortIndex> short_index,
 		The index L,
 		The beginning ID of roots_start,
@@ -162,10 +174,10 @@ weighti distance_query(
 	// Traverse all available hops of v, to see if they reach c
 	// 1. Labels in L[v]
 	for (every label (r, dist_v_r) in L[v]) {
-		if (c_real_id < r || INF == dists_table[c][r]) {
+		if (c_real_id < r || INF == roots_labels_buffer[c][r]) {
 			continue;
 		}
-		weighti label_dist_v_c = dist_v_r + dists_table[c][r];
+		weighti label_dist_v_c = dist_v_r + roots_labels_buffer[c][r];
 		if (label_dist_v_c <= tmp_dist_v_c) {
 			return label_dist_v_c;
 		}
@@ -261,9 +273,12 @@ void sending_back(
 void update_index(
 		The candidate distances data structure vector<ShortIndex> short_index,
 		The index vector<IndexType> L,
-		The ID of beginning vertex of this batch idi roots_start)
+		The ID of beginning vertex of this batch idi roots_start,
+		The queue of all vertices which has new labels in this batch vector<idi> has_new_labels_queue,
+		The flags array of all vertices vector<bool> has_new_labels)
 {
-	for (every vertex v) {
+	for (every vertex v in has_new_labels_queue) {
+		has_new_labels[v] = false; // Reset has_new_labels
 		// Traverse the vertices_que in short_index[v]
 		for (every r in short_index[v].vertices_que) {
 			r_real_id = r + roots_start;
@@ -272,28 +287,32 @@ void update_index(
 				short_index[v].vertices_dists[r] = INF; // Reset vertices_dists
 			}
 		}
+		short_index[v].vertices_que.clear();
 	}
+	has_new_labels_queue.clear();
 }
 
 // Function: reset distance table dists_table
 void reset_tables(
 		The candidate distances data structure vector<ShortIndex> short_index,
 		The index L,
-		The Distance Tabel vector< vector<weighti> > dists_table)
+		The Distance Tabel vector< vector<weighti> > dists_table,
+		Another distance table vector< vector<weighti> > roots_labels_buffer,
+		The buffer of all vertices which have new labels in this batch vector<idi> has_new_labels_queue)
 {
-	// Reset dists_table according to L (old labels)
+	// Reset roots_labels_buffer according to L (old labels)
 	for (every root r_real_id) {
 		// Traverse labels of r
 		for (every label (v_id, dist) in L[r_real_id]) {
-			dists_table[r_real_id - roots_start][v_id] = INF; // Note the ID transfer
+			roots_labels_buffer[r_real_id - roots_start][v_id] = INF; // Note the ID transfer
 		}
-		dists_table[r_real_id - roots_start][r_real_id] = INF; // r to itself
+		roots_labels_buffer[r_real_id - roots_start][r_real_id] = INF; // r to itself
 	}
 
 	// Reset dists_table according to short_index[v].reached_roots_que
-	for (every vertex v) {
+	for (every vertex v in has_new_labels_queue) {
 		for (every r in short_index[v].reached_roots_que) {
-			dists_table[r][v] = INF;
+			dists_table[v][r] = INF;
 		}
 		short_index[v].reached_roots_que.clear();
 	}
@@ -313,9 +332,10 @@ void vertex_centric_labeling_in_batches(
 	A bitmap array vector<bool> is_active(num_v, false); // Flag array: is_active[v] is true means v is in active queue.
 	An queue storing all vertices which have candidates is vector<idi> has_candidates_queue(num_v);
 	A bitmap array vector<bool> has_candidates(num_v, false); // Flag array: has_candidates[v] is true means v is in has_candidates_queue.
-	The the distance table is vector< vector<weighti> > dists_table(roots_size, vector<weighti>(num_v, INF)); 
+	The the distance table is vector< vector<weighti> > dists_table(num_v, vector<weighti>(BATCH_SIZE, INF)); 
 		// The distance table is roots_sizes by N. 1. record the shortest distance so far from every root to every vertex;
-		// 2. The distance buffer, recording label distances of every root. It needs to be initialized every batch by labels of roots.
+		// 2. (DEPRECATED! Replaced by roots_labels_buffer) The distance buffer, recording old label distances of every root. It needs to be initialized every batch by labels of roots. (dists_table[r][l], r > l)
+	Another distance table storing roots' old label distances is vector< vector<weighti> > roots_labels_buffer(BATCH_SIZE, vector<weighti>(num_v, WEIGHTI_MAX));
 //	The label table is vector< vector<weighti> > labels_table(num_v, vector<weighti>(roots_size, INF));
 		// The label table records label distance for every vertex.
 		// This is replaced by the vertices_dists in the short_index.
@@ -341,11 +361,14 @@ void vertex_centric_labeling_in_batches(
 	// Activate roots
 	initialize_tables(
 		The candidate distances data structure vector<ShortIndex> short_index,
-		The distance table vector<weighti> dists_table,
+		The distance table vector<weighti> roots_labels_buffer,
+		//The distance table vector<weighti> dists_table,
 		The active queue vector<idi> active_queue,
 		The ID of beginning vertex of this batch idi roots_start,
 		The number of vertices in this batch inti roots_size,
-		The index vector<IndexType> L);
+		The index vector<IndexType> L,
+		The queue of all vertices which has new labels in this batch vector<idi> has_new_labels_queue,
+		The flags array of all vertices vector<bool> has_new_labels);
 
 	// Active vertices sending messages.
 	// Those vertices received messages are put into has_candidates_queue.
@@ -379,7 +402,8 @@ void vertex_centric_labeling_in_batches(
 				if (INF == (query_dist_v_c = distance_query(
 							vertex v,
 							candidate c,
-							The distance table dists_table,
+							The distance table roots_labels_buffer,
+							//The distance table dists_table,
 							The candidate distances data structure vector<ShortIndex> short_index,
 							The index L,
 							The beginning ID of roots_start,
@@ -392,7 +416,7 @@ void vertex_centric_labeling_in_batches(
 					short_index[v].last_new_roots.enqueue(c);
 					need_activate = true;
 				} else if (query_dist_v_c < tmp_dist_v_c){
-					dists_table[c][v] = query_dist_v_c;
+					dists_table[v][c] = query_dist_v_c;
 					// First correcting option:
 					// v needs to send message back to its neighbor to change potential wrong distance from root c
 					// DEPRECATED! This process is too costy.
@@ -409,6 +433,10 @@ void vertex_centric_labeling_in_batches(
 				if (!is_active[v]) {
 					is_active[v] = true;
 					active_queue.enqueue(v); // Here needs a bitmap to ensure v is added only once
+				}
+				if (!has_new_labels[v_id]) {
+					has_new_labels[v_id] = true;
+					has_new_labels_queue.enque(v_id);
 				}
 			}
 		}
@@ -434,7 +462,9 @@ void vertex_centric_labeling_in_batches(
 	reset_tables(
 		The candidate distances data structure vector<ShortIndex> short_index,
 		The index L,
-		The Distance Tabel vector< vector<weighti> > dists_table);
+		The Distance Table vector< vector<weighti> > dists_table,
+		Another distance table vector< vector<weighti> > roots_labels_buffer,
+		The queue of all vertices which has new labels in this batch vector<idi> has_new_labels_queue);
 	/*
 	Second, after the message-sending phase, all distances are
 	available in the distance table. And according to it, we can build 
@@ -443,7 +473,9 @@ void vertex_centric_labeling_in_batches(
 	update_index(
 		The candidate distances data structure vector<ShortIndex> short_index,
 		The index vector<IndexType> L,
-		The ID of beginning vertex of this batch idi roots_start);
+		The ID of beginning vertex of this batch idi roots_start,
+		The queue of all vertices which has new labels in this batch vector<idi> has_new_labels_queue,
+		The flags array of all vertices vector<bool> has_new_labels);
 
 }
 

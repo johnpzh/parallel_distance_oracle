@@ -11,11 +11,12 @@
 #include <unistd.h>
 #include "globals.h"
 #include "graph.h"
-//#include "pado.h"
+#include "pado.h"
 //#include "pado_weighted.20190111.batch_process_vectorized_dist_query.h"
 //#include "pado_weighted.20181228.batch_process.h"
 //#include "pado_weighted.20190122.labels_correction.h"
-#include "pado_weighted.20190125.tmp.correction_conditions.h"
+//#include "pado_weighted.20190126.tmp.vectorized_more_part_not_only_DQ.h"
+//#include "pado_weighted.20190128.vectorized_with_roots_labels_buffer.h"
 //#include "pado_para.h"
 //#include "pado_para.20181106.tmp.scalability.h"
 //#include "pado_para.20181115.tmp.parallel_bp.h"
@@ -25,7 +26,8 @@ using namespace PADO;
 void pado(const char filename[])
 {
 	//printf("Reading...\n"); fflush(stdout);//test
-	WeightedGraph G(filename);
+	//WeightedGraph G(filename);
+	Graph G(filename);
 	//printf("Ranking...\n"); fflush(stdout);//test
 	vector<idi> rank = G.make_rank();
 //	{ // test
@@ -41,14 +43,14 @@ void pado(const char filename[])
 //	}
 	//G.print();
 	//printf("Labeling...\n"); fflush(stdout);//test
-	WeightedVertexCentricPLL VCPLL(G);
-	VCPLL.switch_labels_to_old_id(rank2id, rank);
+	//WeightedVertexCentricPLL VCPLL(G);
+	//VCPLL.switch_labels_to_old_id(rank2id, rank);
 
 //	NUM_THREADS = 1;
 //	omp_set_num_threads(NUM_THREADS);
 //	ParaVertexCentricPLL VCPLL(G);
-//	VertexCentricPLL VCPLL(G);
-//	VCPLL.switch_labels_to_old_id(rank2id, rank);
+	VertexCentricPLL VCPLL(G);
+	VCPLL.switch_labels_to_old_id(rank2id, rank);
 
 
 //	for (inti t_num = 1; t_num <= 32; t_num *= 2) {
