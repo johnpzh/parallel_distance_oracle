@@ -19,7 +19,6 @@
 #include <cmath>
 #include "globals.h"
 #include "graph.h"
-//#include "index.h"
 #include <omp.h>
 
 using std::vector;
@@ -81,12 +80,12 @@ private:
 		// The v.indicator[BATCH_SIZE] is set if in current batch v has got any new labels already.
 		// In this way, when do initialization, only initialize those short_index[v] whose indicator[BATCH_SIZE] is set.
 		bitset<BATCH_SIZE + 1> indicator; // Global indicator, indicator[r] (0 <= r < BATCH_SIZE) is set means root r once selected as candidate already
-		bitset<BATCH_SIZE> candidates; // Candidates one iteration, candidates[r] is set means root r is candidate in this iteration
+//		bitset<BATCH_SIZE> candidates; // Candidates one iteration, candidates[r] is set means root r is candidate in this iteration
 
-//		// Use a queue to store candidates
-//		vector<inti> candidates_que = vector<inti>(BATCH_SIZE);
-//		inti end_candidates_que = 0;
-//		vector<uint8_t> is_candidate = vector<uint8_t>(BATCH_SIZE, 0);
+		// Use a queue to store candidates
+		vector<inti> candidates_que = vector<inti>(BATCH_SIZE);
+		inti end_candidates_que = 0;
+		vector<uint8_t> is_candidate = vector<uint8_t>(BATCH_SIZE, 0);
 	} __attribute__((aligned(64)));
 
 	vector<IndexType> L;
@@ -187,6 +186,7 @@ private:
 				inti roots_size,
 				vector<IndexType> &L,
 				vector< vector<smalli> > &dist_matrix);
+	// Some parallel interfaces
 	inline idi prefix_sum_for_offsets(
 				vector<idi> &offsets);
 	template <typename T>
@@ -197,6 +197,11 @@ private:
 				idi num_elements, // total number of elements which need to be added from tmp_queue to queue
 				vector<T> &queue,
 				idi &end_queue);
+	template <typename T, typename Int>
+	inline void TS_enqueue(
+				vector<T> &queue,
+				Int &end_queue,
+				const T &e);
 
 	// Test only
 //	uint64_t normal_hit_count = 0;
@@ -1040,11 +1045,13 @@ inline void ParaVertexCentricPLL::push_labels(
 		_mm_prefetch(&L_tail.bp_sets[0][0], _MM_HINT_T0);
 		// Traverse v_head's last inserted labels
 		for (idi l_i = l_i_start; l_i < l_i_bound; ++l_i) {
-			idi label_root_id = Lv.vertices[l_i];
+			inti label_root_id = Lv.vertices[l_i];
 			idi label_real_id = label_root_id + roots_start;
 			if (v_tail <= label_real_id) {
 				// v_tail has higher rank than all remaining labels
-				break;
+				// For candidates_que, this is not true any more!
+//				break;
+				continue;
 			}
 			ShortIndex &SI_v_tail = short_index[v_tail];
 			if (SI_v_tail.indicator[label_root_id]) {
@@ -1087,13 +1094,14 @@ inline void ParaVertexCentricPLL::push_labels(
 		    }
 
 			// Record vertex label_root_id as v_tail's candidates label
-			SI_v_tail.candidates.set(label_root_id);
+//			SI_v_tail.candidates.set(label_root_id);
 //			if (!SI_v_tail.is_candidate[label_root_id]) {
 //				SI_v_tail.is_candidate[label_root_id] = true;
 //				SI_v_tail.candidates_que[SI_v_tail.end_candidates_que++] = label_root_id;
 //			}
-//		    if (!SI_v_tail.is_candidate[label_root_id]) {
-//		    	if (CAS(&SI_v_tail.is_candidate[label_root_id], (uint8_t) 0, (uint8_t) 1)) {
+		    if (!SI_v_tail.is_candidate[label_root_id]) {
+		    	if (CAS(&SI_v_tail.is_candidate[label_root_id], (uint8_t) 0, (uint8_t) 1)) {
+		    		TS_enqueue(SI_v_tail.candidates_que, SI_v_tail.end_candidates_que, label_root_id);
 //		    		volatile inti old_v = SI_v_tail.end_candidates_que;
 //		    		volatile inti new_v = old_v + 1;
 //		    		while (!CAS(&SI_v_tail.end_candidates_que, old_v, new_v)) {
@@ -1101,8 +1109,8 @@ inline void ParaVertexCentricPLL::push_labels(
 //		    			new_v = old_v + 1;
 //		    		}
 //		    		SI_v_tail.candidates_que[old_v] = label_root_id;
-//		    	}
-//		    }
+		    	}
+		    }
 
 			// Add into candidate_queue
 			if (!got_candidates[v_tail]) {
@@ -1326,171 +1334,6 @@ inline void ParaVertexCentricPLL::reset_at_end(
 //	}
 }
 
-// Function to get the prefix sum of elements in offsets
-inline idi ParaVertexCentricPLL::prefix_sum_for_offsets(
-									vector<idi> &offsets)
-{
-	idi size_offsets = offsets.size();
-	if (1 == size_offsets) {
-		idi tmp = offsets[0];
-		offsets[0] = 0;
-		return tmp;
-	} else if (size_offsets < 2048) {
-		idi offset_sum = 0;
-		idi size = size_offsets;
-		for (idi i = 0; i < size; ++i) {
-			idi tmp = offsets[i];
-			offsets[i] = offset_sum;
-			offset_sum += tmp;
-		}
-		return offset_sum;
-	} else {
-		// Parallel Prefix Sum, based on Guy E. Blelloch's Prefix Sums and Their Applications
-		idi last_element = offsets[size_offsets - 1];
-		//	idi size = 1 << ((idi) log2(size_offsets - 1) + 1);
-		idi size = 1 << ((idi) log2(size_offsets));
-		//	vector<idi> nodes(size, 0);
-		idi tmp_element = offsets[size - 1];
-		//#pragma omp parallel for
-		//	for (idi i = 0; i < size_offsets; ++i) {
-		//		nodes[i] = offsets[i];
-		//	}
-
-		// Up-Sweep (Reduce) Phase
-		idi log2size = log2(size);
-		for (idi d = 0; d < log2size; ++d) {
-			idi by = 1 << (d + 1);
-#pragma omp parallel for
-			for (idi k = 0; k < size; k += by) {
-				offsets[k + (1 << (d + 1)) - 1] += offsets[k + (1 << d) - 1];
-			}
-		}
-
-		// Down-Sweep Phase
-		offsets[size - 1] = 0;
-		for (idi d = log2(size) - 1; d != (idi) -1 ; --d) {
-			idi by = 1 << (d + 1);
-#pragma omp parallel for
-			for (idi k = 0; k < size; k += by) {
-				idi t = offsets[k + (1 << d) - 1];
-				offsets[k + (1 << d) - 1] = offsets[k + (1 << (d + 1)) - 1];
-				offsets[k + (1 << (d + 1)) - 1] += t;
-			}
-		}
-
-		//#pragma omp parallel for
-		//	for (idi i = 0; i < size_offsets; ++i) {
-		//		offsets[i] = nodes[i];
-		//	}
-		if (size != size_offsets) {
-			idi tmp_sum = offsets[size - 1] + tmp_element;
-			for (idi i = size; i < size_offsets; ++i) {
-				idi t = offsets[i];
-				offsets[i] = tmp_sum;
-				tmp_sum += t;
-			}
-		}
-
-		return offsets[size_offsets - 1] + last_element;
-	}
-//	// Get the offset as the prefix sum of out degrees
-//	idi offset_sum = 0;
-//	idi size = offsets.size();
-//	for (idi i = 0; i < size; ++i) {
-//		idi tmp = offsets[i];
-//		offsets[i] = offset_sum;
-//		offset_sum += tmp;
-//	}
-//	return offset_sum;
-
-//// Parallel Prefix Sum, based on Guy E. Blelloch's Prefix Sums and Their Applications
-//	idi size_offsets = offsets.size();
-//	idi last_element = offsets[size_offsets - 1];
-////	idi size = 1 << ((idi) log2(size_offsets - 1) + 1);
-//	idi size = 1 << ((idi) log2(size_offsets));
-////	vector<idi> nodes(size, 0);
-//	idi tmp_element = offsets[size - 1];
-////#pragma omp parallel for
-////	for (idi i = 0; i < size_offsets; ++i) {
-////		nodes[i] = offsets[i];
-////	}
-//
-//	// Up-Sweep (Reduce) Phase
-//	idi log2size = log2(size);
-//	for (idi d = 0; d < log2size; ++d) {
-//		idi by = 1 << (d + 1);
-//#pragma omp parallel for
-//		for (idi k = 0; k < size; k += by) {
-//			offsets[k + (1 << (d + 1)) - 1] += offsets[k + (1 << d) - 1];
-//		}
-//	}
-//
-//	// Down-Sweep Phase
-//	offsets[size - 1] = 0;
-//	for (idi d = log2(size) - 1; d != (idi) -1 ; --d) {
-//		idi by = 1 << (d + 1);
-//#pragma omp parallel for
-//		for (idi k = 0; k < size; k += by) {
-//			idi t = offsets[k + (1 << d) - 1];
-//			offsets[k + (1 << d) - 1] = offsets[k + (1 << (d + 1)) - 1];
-//			offsets[k + (1 << (d + 1)) - 1] += t;
-//		}
-//	}
-//
-////#pragma omp parallel for
-////	for (idi i = 0; i < size_offsets; ++i) {
-////		offsets[i] = nodes[i];
-////	}
-//	if (size != offsets.size()) {
-//		idi tmp_sum = offsets[size - 1] + tmp_element;
-//		idi i_bound = offsets.size();
-//		for (idi i = size; i < i_bound; ++i) {
-//			idi t = offsets[i];
-//			offsets[i] = tmp_sum;
-//			tmp_sum += t;
-//		}
-//	}
-//
-//	return offsets[size_offsets - 1] + last_element;
-}
-
-// Collect elements in the tmp_queue into the queue
-template <typename T>
-inline void ParaVertexCentricPLL::collect_into_queue(
-//					vector<idi> &tmp_queue,
-					vector<T> &tmp_queue,
-					vector<idi> &offsets_tmp_queue, // the locations in tmp_queue for writing from tmp_queue
-					vector<idi> &offsets_queue, // the locations in queue for writing into queue.
-					idi num_elements, // total number of elements which need to be added from tmp_queue to queue
-//					vector<idi> &queue,
-					vector<T> &queue,
-					idi &end_queue)
-{
-	if (0 == num_elements) {
-		return;
-	}
-	idi i_bound = offsets_tmp_queue.size();
-#pragma omp parallel for
-	for (idi i = 0; i < i_bound; ++i) {
-		idi i_q_start = end_queue + offsets_queue[i];
-		idi i_q_bound;
-		if (i_bound - 1 != i) {
-			i_q_bound = end_queue + offsets_queue[i + 1];
-		} else {
-			i_q_bound = end_queue + num_elements;
-		}
-		if (i_q_start == i_q_bound) {
-			// If the group has no elements to be added, then continue to the next group
-			continue;
-		}
-		idi end_tmp = offsets_tmp_queue[i];
-		for (idi i_q = i_q_start; i_q < i_q_bound; ++i_q) {
-			queue[i_q] = tmp_queue[end_tmp++];
-		}
-	}
-	end_queue += num_elements;
-}
-
 inline void ParaVertexCentricPLL::batch_process(
 						const Graph &G,
 						idi b_id,
@@ -1671,16 +1514,16 @@ inline void ParaVertexCentricPLL::batch_process(
 				got_candidates[v_id] = 0; // reset got_candidates
 				bool be_active = false; // flag, if be_active is ture, v_id needs to be marked as active (enqueue active_queue)
 				// Traverse v_id's all candidates
-				for (inti cand_root_id = 0; cand_root_id < roots_size; ++cand_root_id) {
-					if (!short_index[v_id].candidates[cand_root_id]) {
-						// Root cand_root_id is not vertex v_id's candidate
-						continue;
-					}
-					short_index[v_id].candidates.reset(cand_root_id);
-//				inti bound_cand_i = short_index[v_id].end_candidates_que;
-//				for (inti cand_i = 0; cand_i < bound_cand_i; ++cand_i) {
-//					inti cand_root_id = short_index[v_id].candidates_que[cand_i];
-//					short_index[v_id].is_candidate[cand_root_id] = 0; // Reset is_candidate
+//				for (inti cand_root_id = 0; cand_root_id < roots_size; ++cand_root_id) {
+//					if (!short_index[v_id].candidates[cand_root_id]) {
+//						// Root cand_root_id is not vertex v_id's candidate
+//						continue;
+//					}
+//					short_index[v_id].candidates.reset(cand_root_id);
+				inti bound_cand_i = short_index[v_id].end_candidates_que;
+				for (inti cand_i = 0; cand_i < bound_cand_i; ++cand_i) {
+					inti cand_root_id = short_index[v_id].candidates_que[cand_i];
+					short_index[v_id].is_candidate[cand_root_id] = 0; // Reset is_candidate
 					// Only insert cand_root_id into v_id's label if its distance to v_id is shorter than existing distance
 					if ( distance_query(
 									cand_root_id,
@@ -1711,7 +1554,7 @@ inline void ParaVertexCentricPLL::batch_process(
 								iter);
 					}
 				}
-//				short_index[v_id].end_candidates_que = 0;
+				short_index[v_id].end_candidates_que = 0;
 //				}
 				if (be_active) {
 					if (CAS(&is_active[v_id], (uint8_t) 0, (uint8_t) 1)) {
@@ -1920,6 +1763,188 @@ void ParaVertexCentricPLL::construct(const Graph &G)
 	printf("Labeling: %f\n\n", time_labeling);
 	// End test
 }
+
+// Function to get the prefix sum of elements in offsets
+inline idi ParaVertexCentricPLL::prefix_sum_for_offsets(
+									vector<idi> &offsets)
+{
+	idi size_offsets = offsets.size();
+	if (1 == size_offsets) {
+		idi tmp = offsets[0];
+		offsets[0] = 0;
+		return tmp;
+	} else if (size_offsets < 2048) {
+		idi offset_sum = 0;
+		idi size = size_offsets;
+		for (idi i = 0; i < size; ++i) {
+			idi tmp = offsets[i];
+			offsets[i] = offset_sum;
+			offset_sum += tmp;
+		}
+		return offset_sum;
+	} else {
+		// Parallel Prefix Sum, based on Guy E. Blelloch's Prefix Sums and Their Applications
+		idi last_element = offsets[size_offsets - 1];
+		//	idi size = 1 << ((idi) log2(size_offsets - 1) + 1);
+		idi size = 1 << ((idi) log2(size_offsets));
+		//	vector<idi> nodes(size, 0);
+		idi tmp_element = offsets[size - 1];
+		//#pragma omp parallel for
+		//	for (idi i = 0; i < size_offsets; ++i) {
+		//		nodes[i] = offsets[i];
+		//	}
+
+		// Up-Sweep (Reduce) Phase
+		idi log2size = log2(size);
+		for (idi d = 0; d < log2size; ++d) {
+			idi by = 1 << (d + 1);
+#pragma omp parallel for
+			for (idi k = 0; k < size; k += by) {
+				offsets[k + (1 << (d + 1)) - 1] += offsets[k + (1 << d) - 1];
+			}
+		}
+
+		// Down-Sweep Phase
+		offsets[size - 1] = 0;
+		for (idi d = log2(size) - 1; d != (idi) -1 ; --d) {
+			idi by = 1 << (d + 1);
+#pragma omp parallel for
+			for (idi k = 0; k < size; k += by) {
+				idi t = offsets[k + (1 << d) - 1];
+				offsets[k + (1 << d) - 1] = offsets[k + (1 << (d + 1)) - 1];
+				offsets[k + (1 << (d + 1)) - 1] += t;
+			}
+		}
+
+		//#pragma omp parallel for
+		//	for (idi i = 0; i < size_offsets; ++i) {
+		//		offsets[i] = nodes[i];
+		//	}
+		if (size != size_offsets) {
+			idi tmp_sum = offsets[size - 1] + tmp_element;
+			for (idi i = size; i < size_offsets; ++i) {
+				idi t = offsets[i];
+				offsets[i] = tmp_sum;
+				tmp_sum += t;
+			}
+		}
+
+		return offsets[size_offsets - 1] + last_element;
+	}
+//	// Get the offset as the prefix sum of out degrees
+//	idi offset_sum = 0;
+//	idi size = offsets.size();
+//	for (idi i = 0; i < size; ++i) {
+//		idi tmp = offsets[i];
+//		offsets[i] = offset_sum;
+//		offset_sum += tmp;
+//	}
+//	return offset_sum;
+
+//// Parallel Prefix Sum, based on Guy E. Blelloch's Prefix Sums and Their Applications
+//	idi size_offsets = offsets.size();
+//	idi last_element = offsets[size_offsets - 1];
+////	idi size = 1 << ((idi) log2(size_offsets - 1) + 1);
+//	idi size = 1 << ((idi) log2(size_offsets));
+////	vector<idi> nodes(size, 0);
+//	idi tmp_element = offsets[size - 1];
+////#pragma omp parallel for
+////	for (idi i = 0; i < size_offsets; ++i) {
+////		nodes[i] = offsets[i];
+////	}
+//
+//	// Up-Sweep (Reduce) Phase
+//	idi log2size = log2(size);
+//	for (idi d = 0; d < log2size; ++d) {
+//		idi by = 1 << (d + 1);
+//#pragma omp parallel for
+//		for (idi k = 0; k < size; k += by) {
+//			offsets[k + (1 << (d + 1)) - 1] += offsets[k + (1 << d) - 1];
+//		}
+//	}
+//
+//	// Down-Sweep Phase
+//	offsets[size - 1] = 0;
+//	for (idi d = log2(size) - 1; d != (idi) -1 ; --d) {
+//		idi by = 1 << (d + 1);
+//#pragma omp parallel for
+//		for (idi k = 0; k < size; k += by) {
+//			idi t = offsets[k + (1 << d) - 1];
+//			offsets[k + (1 << d) - 1] = offsets[k + (1 << (d + 1)) - 1];
+//			offsets[k + (1 << (d + 1)) - 1] += t;
+//		}
+//	}
+//
+////#pragma omp parallel for
+////	for (idi i = 0; i < size_offsets; ++i) {
+////		offsets[i] = nodes[i];
+////	}
+//	if (size != offsets.size()) {
+//		idi tmp_sum = offsets[size - 1] + tmp_element;
+//		idi i_bound = offsets.size();
+//		for (idi i = size; i < i_bound; ++i) {
+//			idi t = offsets[i];
+//			offsets[i] = tmp_sum;
+//			tmp_sum += t;
+//		}
+//	}
+//
+//	return offsets[size_offsets - 1] + last_element;
+}
+
+// Collect elements in the tmp_queue into the queue
+template <typename T>
+inline void ParaVertexCentricPLL::collect_into_queue(
+//					vector<idi> &tmp_queue,
+					vector<T> &tmp_queue,
+					vector<idi> &offsets_tmp_queue, // the locations in tmp_queue for writing from tmp_queue
+					vector<idi> &offsets_queue, // the locations in queue for writing into queue.
+					idi num_elements, // total number of elements which need to be added from tmp_queue to queue
+//					vector<idi> &queue,
+					vector<T> &queue,
+					idi &end_queue)
+{
+	if (0 == num_elements) {
+		return;
+	}
+	idi i_bound = offsets_tmp_queue.size();
+#pragma omp parallel for
+	for (idi i = 0; i < i_bound; ++i) {
+		idi i_q_start = end_queue + offsets_queue[i];
+		idi i_q_bound;
+		if (i_bound - 1 != i) {
+			i_q_bound = end_queue + offsets_queue[i + 1];
+		} else {
+			i_q_bound = end_queue + num_elements;
+		}
+		if (i_q_start == i_q_bound) {
+			// If the group has no elements to be added, then continue to the next group
+			continue;
+		}
+		idi end_tmp = offsets_tmp_queue[i];
+		for (idi i_q = i_q_start; i_q < i_q_bound; ++i_q) {
+			queue[i_q] = tmp_queue[end_tmp++];
+		}
+	}
+	end_queue += num_elements;
+}
+
+// Function: thread-save enqueue. The queue has enough size already. An index points the end of the queue.
+template <typename T, typename Int>
+inline void ParaVertexCentricPLL::TS_enqueue(
+		vector<T> &queue,
+		Int &end_queue,
+		const T &e)
+{
+	volatile Int old_i = end_queue;
+	volatile Int new_i = old_i + 1;
+	while (!CAS(&end_queue, old_i, new_i)) {
+		old_i = end_queue;
+		new_i = old_i + 1;
+	}
+	queue[old_i] = e;
+}
+
 
 void ParaVertexCentricPLL::switch_labels_to_old_id(
 								const vector<idi> &rank2id,

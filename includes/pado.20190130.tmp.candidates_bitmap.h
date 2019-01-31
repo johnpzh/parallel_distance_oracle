@@ -76,12 +76,12 @@ private:
 		// The v.indicator[BATCH_SIZE] is set if in current batch v has got any new labels already.
 		// In this way, when do initialization, only initialize those short_index[v] whose indicator[BATCH_SIZE] is set.
 		bitset<BATCH_SIZE + 1> indicator; // Global indicator, indicator[r] (0 <= r < BATCH_SIZE) is set means root r once selected as candidate already
-//		bitset<BATCH_SIZE> candidates; // Candidates one iteration, candidates[r] is set means root r is candidate in this iteration
+		bitset<BATCH_SIZE> candidates; // Candidates one iteration, candidates[r] is set means root r is candidate in this iteration
 
 		// Use a queue to store candidates
-		vector<inti> candidates_que = vector<inti>(BATCH_SIZE);
-		inti end_candidates_que = 0;
-		vector<bool> is_candidate = vector<bool>(BATCH_SIZE, false);
+//		vector<inti> candidates_que = vector<inti>(BATCH_SIZE);
+//		inti end_candidates_que = 0;
+//		vector<bool> is_candidate = vector<bool>(BATCH_SIZE, false);
 
 	} __attribute__((aligned(64)));
 
@@ -521,9 +521,7 @@ inline void VertexCentricPLL::push_labels(
 			idi label_real_id = label_root_id + roots_start;
 			if (v_tail <= label_real_id) {
 				// v_tail has higher rank than all remaining labels
-				// For candidates_que, this is not true any more!
-//				break;
-				continue;
+				break;
 			}
 			ShortIndex &SI_v_tail = short_index[v_tail];
 			if (SI_v_tail.indicator[label_root_id]) {
@@ -569,11 +567,11 @@ inline void VertexCentricPLL::push_labels(
 //			bp_checking_ins_count.measure_stop();
 
 			// Record vertex label_root_id as v_tail's candidates label
-//			SI_v_tail.candidates.set(label_root_id);
-			if (!SI_v_tail.is_candidate[label_root_id]) {
-				SI_v_tail.is_candidate[label_root_id] = true;
-				SI_v_tail.candidates_que[SI_v_tail.end_candidates_que++] = label_root_id;
-			}
+			SI_v_tail.candidates.set(label_root_id);
+//			if (!SI_v_tail.is_candidate[label_root_id]) {
+//				SI_v_tail.is_candidate[label_root_id] = true;
+//				SI_v_tail.candidates_que[SI_v_tail.end_candidates_que++] = label_root_id;
+//			}
 
 			// Add into candidate_queue
 			if (!got_candidates[v_tail]) {
@@ -843,17 +841,17 @@ inline void VertexCentricPLL::batch_process(
 			got_candidates[v_id] = false; // reset got_candidates
 			// Traverse v_id's all candidates
 //			total_candidates_num += roots_size;
-//			for (inti cand_root_id = 0; cand_root_id < roots_size; ++cand_root_id) {
-//				if (!short_index[v_id].candidates[cand_root_id]) {
-//					// Root cand_root_id is not vertex v_id's candidate
-//					continue;
-//				}
+			for (inti cand_root_id = 0; cand_root_id < roots_size; ++cand_root_id) {
+				if (!short_index[v_id].candidates[cand_root_id]) {
+					// Root cand_root_id is not vertex v_id's candidate
+					continue;
+				}
 //				++set_candidates_num;
-//				short_index[v_id].candidates.reset(cand_root_id);
-			inti bound_cand_i = short_index[v_id].end_candidates_que;
-			for (inti cand_i = 0; cand_i < bound_cand_i; ++cand_i) {
-				inti cand_root_id = short_index[v_id].candidates_que[cand_i];
-				short_index[v_id].is_candidate[cand_root_id] = false;
+				short_index[v_id].candidates.reset(cand_root_id);
+//			inti bound_cand_i = short_index[v_id].end_candidates_que;
+//			for (inti cand_i = 0; cand_i < bound_cand_i; ++cand_i) {
+//				inti cand_root_id = short_index[v_id].candidates_que[cand_i];
+//				short_index[v_id].is_candidate[cand_root_id] = false;
 				// Only insert cand_root_id into v_id's label if its distance to v_id is shorter than existing distance
 				if ( distance_query(
 								cand_root_id,
@@ -878,7 +876,7 @@ inline void VertexCentricPLL::batch_process(
 							iter);
 				}
 			}
-			short_index[v_id].end_candidates_que = 0;
+//			short_index[v_id].end_candidates_que = 0;
 //			}
 			if (0 != inserted_count) {
 				// Update other arrays in L[v_id] if new labels were inserted in this iteration
