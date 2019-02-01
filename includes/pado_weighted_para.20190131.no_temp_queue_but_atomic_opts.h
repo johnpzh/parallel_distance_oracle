@@ -130,11 +130,11 @@ private:
 			const WeightedGraph &G,
 			vector< vector<weighti> > &dists_table,
 			vector<ShortIndex> &short_index,
-//			vector<idi> &has_cand_queue,
-//			idi &end_has_cand_queue,
-			vector<idi> &tmp_has_cand_queue,
-			idi &size_tmp_has_cand_queue,
-			idi offset_tmp_queue,
+			vector<idi> &has_cand_queue,
+			idi &end_has_cand_queue,
+//			vector<idi> &tmp_has_cand_queue,
+//			idi &size_tmp_has_cand_queue,
+//			idi offset_tmp_queue,
 			vector<uint8_t> &has_candidates);
 	inline weighti distance_query(
 			idi v_id,
@@ -224,7 +224,7 @@ private:
 	//uint64_t vc_cc_hit_count = 0;
 //	uint64_t total_candidates_num = 0;
 //	uint64_t set_candidates_num = 0;
-	uint64_t monotone_count = 0;
+//	uint64_t monotone_count = 0;
 	uint64_t checked_count = 0;
 	double initializing_time = 0;
 	double candidating_time = 0;
@@ -406,11 +406,11 @@ inline void WeightedVertexCentricPLL::send_messages(
 				const WeightedGraph &G,
 				vector< vector<weighti> > &dists_table,
 				vector<ShortIndex> &short_index,
-//				vector<idi> &has_cand_queue,
-//				idi &end_has_cand_queue,
-				vector<idi> &tmp_has_cand_queue,
-				idi &size_tmp_has_cand_queue,
-				idi offset_tmp_queue,
+				vector<idi> &has_cand_queue,
+				idi &end_has_cand_queue,
+//				vector<idi> &tmp_has_cand_queue,
+//				idi &size_tmp_has_cand_queue,
+//				idi offset_tmp_queue,
 				vector<uint8_t> &has_candidates)
 {
 	ShortIndex &SI_v_head = short_index[v_head];
@@ -581,7 +581,8 @@ inline void WeightedVertexCentricPLL::send_messages(
 
 		if (got_candidates) {
 			if (CAS(&has_candidates[v_tail], (uint8_t) 0, (uint8_t) 1)) {
-				tmp_has_cand_queue[offset_tmp_queue + size_tmp_has_cand_queue++] = v_tail;
+//				tmp_has_cand_queue[offset_tmp_queue + size_tmp_has_cand_queue++] = v_tail;
+				TS_enqueue(has_cand_queue, end_has_cand_queue, v_tail);
 			}
 		}
 //		if (got_candidates && !has_candidates[v_tail]) {
@@ -1181,7 +1182,7 @@ inline void WeightedVertexCentricPLL::filter_out_labels(
 		// Monotone check
 		++checked_count;
 		if (SI_v.are_dists_monotone) {
-			++monotone_count;
+//			++monotone_count;
 			SI_v.max_dist_batch = 0;
 			continue;
 		} else {
@@ -1369,20 +1370,20 @@ inline void WeightedVertexCentricPLL::vertex_centric_labeling_in_batches(
 		{
 //			candidating_ins_count.measure_start();
 
-			// Prepare for parallel processing the active_queue and adding to candidate_queue.
-			// Every vertex's offset location in tmp_candidate_queue
-			// It's used for every thread to write into tmp_candidate_queue and tmp_once_candidated_queue
-			vector<idi> offsets_tmp_queue(end_active_queue);
-#pragma omp parallel for
-			for (idi i_queue = 0; i_queue < end_active_queue; ++i_queue) {
-				// Traverse all active vertices, get their out degrees.
-				offsets_tmp_queue[i_queue] = G.out_degrees[active_queue[i_queue]];
-			}
-			idi num_neighbors = prefix_sum_for_offsets(offsets_tmp_queue);
-			// every thread writes to tmp_candidate_queue at its offset location
-			vector<idi> tmp_has_cand_queue(num_neighbors);
-			// A vector to store the true number of pushed neighbors of every active vertex.
-			vector<idi> sizes_tmp_has_cand_queue(end_active_queue, 0);
+//			// Prepare for parallel processing the active_queue and adding to candidate_queue.
+//			// Every vertex's offset location in tmp_candidate_queue
+//			// It's used for every thread to write into tmp_candidate_queue and tmp_once_candidated_queue
+//			vector<idi> offsets_tmp_queue(end_active_queue);
+//#pragma omp parallel for
+//			for (idi i_queue = 0; i_queue < end_active_queue; ++i_queue) {
+//				// Traverse all active vertices, get their out degrees.
+//				offsets_tmp_queue[i_queue] = G.out_degrees[active_queue[i_queue]];
+//			}
+//			idi num_neighbors = prefix_sum_for_offsets(offsets_tmp_queue);
+//			// every thread writes to tmp_candidate_queue at its offset location
+//			vector<idi> tmp_has_cand_queue(num_neighbors);
+//			// A vector to store the true number of pushed neighbors of every active vertex.
+//			vector<idi> sizes_tmp_has_cand_queue(end_active_queue, 0);
 
 
 			// Traverse the active queue, every active vertex sends distances to its neighbors
@@ -1397,24 +1398,24 @@ inline void WeightedVertexCentricPLL::vertex_centric_labeling_in_batches(
 						G,
 						dists_table,
 						short_index,
-//						has_cand_queue,
-//						end_has_cand_queue,
-						tmp_has_cand_queue,
-						sizes_tmp_has_cand_queue[i_queue],
-						offsets_tmp_queue[i_queue],
+						has_cand_queue,
+						end_has_cand_queue,
+//						tmp_has_cand_queue,
+//						sizes_tmp_has_cand_queue[i_queue],
+//						offsets_tmp_queue[i_queue],
 						has_candidates);
 			}
 
-			// According to sizes_tmp_candidate_queue, get the offset for inserting to the real queue
-			idi total_new = prefix_sum_for_offsets(sizes_tmp_has_cand_queue);
-			// Collect all candidate vertices from tmp_candidate_queue into candidate_queue.
-			collect_into_queue(
-						tmp_has_cand_queue,
-						offsets_tmp_queue, // the locations in tmp_queue for writing from tmp_queue
-						sizes_tmp_has_cand_queue, // the locations in queue for writing into queue.
-						total_new, // total number of elements which need to be added from tmp_queue to queue
-						has_cand_queue,
-						end_has_cand_queue);
+//			// According to sizes_tmp_candidate_queue, get the offset for inserting to the real queue
+//			idi total_new = prefix_sum_for_offsets(sizes_tmp_has_cand_queue);
+//			// Collect all candidate vertices from tmp_candidate_queue into candidate_queue.
+//			collect_into_queue(
+//						tmp_has_cand_queue,
+//						offsets_tmp_queue, // the locations in tmp_queue for writing from tmp_queue
+//						sizes_tmp_has_cand_queue, // the locations in queue for writing into queue.
+//						total_new, // total number of elements which need to be added from tmp_queue to queue
+//						has_cand_queue,
+//						end_has_cand_queue);
 
 			end_active_queue = 0; // Set the active_queue empty
 //			candidating_ins_count.measure_stop();
@@ -1424,26 +1425,26 @@ inline void WeightedVertexCentricPLL::vertex_centric_labeling_in_batches(
 		// Second stage, adding
 		adding_time -= WallTimer::get_time_mark();
 		{
-//			adding_ins_count.measure_start();
-			// Prepare for parallel processing the candidate_queue and adding to active_queue.
-			// Every vertex's offset location in tmp_active_queue is i_queue * roots_size
-			// It's used for every thread to write into tmp_candidate_queue and tmp_once_candidated_queue
-			vector<idi> offsets_tmp_queue(end_has_cand_queue);
-#pragma omp parallel for
-			for (idi i_queue = 0; i_queue < end_has_cand_queue; ++i_queue) {
-				// Traverse all active vertices, get their out degrees.
-				// A ridiculous bug here. The v_id will, if any, only add itself to the active queue.
-				//offsets_tmp_queue[i_queue] = i_queue * roots_size;
-				offsets_tmp_queue[i_queue] = i_queue;
-			}
-			// every thread writes to tmp_active_queue at its offset location
-			vector<idi> tmp_active_queue(end_has_cand_queue);
-			// A vector to store the true number of pushed neighbors of every active vertex.
-			vector<idi> sizes_tmp_active_queue(end_has_cand_queue, 0);
-			// every thread writes to its offset location.
-			vector<idi> tmp_has_new_labels_queue(end_has_cand_queue);
-			// Store the size of every group recorded by every thread.
-			vector<idi> sizes_tmp_has_new_labels_queue(end_has_cand_queue, 0);
+////			adding_ins_count.measure_start();
+//			// Prepare for parallel processing the candidate_queue and adding to active_queue.
+//			// Every vertex's offset location in tmp_active_queue is i_queue * roots_size
+//			// It's used for every thread to write into tmp_candidate_queue and tmp_once_candidated_queue
+//			vector<idi> offsets_tmp_queue(end_has_cand_queue);
+//#pragma omp parallel for
+//			for (idi i_queue = 0; i_queue < end_has_cand_queue; ++i_queue) {
+//				// Traverse all active vertices, get their out degrees.
+//				// A ridiculous bug here. The v_id will, if any, only add itself to the active queue.
+//				//offsets_tmp_queue[i_queue] = i_queue * roots_size;
+//				offsets_tmp_queue[i_queue] = i_queue;
+//			}
+//			// every thread writes to tmp_active_queue at its offset location
+//			vector<idi> tmp_active_queue(end_has_cand_queue);
+//			// A vector to store the true number of pushed neighbors of every active vertex.
+//			vector<idi> sizes_tmp_active_queue(end_has_cand_queue, 0);
+//			// every thread writes to its offset location.
+//			vector<idi> tmp_has_new_labels_queue(end_has_cand_queue);
+//			// Store the size of every group recorded by every thread.
+//			vector<idi> sizes_tmp_has_new_labels_queue(end_has_cand_queue, 0);
 
 			// Traverse vertices in the has_cand_queue to insert labels
 #pragma omp parallel for
@@ -1502,36 +1503,38 @@ inline void WeightedVertexCentricPLL::vertex_centric_labeling_in_batches(
 				if (need_activate) {
 					if (!is_active[v_id]) {
 						is_active[v_id] = 1;
-						tmp_active_queue[offsets_tmp_queue[i_queue] + sizes_tmp_active_queue[i_queue]++] = v_id;
+//						tmp_active_queue[offsets_tmp_queue[i_queue] + sizes_tmp_active_queue[i_queue]++] = v_id;
 //						active_queue[end_active_queue++] = v_id;
+						TS_enqueue(active_queue, end_active_queue, v_id);
 					}
 					if (!has_new_labels[v_id]) {
 						has_new_labels[v_id] = 1;
-						tmp_has_new_labels_queue[offsets_tmp_queue[i_queue] + sizes_tmp_has_new_labels_queue[i_queue]++] = v_id;
+//						tmp_has_new_labels_queue[offsets_tmp_queue[i_queue] + sizes_tmp_has_new_labels_queue[i_queue]++] = v_id;
 //						has_new_labels_queue[end_has_new_labels_queue++] = v_id;
+						TS_enqueue(has_new_labels_queue, end_has_new_labels_queue, v_id);
 					}
 				}
 			}
-			// According to sizes_tmp_active_queue, get the offset for inserting to the real queue
-			idi total_new = prefix_sum_for_offsets(sizes_tmp_active_queue);
-			// Collect all candidate vertices from tmp_active_queue into active_queue.
-			collect_into_queue(
-						tmp_active_queue,
-						offsets_tmp_queue, // the locations in tmp_queue for writing from tmp_queue
-						sizes_tmp_active_queue, // the locations in queue for writing into queue.
-						total_new, // total number of elements which need to be added from tmp_queue to queue
-						active_queue,
-						end_active_queue);
-			// According to sizes_tmp_active_queue, get the offset for inserting to the real queue
-			total_new = prefix_sum_for_offsets(sizes_tmp_has_new_labels_queue);
-			// Collect all candidate vertices from tmp_candidate_queue into candidate_queue.
-			collect_into_queue(
-						tmp_has_new_labels_queue,
-						offsets_tmp_queue, // the locations in tmp_queue for writing from tmp_queue
-						sizes_tmp_has_new_labels_queue, // the locations in queue for writing into queue.
-						total_new, // total number of elements which need to be added from tmp_queue to queue
-						has_new_labels_queue,
-						end_has_new_labels_queue);
+//			// According to sizes_tmp_active_queue, get the offset for inserting to the real queue
+//			idi total_new = prefix_sum_for_offsets(sizes_tmp_active_queue);
+//			// Collect all candidate vertices from tmp_active_queue into active_queue.
+//			collect_into_queue(
+//						tmp_active_queue,
+//						offsets_tmp_queue, // the locations in tmp_queue for writing from tmp_queue
+//						sizes_tmp_active_queue, // the locations in queue for writing into queue.
+//						total_new, // total number of elements which need to be added from tmp_queue to queue
+//						active_queue,
+//						end_active_queue);
+//			// According to sizes_tmp_active_queue, get the offset for inserting to the real queue
+//			total_new = prefix_sum_for_offsets(sizes_tmp_has_new_labels_queue);
+//			// Collect all candidate vertices from tmp_candidate_queue into candidate_queue.
+//			collect_into_queue(
+//						tmp_has_new_labels_queue,
+//						offsets_tmp_queue, // the locations in tmp_queue for writing from tmp_queue
+//						sizes_tmp_has_new_labels_queue, // the locations in queue for writing into queue.
+//						total_new, // total number of elements which need to be added from tmp_queue to queue
+//						has_new_labels_queue,
+//						end_has_new_labels_queue);
 			// Reset vertices' candidates_que and candidates_dists
 #pragma omp parallel for
 			for (idi i_queue = 0; i_queue < end_has_cand_queue; ++i_queue) {
@@ -1742,7 +1745,7 @@ void WeightedVertexCentricPLL::construct(const WeightedGraph &G)
 //	printf("BP_Checking: "); bp_checking_ins_count.print();
 //	printf("distance_query: "); dist_query_ins_count.print();
 	printf("Correction: %f %.2f%%\n", correction_time, 100.0 * correction_time / time_labeling);
-	printf("Monotone_count: %'lu %.2f%%\n", monotone_count, 100.0 * monotone_count / checked_count);
+//	printf("Monotone_count: %'lu %.2f%%\n", monotone_count, 100.0 * monotone_count / checked_count);
 	printf("Total_labeling_time: %.2f seconds\n", time_labeling); fflush(stdout);
 }
 
@@ -2061,7 +2064,7 @@ void WeightedVertexCentricPLL::switch_labels_to_old_id(
 //			}
 //		}
 //	}
-	printf("Label_sum: %'u %'u mean: %f\n", label_sum, test_label_sum, label_sum * 1.0 / num_v);
+	printf("Label_sum: %'u %'u mean: %f\n", label_sum, test_label_sum, label_sum * 1.0 / num_v); fflush(stdout);
 
 //	// Try to print
 //	for (idi v = 0; v < num_v; ++v) {

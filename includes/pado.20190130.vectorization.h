@@ -15,6 +15,7 @@
 #include <iostream>
 #include <climits>
 #include <xmmintrin.h>
+#include <immintrin.h>
 #include <bitset>
 #include <cmath>
 #include "globals.h"
@@ -31,7 +32,15 @@ using std::fill;
 namespace PADO {
 
 const inti BATCH_SIZE = 1024; // The size for regular batch and bit array.
-const inti BITPARALLEL_SIZE = 0;
+const inti BITPARALLEL_SIZE = 50;
+inti BUFFER_SIZE = 32;
+
+// AVX-512 constant variables
+const inti NUM_P_INT = 16;
+const __m512i INF_v = _mm512_set1_epi32(WEIGHTI_MAX);
+const __m512i UNDEF_i32_v = _mm512_undefined_epi32();
+const __m512i LOWEST_BYTE_MASK = _mm512_set1_epi32(0xFF);
+const __m128i INF_v_128i = _mm_set1_epi8(-1);
 
 //// Batch based processing, 09/11/2018
 class VertexCentricPLL {
@@ -53,16 +62,16 @@ private:
 		struct DistanceIndexType {
 			idi start_index; // Index to the array vertices where the same-ditance vertices start
 			inti size; // Number of the same-distance vertices
-			smalli dist; // The real distance
+			weighti dist; // The real distance
 
-			DistanceIndexType(idi start_index_, inti size_, smalli dist_):
+			DistanceIndexType(idi start_index_, inti size_, weighti dist_):
 						start_index(start_index_), size(size_), dist(dist_)
 			{
 				;
 			}
 		};
 
-	    smalli bp_dist[BITPARALLEL_SIZE];
+	    weighti bp_dist[BITPARALLEL_SIZE];
 	    uint64_t bp_sets[BITPARALLEL_SIZE][2];  // [0]: S^{-1}, [1]: S^{0}
 
 		vector<Batch> batches; // Batch info
@@ -95,7 +104,7 @@ private:
 			idi v_id,
 			idi w_id,
 			const vector<IndexType> &L,
-			smalli iter);
+			weighti iter);
 
 //	inline void batch_process(
 //			const Graph &G,
@@ -116,7 +125,7 @@ private:
 			vector<idi> &candidate_queue,
 			idi &end_candidate_queue,
 			vector<ShortIndex> &short_index,
-			vector< vector<smalli> > &dist_matrix,
+			vector< vector<weighti> > &dist_matrix,
 			vector<bool> &got_candidates,
 			vector<bool> &is_active,
 			vector<idi> &once_candidated_queue,
@@ -126,7 +135,7 @@ private:
 
 	inline void initialize(
 				vector<ShortIndex> &short_index,
-				vector< vector<smalli> > &dist_matrix,
+				vector< vector<weighti> > &dist_matrix,
 				vector<idi> &active_queue,
 				idi &end_active_queue,
 				vector<idi> &once_candidated_queue,
@@ -150,34 +159,44 @@ private:
 				idi &end_once_candidated_queue,
 				vector<bool> &once_candidated,
 				const vector<bool> &used_bp_roots,
-				smalli iter);
+				weighti iter);
 	inline bool distance_query(
 				idi cand_root_id,
 				idi v_id,
 				idi roots_start,
 				const vector<IndexType> &L,
-				const vector< vector<smalli> > &dist_matrix,
-				smalli iter);
+				const vector< vector<weighti> > &dist_matrix,
+				weighti iter);
+	inline bool distance_check_vec_core(
+				vector<weighti> &dists_buffer,
+				vector<idi> &ids_buffer,
+				idi size_buffer,
+				idi cand_root_id,
+				__m512i cand_real_id_v,
+//				__m512i id_offset_v,
+				__m512i iter_v,
+				const vector<IndexType> &L,
+				const vector< vector<weighti> > &dist_matrix);
 	inline void insert_label_only(
 				idi cand_root_id,
 				idi v_id,
 				idi roots_start,
 				inti roots_size,
 				vector<IndexType> &L,
-				vector< vector<smalli> > &dist_matrix,
-				smalli iter);
+				vector< vector<weighti> > &dist_matrix,
+				weighti iter);
 	inline void update_label_indices(
 				idi v_id,
 				idi inserted_count,
 				vector<IndexType> &L,
 				vector<ShortIndex> &short_index,
 				idi b_id,
-				smalli iter);
+				weighti iter);
 	inline void reset_at_end(
 				idi roots_start,
 				inti roots_size,
 				vector<IndexType> &L,
-				vector< vector<smalli> > &dist_matrix);
+				vector< vector<weighti> > &dist_matrix);
 
 	// Test only
 //	uint64_t normal_hit_count = 0;
@@ -195,6 +214,7 @@ private:
 //	double init_start_reset_time = 0;
 //	double init_indicators_time = 0;
 	//L2CacheMissRate cache_miss;
+	pair<uint64_t, uint64_t> simd_full_count = make_pair(0, 0);
 //	TotalInstructsExe candidating_ins_count;
 //	TotalInstructsExe adding_ins_count;
 //	TotalInstructsExe bp_labeling_ins_count;
@@ -232,7 +252,7 @@ inline void VertexCentricPLL::bit_parallel_labeling(
 	idi num_v = G.get_num_v();
 	idi num_e = G.get_num_e();
 
-	std::vector<smalli> tmp_d(num_v); // distances from the root to every v
+	std::vector<weighti> tmp_d(num_v); // distances from the root to every v
 	std::vector<std::pair<uint64_t, uint64_t> > tmp_s(num_v); // first is S_r^{-1}, second is S_r^{0}
 	std::vector<idi> que(num_v); // active queue
 	std::vector<std::pair<idi, idi> > sibling_es(num_e); // siblings, their distances to the root are equal (have difference of 0)
@@ -275,7 +295,7 @@ inline void VertexCentricPLL::bit_parallel_labeling(
 			}
 		}
 
-		for (smalli d = 0; que_t0 < que_h; ++d) {
+		for (weighti d = 0; que_t0 < que_h; ++d) {
 			idi num_sibling_es = 0, num_child_es = 0;
 
 			for (idi que_i = que_t0; que_i < que_t1; ++que_i) {
@@ -284,7 +304,7 @@ inline void VertexCentricPLL::bit_parallel_labeling(
 				idi i_bound = i_start + G.out_degrees[v];
 				for (idi i = i_start; i < i_bound; ++i) {
 					idi tv = G.out_edges[i];
-					smalli td = d + 1;
+					weighti td = d + 1;
 
 					if (d > tmp_d[tv]) {
 						;
@@ -337,7 +357,7 @@ inline bool VertexCentricPLL::bit_parallel_checking(
 			idi v_id,
 			idi w_id,
 			const vector<IndexType> &L,
-			smalli iter)
+			weighti iter)
 {
 	// Bit Parallel Checking: if label_real_id to v_tail has shorter distance already
 	const IndexType &Lv = L[v_id];
@@ -371,7 +391,7 @@ inline bool VertexCentricPLL::bit_parallel_checking(
 // unset flag arrays is_active and got_labels
 inline void VertexCentricPLL::initialize(
 			vector<ShortIndex> &short_index,
-			vector< vector<smalli> > &dist_matrix,
+			vector< vector<weighti> > &dist_matrix,
 			vector<idi> &active_queue,
 			idi &end_active_queue,
 			vector<idi> &once_candidated_queue,
@@ -444,7 +464,7 @@ inline void VertexCentricPLL::initialize(
 		idi dist_bound_index;
 		idi v_start_index;
 		idi v_bound_index;
-		smalli dist;
+		weighti dist;
 		for (idi r_id = 0; r_id < roots_size; ++r_id) {
 			if (used_bp_roots[r_id + roots_start]) {
 				continue;
@@ -487,7 +507,7 @@ inline void VertexCentricPLL::push_labels(
 				idi &end_once_candidated_queue,
 				vector<bool> &once_candidated,
 				const vector<bool> &used_bp_roots,
-				smalli iter)
+				weighti iter)
 {
 	const IndexType &Lv = L[v_head];
 	// These 2 index are used for traversing v_head's last inserted labels
@@ -585,6 +605,142 @@ inline void VertexCentricPLL::push_labels(
 	}
 }
 
+
+//// BACKUP: Function for distance query;
+//// traverse vertex v_id's labels;
+//// return false if shorter distance exists already, return true if the cand_root_id can be added into v_id's label.
+//inline bool VertexCentricPLL::distance_query(
+//			idi cand_root_id,
+//			idi v_id,
+//			idi roots_start,
+//			const vector<IndexType> &L,
+//			const vector< vector<weighti> > &dist_matrix,
+//			weighti iter)
+//{
+////	++total_check_count;
+//	++normal_check_count;
+//	distance_query_time -= WallTimer::get_time_mark();
+////	dist_query_ins_count.measure_start();
+//
+//	idi cand_real_id = cand_root_id + roots_start;
+//	__m512i cand_real_id_v = _mm512_set1_epi32(cand_real_id); // For vectorized version
+//	__m512i iter_v = _mm512_set1_epi32(iter);
+//	const IndexType &Lv = L[v_id];
+//
+////	// Bit Parallel Checking: if label_real_id to v_tail has shorter distance already
+////	++total_check_count;
+////	const IndexType &L_tail = L[cand_real_id];
+////
+////	_mm_prefetch(&Lv.bp_dist[0], _MM_HINT_T0);
+////	_mm_prefetch(&Lv.bp_sets[0][0], _MM_HINT_T0);
+////	for (inti i = 0; i < BITPARALLEL_SIZE; ++i) {
+////		inti td = Lv.bp_dist[i] + L_tail.bp_dist[i];
+////		if (td - 2 <= iter) {
+////			td +=
+////				(Lv.bp_sets[i][0] & L_tail.bp_sets[i][0]) ? -2 :
+////				((Lv.bp_sets[i][0] & L_tail.bp_sets[i][1]) |
+////				 (Lv.bp_sets[i][1] & L_tail.bp_sets[i][0]))
+////				? -1 : 0;
+////			if (td <= iter) {
+////				++bp_hit_count;
+////				return false;
+////			}
+////		}
+////	}
+//
+//	// Traverse v_id's all existing labels
+//	inti b_i_bound = Lv.batches.size();
+//	_mm_prefetch(&Lv.batches[0], _MM_HINT_T0);
+//	_mm_prefetch(&Lv.distances[0], _MM_HINT_T0);
+//	_mm_prefetch(&Lv.vertices[0], _MM_HINT_T0);
+//	//_mm_prefetch(&dist_matrix[cand_root_id][0], _MM_HINT_T0);
+//	for (inti b_i = 0; b_i < b_i_bound; ++b_i) {
+//		idi id_offset = Lv.batches[b_i].batch_id * BATCH_SIZE;
+//		__m512i id_offset_v = _mm512_set1_epi32(id_offset); // For vectorized version
+//		idi dist_start_index = Lv.batches[b_i].start_index;
+//		idi dist_bound_index = dist_start_index + Lv.batches[b_i].size;
+//
+//		// Traverse dist_matrix
+//		for (idi dist_i = dist_start_index; dist_i < dist_bound_index; ++dist_i) {
+//			inti dist = Lv.distances[dist_i].dist;
+//			if (dist >= iter) { // In a batch, the labels' distances are increasingly ordered.
+//				// If the half path distance is already greater than their targeted distance, jump to next batch
+//				break;
+//			}
+//
+//			// Vectorized Version
+//			__m512i dist_v = _mm512_set1_epi32(dist);
+//			idi v_start_index = Lv.distances[dist_i].start_index;
+//			inti remainder_simd = Lv.distances[dist_i].size % NUM_P_INT;
+//			idi bound_v_i = Lv.distances[dist_i].size - remainder_simd;
+//			for (idi v_i = 0; v_i < bound_v_i; v_i += NUM_P_INT) {
+//				++simd_full_count.first;
+//				++simd_full_count.second;
+//				// Get labels r (v_v)
+//				__m512i v_v = _mm512_loadu_epi32(&Lv.vertices[v_i + v_start_index]); // @suppress("Function cannot be resolved")
+//				v_v = _mm512_add_epi32(v_v, id_offset_v);
+//				__mmask16 is_r_higher_ranked_m = _mm512_cmplt_epi32_mask(v_v, cand_real_id_v);
+//				if (!is_r_higher_ranked_m) {
+//					continue;
+//				}
+//				// Get distance from r to c
+//				__m512i dists_r_c_v = _mm512_mask_i32gather_epi32(INF_v, is_r_higher_ranked_m, v_v, &dist_matrix[cand_root_id][0], sizeof(weighti));
+//				dists_r_c_v = _mm512_mask_and_epi32(INF_v, is_r_higher_ranked_m, dists_r_c_v, LOWEST_BYTE_MASK);
+//				// Query distance from v to c
+//				__m512i d_tmp_v = _mm512_mask_add_epi32(INF_v, is_r_higher_ranked_m, dist_v, dists_r_c_v);
+//				__mmask16 is_query_shorter = _mm512_mask_cmple_epi32_mask(is_r_higher_ranked_m, d_tmp_v, iter_v);
+//				if (is_query_shorter) {
+//					distance_query_time += WallTimer::get_time_mark();
+//					return false;
+//				}
+//			}
+//			if (remainder_simd) {
+//				++simd_full_count.second;
+//				__mmask16 in_m = (__mmask16) ((uint16_t) 0xFFFF >> (NUM_P_INT - remainder_simd));
+//				// Get labels r (v_v)
+//				__m512i v_v = _mm512_mask_loadu_epi32(UNDEF_i32_v, in_m, &Lv.vertices[bound_v_i + v_start_index]); // @suppress("Function cannot be resolved")
+//				v_v = _mm512_mask_add_epi32(UNDEF_i32_v, in_m, v_v, id_offset_v);
+//				__mmask16 is_r_higher_ranked_m = _mm512_mask_cmplt_epi32_mask(in_m, v_v, cand_real_id_v);
+//				if (!is_r_higher_ranked_m) {
+//					continue;
+//				}
+//				// Get distance from r to c
+//				__m512i dists_r_c_v = _mm512_mask_i32gather_epi32(INF_v, is_r_higher_ranked_m, v_v, &dist_matrix[cand_root_id][0], sizeof(weighti));
+//				dists_r_c_v = _mm512_mask_and_epi32(INF_v, is_r_higher_ranked_m, dists_r_c_v, LOWEST_BYTE_MASK);
+//				// Query distance from v to c
+//				__m512i d_tmp_v = _mm512_mask_add_epi32(INF_v, is_r_higher_ranked_m, dist_v, dists_r_c_v);
+//				__mmask16 is_query_shorter = _mm512_mask_cmple_epi32_mask(is_r_higher_ranked_m, d_tmp_v, iter_v);
+//				if (is_query_shorter) {
+//					distance_query_time += WallTimer::get_time_mark();
+//					return false;
+//				}
+//			}
+//
+////			// Sequential Version
+////			idi v_start_index = Lv.distances[dist_i].start_index;
+////			idi v_bound_index = v_start_index + Lv.distances[dist_i].size;
+////			_mm_prefetch(&dist_matrix[cand_root_id][0], _MM_HINT_T0);
+////			for (idi v_i = v_start_index; v_i < v_bound_index; ++v_i) {
+////				idi v = Lv.vertices[v_i] + id_offset; // v is a label hub of v_id
+////				if (v >= cand_real_id) {
+////					// Vertex cand_real_id cannot have labels whose ranks are lower than it,
+////					// in which case dist_matrix[cand_root_id][v] does not exist.
+////					continue;
+////				}
+////				inti d_tmp = dist + dist_matrix[cand_root_id][v];
+////				if (d_tmp <= iter) {
+////					distance_query_time += WallTimer::get_time_mark();
+//////					dist_query_ins_count.measure_stop();
+////					return false;
+////				}
+////			}
+//		}
+//	}
+//	distance_query_time += WallTimer::get_time_mark();
+////	dist_query_ins_count.measure_stop();
+//	return true;
+//}
+
 // Function for distance query;
 // traverse vertex v_id's labels;
 // return false if shorter distance exists already, return true if the cand_root_id can be added into v_id's label.
@@ -593,8 +749,8 @@ inline bool VertexCentricPLL::distance_query(
 			idi v_id,
 			idi roots_start,
 			const vector<IndexType> &L,
-			const vector< vector<smalli> > &dist_matrix,
-			smalli iter)
+			const vector< vector<weighti> > &dist_matrix,
+			weighti iter)
 {
 //	++total_check_count;
 	++normal_check_count;
@@ -602,28 +758,14 @@ inline bool VertexCentricPLL::distance_query(
 //	dist_query_ins_count.measure_start();
 
 	idi cand_real_id = cand_root_id + roots_start;
+	__m512i cand_real_id_v = _mm512_set1_epi32(cand_real_id); // For vectorized version
+	__m512i iter_v = _mm512_set1_epi32(iter);
 	const IndexType &Lv = L[v_id];
 
-//	// Bit Parallel Checking: if label_real_id to v_tail has shorter distance already
-//	++total_check_count;
-//	const IndexType &L_tail = L[cand_real_id];
-//
-//	_mm_prefetch(&Lv.bp_dist[0], _MM_HINT_T0);
-//	_mm_prefetch(&Lv.bp_sets[0][0], _MM_HINT_T0);
-//	for (inti i = 0; i < BITPARALLEL_SIZE; ++i) {
-//		inti td = Lv.bp_dist[i] + L_tail.bp_dist[i];
-//		if (td - 2 <= iter) {
-//			td +=
-//				(Lv.bp_sets[i][0] & L_tail.bp_sets[i][0]) ? -2 :
-//				((Lv.bp_sets[i][0] & L_tail.bp_sets[i][1]) |
-//				 (Lv.bp_sets[i][1] & L_tail.bp_sets[i][0]))
-//				? -1 : 0;
-//			if (td <= iter) {
-//				++bp_hit_count;
-//				return false;
-//			}
-//		}
-//	}
+	vector<weighti> dists_buffer(BUFFER_SIZE);
+	vector<idi> ids_buffer(BUFFER_SIZE);
+	idi size_buffer = 0;
+	idi capacity_buffer = BUFFER_SIZE;
 
 	// Traverse v_id's all existing labels
 	inti b_i_bound = Lv.batches.size();
@@ -633,8 +775,10 @@ inline bool VertexCentricPLL::distance_query(
 	//_mm_prefetch(&dist_matrix[cand_root_id][0], _MM_HINT_T0);
 	for (inti b_i = 0; b_i < b_i_bound; ++b_i) {
 		idi id_offset = Lv.batches[b_i].batch_id * BATCH_SIZE;
+		__m512i id_offset_v = _mm512_set1_epi32(id_offset); // For vectorized version
 		idi dist_start_index = Lv.batches[b_i].start_index;
 		idi dist_bound_index = dist_start_index + Lv.batches[b_i].size;
+
 		// Traverse dist_matrix
 		for (idi dist_i = dist_start_index; dist_i < dist_bound_index; ++dist_i) {
 			inti dist = Lv.distances[dist_i].dist;
@@ -642,27 +786,170 @@ inline bool VertexCentricPLL::distance_query(
 				// If the half path distance is already greater than their targeted distance, jump to next batch
 				break;
 			}
-			idi v_start_index = Lv.distances[dist_i].start_index;
-			idi v_bound_index = v_start_index + Lv.distances[dist_i].size;
-			_mm_prefetch(&dist_matrix[cand_root_id][0], _MM_HINT_T0);
-			for (idi v_i = v_start_index; v_i < v_bound_index; ++v_i) {
-				idi v = Lv.vertices[v_i] + id_offset; // v is a label hub of v_id
-				if (v >= cand_real_id) {
-					// Vertex cand_real_id cannot have labels whose ranks are lower than it,
-					// in which case dist_matrix[cand_root_id][v] does not exist.
-					continue;
-				}
-				inti d_tmp = dist + dist_matrix[cand_root_id][v];
-				if (d_tmp <= iter) {
-					distance_query_time += WallTimer::get_time_mark();
-//					dist_query_ins_count.measure_stop();
-					return false;
+			idi v_i = Lv.distances[dist_i].start_index;
+			idi remain = Lv.distances[dist_i].size;
+			while (0 != remain) {
+				// This distance still has labels
+				if (0 != capacity_buffer) {
+					// Buffer still has free space
+					if (capacity_buffer >= remain) {
+						// All remain can be put into Buffer
+						// ids_buffer
+//						memcpy(&ids_buffer[size_buffer], &Lv.vertices[v_i], remain * sizeof(idi));
+						for (inti i = 0; i < remain; ++i) {
+							ids_buffer[size_buffer + i] = Lv.vertices[v_i + i] + id_offset;
+						}
+						// dists_buffer
+						int bound_i = size_buffer + remain;
+						for (; size_buffer < bound_i; ++size_buffer) {
+							dists_buffer[size_buffer] = dist;
+						}
+						v_i += remain;
+						capacity_buffer -= remain;
+						remain = 0;
+					} else {
+						// Only the capacity-size of remain can be put into Buffer
+						// ids_buffer
+//						memcpy(&ids_buffer[size_buffer], &Lv.vertices[v_i], capacity_buffer * sizeof(idi));
+						for (inti i = 0; i < capacity_buffer; ++i) {
+							ids_buffer[size_buffer + i] = Lv.vertices[v_i + i] + id_offset;
+						}
+						// dists_buffer
+						int bound_i = size_buffer + capacity_buffer;
+						for (; size_buffer < bound_i; ++size_buffer) {
+							dists_buffer[size_buffer] = dist;
+						}
+						v_i += capacity_buffer;
+						remain -= capacity_buffer;
+						capacity_buffer = 0;
+					}
+				} else {
+					// Process the buffer
+					if (!distance_check_vec_core(
+							dists_buffer,
+							ids_buffer,
+							size_buffer,
+							cand_root_id,
+							cand_real_id_v,
+//							id_offset_v,
+							iter_v,
+							L,
+							dist_matrix)) {
+						distance_query_time += WallTimer::get_time_mark();
+						return false;
+					}
+					size_buffer = 0;
+					capacity_buffer = BUFFER_SIZE;
 				}
 			}
 		}
+//		if (!distance_check_vec_core(
+//				dists_buffer,
+//				ids_buffer,
+//				size_buffer,
+//				cand_root_id,
+//				cand_real_id_v,
+//				id_offset_v,
+//				iter_v,
+//				L,
+//				dist_matrix)) {
+//			distance_query_time += WallTimer::get_time_mark();
+//			return false;
+//		}
+//		size_buffer = 0;
+//		capacity_buffer = BUFFER_SIZE;
 	}
+	if (!distance_check_vec_core(
+			dists_buffer,
+			ids_buffer,
+			size_buffer,
+			cand_root_id,
+			cand_real_id_v,
+//			id_offset_v,
+			iter_v,
+			L,
+			dist_matrix)) {
+		distance_query_time += WallTimer::get_time_mark();
+		return false;
+	}
+//	size_buffer = 0;
+//	capacity_buffer = BUFFER_SIZE;
 	distance_query_time += WallTimer::get_time_mark();
 //	dist_query_ins_count.measure_stop();
+	return true;
+}
+
+inline bool VertexCentricPLL::distance_check_vec_core(
+		vector<weighti> &dists_buffer,
+		vector<idi> &ids_buffer,
+		idi size_buffer,
+		idi cand_root_id,
+		__m512i cand_real_id_v,
+//		__m512i id_offset_v,
+		__m512i iter_v,
+		const vector<IndexType> &L,
+		const vector< vector<weighti> > &dist_matrix)
+{
+	// Vectorization Version
+	inti remainder_simd = size_buffer % NUM_P_INT;
+	idi bound_v_i = size_buffer - remainder_simd;
+	for (idi v_i = 0; v_i < bound_v_i; v_i += NUM_P_INT) {
+		++simd_full_count.first;
+		++simd_full_count.second;
+		__m512i v_v = _mm512_loadu_epi32(&ids_buffer[v_i]); // @suppress("Function cannot be resolved")
+//		v_v = _mm512_add_epi32(v_v, id_offset_v);
+		__mmask16 is_r_higher_ranked_m = _mm512_cmplt_epi32_mask(v_v, cand_real_id_v);
+		if (!is_r_higher_ranked_m) {
+			continue;
+		}
+		// Distance from v to r
+		__m128i tmp_dist_v_128i = _mm_mask_loadu_epi8(INF_v_128i, is_r_higher_ranked_m, &dists_buffer[v_i]);
+		__m512i dist_v = _mm512_mask_cvtepi8_epi32(INF_v, is_r_higher_ranked_m, tmp_dist_v_128i);
+		// Get distance from r to c
+		__m512i dists_r_c_v = _mm512_mask_i32gather_epi32(INF_v, is_r_higher_ranked_m, v_v, &dist_matrix[cand_root_id][0], sizeof(weighti));
+		dists_r_c_v = _mm512_mask_and_epi32(INF_v, is_r_higher_ranked_m, dists_r_c_v, LOWEST_BYTE_MASK);
+		// Query distance from v to c
+		__m512i d_tmp_v = _mm512_mask_add_epi32(INF_v, is_r_higher_ranked_m, dist_v, dists_r_c_v);
+		__mmask16 is_query_shorter = _mm512_mask_cmple_epi32_mask(is_r_higher_ranked_m, d_tmp_v, iter_v);
+		if (is_query_shorter) {
+			return false;
+		}
+	}
+	if (remainder_simd) {
+		++simd_full_count.second;
+		__mmask16 in_m = (__mmask16) ((uint16_t) 0xFFFF >> (NUM_P_INT - remainder_simd));
+		__m512i v_v = _mm512_mask_loadu_epi32(UNDEF_i32_v, in_m, &ids_buffer[bound_v_i]);
+//		v_v = _mm512_add_epi32(v_v, id_offset_v);
+		__mmask16 is_r_higher_ranked_m = _mm512_mask_cmplt_epi32_mask(in_m, v_v, cand_real_id_v);
+		if (is_r_higher_ranked_m) {
+			// Distance from v to r
+			__m128i tmp_dist_v_128i = _mm_mask_loadu_epi8(INF_v_128i, is_r_higher_ranked_m, &dists_buffer[bound_v_i]);
+			__m512i dist_v = _mm512_mask_cvtepi8_epi32(INF_v, is_r_higher_ranked_m, tmp_dist_v_128i);
+			// Get distance from r to c
+			__m512i dists_r_c_v = _mm512_mask_i32gather_epi32(INF_v, is_r_higher_ranked_m, v_v, &dist_matrix[cand_root_id][0], sizeof(weighti));
+			dists_r_c_v = _mm512_mask_and_epi32(INF_v, is_r_higher_ranked_m, dists_r_c_v, LOWEST_BYTE_MASK);
+			// Query distance from v to c
+			__m512i d_tmp_v = _mm512_mask_add_epi32(INF_v, is_r_higher_ranked_m, dist_v, dists_r_c_v);
+			__mmask16 is_query_shorter = _mm512_mask_cmple_epi32_mask(is_r_higher_ranked_m, d_tmp_v, iter_v);
+			if (is_query_shorter) {
+				return false;
+			}
+		}
+	}
+
+	// Sequential Version
+//	for (idi v_i = 0; v_i < size_buffer; ++v_i) {
+//		idi v = ids_buffer[v_i] + id_offset;
+//		if (v >= cand_real_id) {
+//			continue;
+//		}
+//		weighti dist_v_r = dists_buffer[v_i];
+//		inti d_tmp = dist_v_r + dist_matrix[cand_root_id][v];
+//		if (d_tmp <= iter) {
+//			distance_query_time += WallTimer::get_time_mark();
+//			return false;
+//		}
+//	}
 	return true;
 }
 
@@ -675,8 +962,8 @@ inline void VertexCentricPLL::insert_label_only(
 				idi roots_start,
 				inti roots_size,
 				vector<IndexType> &L,
-				vector< vector<smalli> > &dist_matrix,
-				smalli iter)
+				vector< vector<weighti> > &dist_matrix,
+				weighti iter)
 {
 	L[v_id].vertices.push_back(cand_root_id);
 	// Update the distance buffer if necessary
@@ -693,7 +980,7 @@ inline void VertexCentricPLL::update_label_indices(
 				vector<IndexType> &L,
 				vector<ShortIndex> &short_index,
 				idi b_id,
-				smalli iter)
+				weighti iter)
 {
 	IndexType &Lv = L[v_id];
 	// indicator[BATCH_SIZE + 1] is true, means v got some labels already in this batch
@@ -722,7 +1009,7 @@ inline void VertexCentricPLL::reset_at_end(
 				idi roots_start,
 				inti roots_size,
 				vector<IndexType> &L,
-				vector< vector<smalli> > &dist_matrix)
+				vector< vector<weighti> > &dist_matrix)
 {
 	inti b_i_bound;
 	idi id_offset;
@@ -764,7 +1051,7 @@ inline void VertexCentricPLL::batch_process(
 						vector<idi> &candidate_queue,
 						idi &end_candidate_queue,
 						vector<ShortIndex> &short_index,
-						vector< vector<smalli> > &dist_matrix,
+						vector< vector<weighti> > &dist_matrix,
 						vector<bool> &got_candidates,
 						vector<bool> &is_active,
 						vector<idi> &once_candidated_queue,
@@ -779,7 +1066,7 @@ inline void VertexCentricPLL::batch_process(
 //	static vector<idi> candidate_queue(num_v);
 //	static idi end_candidate_queue = 0;
 //	static vector<ShortIndex> short_index(num_v);
-//	static vector< vector<smalli> > dist_matrix(roots_size, vector<smalli>(num_v, SMALLI_MAX));
+//	static vector< vector<weighti> > dist_matrix(roots_size, vector<weighti>(num_v, SMALLI_MAX));
 //	static vector<bool> got_candidates(num_v, false); // got_candidates[v] is true means vertex v is in the queue candidate_queue
 //	static vector<bool> is_active(num_v, false);// is_active[v] is true means vertex v is in the active queue.
 //
@@ -802,7 +1089,7 @@ inline void VertexCentricPLL::batch_process(
 			L,
 			used_bp_roots);
 
-	smalli iter = 0; // The iterator, also the distance for current iteration
+	weighti iter = 0; // The iterator, also the distance for current iteration
 	initializing_time += WallTimer::get_time_mark();
 
 
@@ -939,7 +1226,7 @@ void VertexCentricPLL::construct(const Graph &G)
 	vector<idi> candidate_queue(num_v);
 	idi end_candidate_queue = 0;
 	vector<ShortIndex> short_index(num_v);
-	vector< vector<smalli> > dist_matrix(BATCH_SIZE, vector<smalli>(num_v, SMALLI_MAX));
+	vector< vector<weighti> > dist_matrix(BATCH_SIZE, vector<weighti>(num_v, SMALLI_MAX));
 	vector<bool> got_candidates(num_v, false); // got_candidates[v] is true means vertex v is in the queue candidate_queue
 	vector<bool> is_active(num_v, false);// is_active[v] is true means vertex v is in the active queue.
 
@@ -1017,6 +1304,7 @@ void VertexCentricPLL::construct(const Graph &G)
 	printf("Candidating: %f %.2f%%\n", candidating_time, candidating_time / time_labeling * 100);
 	printf("Adding: %f %.2f%%\n", adding_time, adding_time / time_labeling * 100);
 		printf("distance_query_time: %f %.2f%%\n", distance_query_time, distance_query_time / time_labeling * 100);
+		printf("SIMD_full_ratio: %.2f%% %'lu %'lu\n", 100.0 * simd_full_count.first / simd_full_count.second, simd_full_count.first, simd_full_count.second);
 		uint64_t total_check_count = bp_hit_count + normal_check_count;
 		printf("total_check_count: %'llu\n", total_check_count);
 		printf("bp_hit_count: %'llu %.2f%%\n",
@@ -1037,7 +1325,7 @@ void VertexCentricPLL::construct(const Graph &G)
 //	printf("BP_Labeling: "); bp_labeling_ins_count.print();
 //	printf("BP_Checking: "); bp_checking_ins_count.print();
 //	printf("distance_query: "); dist_query_ins_count.print();
-	printf("Labeling_time: %.2f\n", time_labeling);
+	printf("Labeling_time: %.2f\n", time_labeling); fflush(stdout);
 	// End test
 }
 
@@ -1088,7 +1376,7 @@ void VertexCentricPLL::switch_labels_to_old_id(
 			}
 		}
 	}
-	printf("Label sum: %u (%u), mean: %f\n", label_sum, test_label_sum, label_sum * 1.0 / num_v);
+	printf("Label sum: %u %u, mean: %f\n", label_sum, test_label_sum, label_sum * 1.0 / num_v);
 
 //	// Try to print
 //	for (idi v = 0; v < num_v; ++v) {
