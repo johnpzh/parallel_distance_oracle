@@ -608,11 +608,6 @@ inline weighti WeightedVertexCentricPLL::distance_query(
 {
 	//++check_count;
 //	distance_query_time -= WallTimer::get_time_mark();
-	//static const __m512i INF_v = _mm512_set1_epi32(WEIGHTI_MAX);
-	//static const __m512i UNDEF_i32_v = _mm512_undefined_epi32();
-	//static const __m512i LOWEST_BYTE_MASK = _mm512_set1_epi32(0xFF);
-	//static const __m128i INF_v_128i = _mm_set1_epi8(-1);
-	//static const inti NUM_P_INT = 16;
 	// Traverse all available hops of v, to see if they reach c
 	// 1. Labels in L[v]
 	idi cand_real_id = cand_root_id + roots_start;
@@ -1201,11 +1196,6 @@ inline void WeightedVertexCentricPLL::filter_out_labels(
 			ShortIndex &SI_c = short_index[c_root_id + roots_start];
 
 			// Vectorized Version
-			//static inti NUM_P_INT = 16;
-			//static const __m512i INF_v = _mm512_set1_epi32(WEIGHTI_MAX);
-			//static const __m512i UNDEF_i32_v = _mm512_undefined_epi32();
-			//static const __m512i LOWEST_BYTE_MASK = _mm512_set1_epi32(0xFF);
-			//static const __m128i INF_v_128i = _mm_set1_epi8(-1);
 			const __m512i c_root_id_v = _mm512_set1_epi32(c_root_id);
 			const __m512i dist_v_c_v = _mm512_set1_epi32(dist_v_c);
 			inti remainder_simd = bound_label_i % NUM_P_INT;
@@ -1632,31 +1622,31 @@ void WeightedVertexCentricPLL::construct(const WeightedGraph &G)
 	idi b_i_bound = num_v / BATCH_SIZE;
 //	cache_miss.measure_start();
 	// Active queue
-	static vector<idi> active_queue(num_v);
-	static idi end_active_queue = 0;
-	static vector<uint8_t> is_active(num_v, false);// is_active[v] is true means vertex v is in the active queue.
+	vector<idi> active_queue(num_v);
+	idi end_active_queue = 0;
+	vector<uint8_t> is_active(num_v, false);// is_active[v] is true means vertex v is in the active queue.
 	// Queue of vertices having candidates
-	static vector<idi> has_cand_queue(num_v);
-	static idi end_has_cand_queue = 0;
-	static vector<uint8_t> has_candidates(num_v, false); // has_candidates[v] is true means vertex v is in the queue has_cand_queue.
+	vector<idi> has_cand_queue(num_v);
+	idi end_has_cand_queue = 0;
+	vector<uint8_t> has_candidates(num_v, false); // has_candidates[v] is true means vertex v is in the queue has_cand_queue.
 	// Distance table of shortest distance from roots to other vertices.
-	static vector< vector<weighti> > dists_table(num_v, vector<weighti>(BATCH_SIZE, WEIGHTI_MAX)); 
+	vector< vector<weighti> > dists_table(num_v, vector<weighti>(BATCH_SIZE, WEIGHTI_MAX));
 		// The distance table is roots_sizes by N. 
 		// 1. record the shortest distance so far from every root to every vertex; (from v to root r)
 		// 2. (DEPRECATED! Replaced by roots_labels_buffer) The distance buffer, recording old label distances of every root. It needs to be initialized every batch by labels of roots. (dists_table[r][l], r > l)
 	// A tabel for roots' old label distances (which are stored in the dists_table in the last version)
-	static vector< vector<weighti> > roots_labels_buffer(BATCH_SIZE, vector<weighti>(num_v, WEIGHTI_MAX)); // r's old label distance from r to v
+	vector< vector<weighti> > roots_labels_buffer(BATCH_SIZE, vector<weighti>(num_v, WEIGHTI_MAX)); // r's old label distance from r to v
 	// Every vertex has a ShortIndex object; the previous labels_table is now in ShortIndex structure
-	static vector<ShortIndex> short_index(num_v, ShortIndex(BATCH_SIZE)); // Here the size of short_index actually is fixed because it is static.
+	vector<ShortIndex> short_index(num_v, ShortIndex(BATCH_SIZE)); // Here the size of short_index actually is fixed because it is static.
 		// Temporary distance table, recording in the current iteration the traversing distance from a vertex to a root.
 		// The candidate table is replaced by the ShortIndex structure: every vertex has a queue and a distance array;
    		// 1. the queue records last inserted labels.
 		// 2. the distance array acts like a bitmap but restores distances.
 
 	// A queue to store vertices which have got new labels in this batch. This queue is used for reset dists_table.
-	static vector<idi> has_new_labels_queue(num_v);
-	static idi end_has_new_labels_queue = 0;
-	static vector<uint8_t> has_new_labels(num_v, false);
+	vector<idi> has_new_labels_queue(num_v);
+	idi end_has_new_labels_queue = 0;
+	vector<uint8_t> has_new_labels(num_v, false);
 
 	double time_labeling = -WallTimer::get_time_mark();
 
