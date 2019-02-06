@@ -33,7 +33,7 @@ namespace PADO {
 
 const inti BATCH_SIZE = 1024; // The size for regular batch and bit array.
 const inti BITPARALLEL_SIZE = 50;
-inti BUFFER_SIZE = 32;
+//inti BUFFER_SIZE = 32;
 
 // AVX-512 constant variables
 const inti NUM_P_INT = 16;
@@ -41,6 +41,16 @@ const __m512i INF_v = _mm512_set1_epi32(WEIGHTI_MAX);
 const __m512i UNDEF_i32_v = _mm512_undefined_epi32();
 const __m512i LOWEST_BYTE_MASK = _mm512_set1_epi32(0xFF);
 const __m128i INF_v_128i = _mm_set1_epi8(-1);
+const inti NUM_P_BP_LABEL = 8;
+//const inti REMAINDER_BP = BITPARALLEL_SIZE % NUM_P_BP_LABEL;
+//const inti BOUND_BP_I = BITPARALLEL_SIZE - REMAINDER_BP;
+//const __mmask8 IN_EPI64_M = (__mmask8) ((uint8_t) 0xFF >> (NUM_P_BP_LABEL - REMAINDER_BP));
+//const __mmask16 IN_128I_M = (__mmask16) ((uint16_t) 0xFFFF >> (NUM_P_INT - REMAINDER_BP));
+const __mmask16 FIRST_8_LANES = (__mmask16) ((uint16_t) 0xFFFF >> 8);
+const __m512i INF_v_epi64 = _mm512_set1_epi64(WEIGHTI_MAX);
+const __m512i ZERO_epi64_v = _mm512_set1_epi64(0);
+const __m512i MINUS_2_epi64_v = _mm512_set1_epi64(-2);
+const __m512i MINUS_1_epi64_v = _mm512_set1_epi64(-1);
 
 //// Batch based processing, 09/11/2018
 class VertexCentricPLL {
@@ -77,13 +87,15 @@ private:
 //		};
 
 	    weighti bp_dist[BITPARALLEL_SIZE];
-	    uint64_t bp_sets[BITPARALLEL_SIZE][2];  // [0]: S^{-1}, [1]: S^{0}
+//	    uint64_t bp_sets[BITPARALLEL_SIZE][2];  // [0]: S^{-1}, [1]: S^{0}
+	    uint64_t bp_sets_0[BITPARALLEL_SIZE];
+	    uint64_t bp_sets_1[BITPARALLEL_SIZE];
 
 //		vector<Batch> batches; // Batch info
 //		vector<DistanceIndexType> distances; // Distance info
 	    idi last_start = 0; // The start index of labels in the last iteration
 	    idi last_size = 0; // The size of labels in the last iteration
-		vector<idi> vertices; // Vertices in the label, presented as temporary ID
+		vector<idi> vertices; // Vertices in the label, preresented as temperory ID
 		vector<weighti> label_dists; // Used for SIMD, storing distances of labels.
 	} __attribute__((aligned(64)));
 
@@ -108,11 +120,11 @@ private:
 			const Graph &G,
 			vector<IndexType> &L,
 			vector<bool> &used_bp_roots);
-	inline bool bit_parallel_checking(
-			idi v_id,
-			idi w_id,
-			const vector<IndexType> &L,
-			weighti iter);
+//	inline bool bit_parallel_checking(
+//			idi v_id,
+//			idi w_id,
+//			const vector<IndexType> &L,
+//			weighti iter);
 
 //	inline void batch_process(
 //			const Graph &G,
@@ -142,69 +154,69 @@ private:
 
 
 	inline void initialize(
-				vector<ShortIndex> &short_index,
-				vector< vector<weighti> > &dist_matrix,
-				vector<idi> &active_queue,
-				idi &end_active_queue,
-				vector<idi> &once_candidated_queue,
-				idi &end_once_candidated_queue,
-				vector<bool> &once_candidated,
-				idi b_id,
-				idi roots_start,
-				inti roots_size,
-				vector<IndexType> &L,
-				const vector<bool> &used_bp_roots);
+			vector<ShortIndex> &short_index,
+			vector< vector<weighti> > &dist_matrix,
+			vector<idi> &active_queue,
+			idi &end_active_queue,
+			vector<idi> &once_candidated_queue,
+			idi &end_once_candidated_queue,
+			vector<bool> &once_candidated,
+			idi b_id,
+			idi roots_start,
+			inti roots_size,
+			vector<IndexType> &L,
+			const vector<bool> &used_bp_roots);
 	inline void push_labels(
-				idi v_head,
-				idi roots_start,
-				const Graph &G,
-				const vector<IndexType> &L,
-				vector<ShortIndex> &short_index,
-				vector<idi> &candidate_queue,
-				idi &end_candidate_queue,
-				vector<bool> &got_candidates,
-				vector<idi> &once_candidated_queue,
-				idi &end_once_candidated_queue,
-				vector<bool> &once_candidated,
-				const vector<bool> &used_bp_roots,
-				weighti iter);
+			idi v_head,
+			idi roots_start,
+			const Graph &G,
+			const vector<IndexType> &L,
+			vector<ShortIndex> &short_index,
+			vector<idi> &candidate_queue,
+			idi &end_candidate_queue,
+			vector<bool> &got_candidates,
+			vector<idi> &once_candidated_queue,
+			idi &end_once_candidated_queue,
+			vector<bool> &once_candidated,
+			const vector<bool> &used_bp_roots,
+			weighti iter);
 	inline bool distance_query(
-				idi cand_root_id,
-				idi v_id,
-				idi roots_start,
-				const vector<IndexType> &L,
-				const vector< vector<weighti> > &dist_matrix,
-				weighti iter);
+			idi cand_root_id,
+			idi v_id,
+			idi roots_start,
+			const vector<IndexType> &L,
+			const vector< vector<weighti> > &dist_matrix,
+			weighti iter);
 	inline bool distance_check_vec_core(
-				vector<weighti> &dists_buffer,
-				vector<idi> &ids_buffer,
-				idi size_buffer,
-				idi cand_root_id,
-				__m512i cand_real_id_v,
-//				__m512i id_offset_v,
-				__m512i iter_v,
-				const vector<IndexType> &L,
-				const vector< vector<weighti> > &dist_matrix);
+			vector<weighti> &dists_buffer,
+			vector<idi> &ids_buffer,
+			idi size_buffer,
+			idi cand_root_id,
+			__m512i cand_real_id_v,
+			//				__m512i id_offset_v,
+			__m512i iter_v,
+			const vector<IndexType> &L,
+			const vector< vector<weighti> > &dist_matrix);
 	inline void insert_label_only(
-				idi cand_root_id,
-				idi v_id,
-				idi roots_start,
-				inti roots_size,
-				vector<IndexType> &L,
-				vector< vector<weighti> > &dist_matrix,
-				weighti iter);
+			idi cand_root_id,
+			idi v_id,
+			idi roots_start,
+			inti roots_size,
+			vector<IndexType> &L,
+			vector< vector<weighti> > &dist_matrix,
+			weighti iter);
 	inline void update_label_indices(
-				idi v_id,
-				idi inserted_count,
-				vector<IndexType> &L,
-				vector<ShortIndex> &short_index,
-				idi b_id,
-				weighti iter);
+			idi v_id,
+			idi inserted_count,
+			vector<IndexType> &L,
+			vector<ShortIndex> &short_index,
+			idi b_id,
+			weighti iter);
 	inline void reset_at_end(
-				idi roots_start,
-				inti roots_size,
-				vector<IndexType> &L,
-				vector< vector<weighti> > &dist_matrix);
+			idi roots_start,
+			inti roots_size,
+			vector<IndexType> &L,
+			vector< vector<weighti> > &dist_matrix);
 
 	// Test only
 //	uint64_t normal_hit_count = 0;
@@ -353,45 +365,56 @@ inline void VertexCentricPLL::bit_parallel_labeling(
 
 		for (idi v = 0; v < num_v; ++v) {
 			L[v].bp_dist[i_bpspt] = tmp_d[v];
-			L[v].bp_sets[i_bpspt][0] = tmp_s[v].first; // S_r^{-1}
-			L[v].bp_sets[i_bpspt][1] = tmp_s[v].second & ~tmp_s[v].first; // Only need those r's neighbors who are not already in S_r^{-1}
+			L[v].bp_sets_0[i_bpspt] = tmp_s[v].first; // S_r^{-1}
+			L[v].bp_sets_1[i_bpspt] = tmp_s[v].second & ~tmp_s[v].first; // Only need those r's neighbors who are not already in S_r^{-1}
+//			L[v].bp_sets[i_bpspt][0] = tmp_s[v].first; // S_r^{-1}
+//			L[v].bp_sets[i_bpspt][1] = tmp_s[v].second & ~tmp_s[v].first; // Only need those r's neighbors who are not already in S_r^{-1}
 		}
 	}
 
 }
 
-// Function bit parallel checking:
-// return false if shortest distance exits in bp labels, return true if bp labels cannot cover the distance
-inline bool VertexCentricPLL::bit_parallel_checking(
-			idi v_id,
-			idi w_id,
-			const vector<IndexType> &L,
-			weighti iter)
-{
-	// Bit Parallel Checking: if label_real_id to v_tail has shorter distance already
-	const IndexType &Lv = L[v_id];
-	const IndexType &Lw = L[w_id];
-
-	_mm_prefetch(&Lv.bp_dist[0], _MM_HINT_T0);
-	_mm_prefetch(&Lv.bp_sets[0][0], _MM_HINT_T0);
-	_mm_prefetch(&Lw.bp_dist[0], _MM_HINT_T0);
-	_mm_prefetch(&Lw.bp_sets[0][0], _MM_HINT_T0);
-	for (inti i = 0; i < BITPARALLEL_SIZE; ++i) {
-		inti td = Lv.bp_dist[i] + Lw.bp_dist[i];
-		if (td - 2 <= iter) {
-			td +=
-				(Lv.bp_sets[i][0] & Lw.bp_sets[i][0]) ? -2 :
-				((Lv.bp_sets[i][0] & Lw.bp_sets[i][1]) |
-				 (Lv.bp_sets[i][1] & Lw.bp_sets[i][0]))
-				? -1 : 0;
-			if (td <= iter) {
-				++bp_hit_count;
-				return false;
-			}
-		}
-	}
-	return true;
-}
+//// Function bit parallel checking:
+//// return false if shortest distance exits in bp labels, return true if bp labels cannot cover the distance
+//inline bool VertexCentricPLL::bit_parallel_checking(
+//			idi v_id,
+//			idi w_id,
+//			const vector<IndexType> &L,
+//			weighti iter)
+//{
+//	// Bit Parallel Checking: if label_real_id to v_tail has shorter distance already
+//	const IndexType &Lv = L[v_id];
+//	const IndexType &Lw = L[w_id];
+//
+//	_mm_prefetch(&Lv.bp_dist[0], _MM_HINT_T0);
+//	_mm_prefetch(&Lv.bp_sets_0[0], _MM_HINT_T0);
+//	_mm_prefetch(&Lv.bp_sets_1[0], _MM_HINT_T0);
+////	_mm_prefetch(&Lv.bp_sets[0][0], _MM_HINT_T0);
+//	_mm_prefetch(&Lw.bp_dist[0], _MM_HINT_T0);
+//	_mm_prefetch(&Lw.bp_sets_0[0], _MM_HINT_T0);
+//	_mm_prefetch(&Lw.bp_sets_1[0], _MM_HINT_T0);
+////	_mm_prefetch(&Lw.bp_sets[0][0], _MM_HINT_T0);
+//	for (inti i = 0; i < BITPARALLEL_SIZE; ++i) {
+//		inti td = Lv.bp_dist[i] + Lw.bp_dist[i];
+//		if (td - 2 <= iter) {
+//			td +=
+//				(Lv.bp_sets_0[i] & Lw.bp_sets_0[i]) ? -2 :
+//				((Lv.bp_sets_0[i] & Lw.bp_sets_1[i]) |
+//				(Lv.bp_sets_1[i] & Lw.bp_sets_0[i]))
+//					? -1 : 0;
+////			td +=
+////				(Lv.bp_sets[i][0] & Lw.bp_sets[i][0]) ? -2 :
+////				((Lv.bp_sets[i][0] & Lw.bp_sets[i][1]) |
+////				 (Lv.bp_sets[i][1] & Lw.bp_sets[i][0]))
+////				? -1 : 0;
+//			if (td <= iter) {
+//				++bp_hit_count;
+//				return false;
+//			}
+//		}
+//	}
+//	return true;
+//}
 
 
 // Function for initializing at the begin of a batch
@@ -535,6 +558,13 @@ inline void VertexCentricPLL::push_labels(
 				const vector<bool> &used_bp_roots,
 				weighti iter)
 {
+	const inti REMAINDER_BP = BITPARALLEL_SIZE % NUM_P_BP_LABEL;
+	const inti BOUND_BP_I = BITPARALLEL_SIZE - REMAINDER_BP;
+	const __mmask8 IN_EPI64_M = (__mmask8) ((uint8_t) 0xFF >> (NUM_P_BP_LABEL - REMAINDER_BP));
+	const __mmask16 IN_128I_M = (__mmask16) ((uint16_t) 0xFFFF >> (NUM_P_INT - REMAINDER_BP));
+	__m512i iter_v = _mm512_set1_epi64(iter);
+	__m512i iter_plus_2_v = _mm512_set1_epi64(iter + 2);
+
 	const IndexType &Lv = L[v_head];
 	// These 2 index are used for traversing v_head's last inserted labels
 	idi l_i_start = Lv.last_start;
@@ -559,7 +589,9 @@ inline void VertexCentricPLL::push_labels(
 //		} // This condition cannot be used anymore since v_head's last inserted labels are not ordered from higher rank to lower rank now, because v_head's candidate set is a queue now rather than a bitmap. For a queue, its order of candidates are not ordered by ranks.
 		const IndexType &L_tail = L[v_tail];
 		_mm_prefetch(&L_tail.bp_dist[0], _MM_HINT_T0);
-		_mm_prefetch(&L_tail.bp_sets[0][0], _MM_HINT_T0);
+		_mm_prefetch(&L_tail.bp_sets_0[0], _MM_HINT_T0);
+		_mm_prefetch(&L_tail.bp_sets_1[0], _MM_HINT_T0);
+//		_mm_prefetch(&L_tail.bp_sets[0][0], _MM_HINT_T0);
 		// Traverse v_head's last inserted labels
 		for (idi l_i = l_i_start; l_i < l_i_bound; ++l_i) {
 //			idi label_root_id = Lv.vertices[l_i];
@@ -591,25 +623,146 @@ inline void VertexCentricPLL::push_labels(
 			const IndexType &L_label = L[label_real_id];
 
 			_mm_prefetch(&L_label.bp_dist[0], _MM_HINT_T0);
-			_mm_prefetch(&L_label.bp_sets[0][0], _MM_HINT_T0);
-			bp_checking_time -= WallTimer::get_time_mark();
+			_mm_prefetch(&L_label.bp_sets_0[0], _MM_HINT_T0);
+			_mm_prefetch(&L_label.bp_sets_1[0], _MM_HINT_T0);
+//			_mm_prefetch(&L_label.bp_sets[0][0], _MM_HINT_T0);
 //			bp_checking_ins_count.measure_start();
 			bool no_need_add = false;
-			for (inti i = 0; i < BITPARALLEL_SIZE; ++i) {
-				inti td = L_label.bp_dist[i] + L_tail.bp_dist[i];
-				if (td - 2 <= iter) {
-					td +=
-						(L_label.bp_sets[i][0] & L_tail.bp_sets[i][0]) ? -2 :
-						((L_label.bp_sets[i][0] & L_tail.bp_sets[i][1]) |
-						 (L_label.bp_sets[i][1] & L_tail.bp_sets[i][0]))
-						? -1 : 0;
-					if (td <= iter) {
+			bp_checking_time -= WallTimer::get_time_mark();
+
+			// Vectorization Version
+//			inti remainder_simd = BITPARALLEL_SIZE % NUM_P_BP_LABEL;
+//			idi bound_i = BITPARALLEL_SIZE - remainder_simd;
+			for (idi i = 0; i < BOUND_BP_I; i += NUM_P_BP_LABEL) {
+				// Distance from label to BP root
+				__m128i tmp_dist_l_r_128i = _mm_loadu_epi8(&L_label.bp_dist[i]); // @suppress("Function cannot be resolved")
+//				__m128i tmp_dist_l_r_128i = _mm_mask_loadu_epi8(INF_v_128i, FIRST_8_LANES, &L_label.bp_dist[i]);
+				__m512i dist_l_r_v = _mm512_cvtepi8_epi64(tmp_dist_l_r_128i);
+				// Distance from tail to BP root
+				__m128i tmp_dist_t_r_128i = _mm_loadu_epi8(&L_tail.bp_dist[i]); // @suppress("Function cannot be resolved")
+//				__m128i tmp_dist_t_r_128i = _mm_mask_loadu_epi8(INF_v_128i, FIRST_8_LANES, &L_tail.bp_dist[i]);
+				__m512i dist_t_r_v = _mm512_cvtepi8_epi64(tmp_dist_t_r_128i);
+				// BP-label distance from label to tail
+				__m512i td_v = _mm512_add_epi64(dist_l_r_v, dist_t_r_v);
+				// Compari BP-label dist to td_plus_2
+				__mmask8 is_bp_dist_shorter = _mm512_cmple_epi64_mask(td_v, iter_plus_2_v);
+				if (is_bp_dist_shorter) {
+					__m512i l_sets_0_v = _mm512_mask_loadu_epi64(ZERO_epi64_v, is_bp_dist_shorter, &L_label.bp_sets_0[i]); // @suppress("Function cannot be resolved")
+					__m512i t_sets_0_v = _mm512_mask_loadu_epi64(ZERO_epi64_v, is_bp_dist_shorter, &L_tail.bp_sets_0[i]); // @suppress("Function cannot be resolved")
+
+					__mmask8 can_both_reach_m = _mm512_mask_cmpneq_epi64_mask(
+													is_bp_dist_shorter,
+													ZERO_epi64_v,
+													_mm512_mask_and_epi64(ZERO_epi64_v, is_bp_dist_shorter, l_sets_0_v, t_sets_0_v));
+					if (can_both_reach_m) {
+						td_v = _mm512_mask_add_epi64(td_v, can_both_reach_m, td_v, MINUS_2_epi64_v);
+					} else {
+						__mmask8 compound_mask = is_bp_dist_shorter & (~can_both_reach_m);
+						__m512i l_sets_1_v = _mm512_mask_loadu_epi64(ZERO_epi64_v, compound_mask, &L_label.bp_sets_1[i]); // @suppress("Function cannot be resolved")
+						__m512i t_sets_1_v = _mm512_mask_loadu_epi64(ZERO_epi64_v, compound_mask, &L_tail.bp_sets_1[i]); // @suppress("Function cannot be resolved")
+						__mmask8 can_single_reach_m = _mm512_mask_cmpneq_epi64_mask(
+								compound_mask,
+								ZERO_epi64_v,
+								_mm512_mask_or_epi64(
+									ZERO_epi64_v,
+									compound_mask,
+									_mm512_mask_and_epi64(ZERO_epi64_v, compound_mask, l_sets_0_v, t_sets_1_v),
+									_mm512_mask_and_epi64(ZERO_epi64_v, compound_mask, l_sets_1_v, t_sets_0_v)));
+						if (can_single_reach_m) {
+							td_v = _mm512_mask_add_epi64(td_v, can_single_reach_m, td_v, MINUS_1_epi64_v);
+						}
+					}
+					if (_mm512_mask_cmple_epi64_mask(is_bp_dist_shorter, td_v, iter_v)) {
 						no_need_add = true;
 						++bp_hit_count;
 						break;
 					}
 				}
 			}
+//			if (true) {
+////				__mmask8 in_epi64_m = (__mmask8) ((uint8_t) 0xFF >> (NUM_P_BP_LABEL - remainder_simd));
+////				__mmask16 in_128i_m = (__mmask16) ((uint16_t) 0xFFFF >> (NUM_P_INT - remainder_simd));
+//				// Distance from label to BP root
+//				__m128i tmp_dist_l_r_128i = _mm_mask_loadu_epi8(INF_v_128i, IN_128I_M, &L_label.bp_dist[BOUND_BP_I]);
+//				__m512i dist_l_r_v = _mm512_mask_cvtepi8_epi64(INF_v_epi64, IN_EPI64_M, tmp_dist_l_r_128i);
+//				// Distance from tail to BP root
+//				__m128i tmp_dist_t_r_128i = _mm_mask_loadu_epi8(INF_v_128i, IN_128I_M, &L_tail.bp_dist[BOUND_BP_I]);
+//				__m512i dist_t_r_v = _mm512_mask_cvtepi8_epi64(INF_v_epi64, IN_EPI64_M, tmp_dist_t_r_128i);
+//				// BP-label distance from label to tail
+//				__m512i td_v = _mm512_mask_add_epi64(INF_v_epi64, IN_EPI64_M, dist_l_r_v, dist_t_r_v);
+//				// Compari BP-label dist to td_plus_2
+//				__mmask8 is_bp_dist_shorter = _mm512_mask_cmple_epi64_mask(IN_EPI64_M, td_v, iter_plus_2_v);
+//				if (is_bp_dist_shorter) {
+//					__m512i l_sets_0_v = _mm512_mask_loadu_epi64(ZERO_epi64_v, is_bp_dist_shorter, &L_label.bp_sets_0[BOUND_BP_I]); // @suppress("Function cannot be resolved")
+//					__m512i t_sets_0_v = _mm512_mask_loadu_epi64(ZERO_epi64_v, is_bp_dist_shorter, &L_tail.bp_sets_0[BOUND_BP_I]); // @suppress("Function cannot be resolved")
+//
+//					__mmask8 can_both_reach_m = _mm512_mask_cmpneq_epi64_mask(
+//							is_bp_dist_shorter,
+//							ZERO_epi64_v,
+//							_mm512_mask_and_epi64(ZERO_epi64_v, is_bp_dist_shorter, l_sets_0_v, t_sets_0_v));
+//					if (can_both_reach_m) {
+//						td_v = _mm512_mask_add_epi64(td_v, can_both_reach_m, td_v, MINUS_2_epi64_v);
+//					} else {
+//						__mmask8 compound_mask = is_bp_dist_shorter & (~can_both_reach_m);
+//						__m512i l_sets_1_v = _mm512_mask_loadu_epi64(ZERO_epi64_v, compound_mask, &L_label.bp_sets_1[BOUND_BP_I]); // @suppress("Function cannot be resolved")
+//						__m512i t_sets_1_v = _mm512_mask_loadu_epi64(ZERO_epi64_v, compound_mask, &L_tail.bp_sets_1[BOUND_BP_I]); // @suppress("Function cannot be resolved")
+//						__mmask8 can_single_reach_m = _mm512_mask_cmpneq_epi64_mask(
+//								compound_mask,
+//								ZERO_epi64_v,
+//								_mm512_mask_or_epi64(
+//									ZERO_epi64_v,
+//									compound_mask,
+//									_mm512_mask_and_epi64(ZERO_epi64_v, compound_mask, l_sets_0_v, t_sets_1_v),
+//									_mm512_mask_and_epi64(ZERO_epi64_v, compound_mask, l_sets_1_v, t_sets_0_v)));
+//						if (can_single_reach_m) {
+//							td_v = _mm512_mask_add_epi64(td_v, can_single_reach_m, td_v, MINUS_1_epi64_v);
+//						}
+//					}
+//					if (_mm512_mask_cmple_epi64_mask(is_bp_dist_shorter, td_v, iter_v)) {
+//						no_need_add = true;
+//						++bp_hit_count;
+//						// This is one of the most incredibly egregiously ugly bugs ever! 02/05/2019
+////						break; // The break should never be here, as it is in a if-condition statement rather than a for-loop.
+//					}
+//				}
+//			}
+			for (inti i = BOUND_BP_I; i < BITPARALLEL_SIZE; ++i) {
+				inti td = L_label.bp_dist[i] + L_tail.bp_dist[i];
+				if (td - 2 <= iter) {
+					td +=
+						(L_label.bp_sets_0[i] & L_tail.bp_sets_0[i]) ? -2 :
+							((L_label.bp_sets_0[i] & L_tail.bp_sets_1[i]) |
+									(L_label.bp_sets_1[i] & L_tail.bp_sets_0[i]))
+									? -1 : 0;
+					if (td <= iter) {
+						no_need_add = true;
+						++bp_hit_count;
+//							break;
+					}
+				}
+			}
+
+//			// Sequential Version
+//			for (inti i = 0; i < BITPARALLEL_SIZE; ++i) {
+//				inti td = L_label.bp_dist[i] + L_tail.bp_dist[i];
+//				if (td - 2 <= iter) {
+//					td +=
+//						(L_label.bp_sets_0[i] & L_tail.bp_sets_0[i]) ? -2 :
+//						((L_label.bp_sets_0[i] & L_tail.bp_sets_1[i]) |
+//						(L_label.bp_sets_1[i] & L_tail.bp_sets_0[i]))
+//							? -1 : 0;
+////					td +=
+////						(L_label.bp_sets[i][0] & L_tail.bp_sets[i][0]) ? -2 :
+////						((L_label.bp_sets[i][0] & L_tail.bp_sets[i][1]) |
+////						 (L_label.bp_sets[i][1] & L_tail.bp_sets[i][0]))
+////						? -1 : 0;
+//					if (td <= iter) {
+//						no_need_add = true;
+//						++bp_hit_count;
+//						break;
+//					}
+//				}
+//			}
 			bp_checking_time += WallTimer::get_time_mark();
 			if (no_need_add) {
 //				bp_checking_ins_count.measure_stop();
@@ -1046,7 +1199,7 @@ inline bool VertexCentricPLL::distance_query(
 			__m512i r_real_id_v = _mm512_mask_loadu_epi32(UNDEF_i32_v, is_v_r_shorter, &Lv.vertices[bound_l_i]); // @suppress("Function cannot be resolved")
 			__mmask16 is_r_higher_ranked_m = _mm512_mask_cmplt_epi32_mask(is_v_r_shorter, r_real_id_v, cand_real_id_v);
 			if (is_r_higher_ranked_m) {
-				// Distance from r to c
+				// Distance from r to c !!!!!
 				__m512i dist_r_c_v = _mm512_mask_i32gather_epi32(INF_v, is_r_higher_ranked_m, r_real_id_v, &dist_matrix[cand_root_id][0], sizeof(weighti));
 				dist_r_c_v = _mm512_mask_and_epi32(INF_v, is_r_higher_ranked_m, dist_r_c_v, LOWEST_BYTE_MASK);
 				// Query distance from v to c
@@ -1059,7 +1212,6 @@ inline bool VertexCentricPLL::distance_query(
 			}
 		}
 	}
-
 //	// Sequential Version
 //	idi bound_l_i = Lv.last_size;
 //	for (idi l_i = 0; l_i < bound_l_i; ++l_i) {
@@ -1598,10 +1750,15 @@ void VertexCentricPLL::switch_labels_to_old_id(
 //			int td = idx_v.bp_dist[i] + idx_u.bp_dist[i];
 //			if (td - 2 <= dist) {
 //				td +=
-//					(idx_v.bp_sets[i][0] & idx_u.bp_sets[i][0]) ? -2 :
-//					((idx_v.bp_sets[i][0] & idx_u.bp_sets[i][1])
-//							| (idx_v.bp_sets[i][1] & idx_u.bp_sets[i][0]))
+//					(idx_v.bp_sets_0[i] & idx_u.bp_sets_0[i]) ? -2 :
+//					((idx_v.bp_sets_0[i] & idx_u.bp_sets_1[i])
+//							| (idx_v.bp_sets_1[i] & idx_u.bp_sets_0[i]))
 //							? -1 : 0;
+////				td +=
+////					(idx_v.bp_sets[i][0] & idx_u.bp_sets[i][0]) ? -2 :
+////					((idx_v.bp_sets[i][0] & idx_u.bp_sets[i][1])
+////							| (idx_v.bp_sets[i][1] & idx_u.bp_sets[i][0]))
+////							? -1 : 0;
 //				if (td < dist) {
 //					dist = td;
 //				}

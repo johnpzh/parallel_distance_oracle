@@ -21,11 +21,13 @@
 //#include "pado_para.h"
 //#include "pado_para.20181106.tmp.scalability.h"
 //#include "pado_para.20181115.tmp.parallel_bp.h"
-//#include "pado_para.20190129.candidates_que.h"
+#include "pado_para.20190129.candidates_que.h"
+//#include "pado_para.20190205.vec_DQ_vec_BPC.h"
 //#include "pado_weighted_para.20190129.parallel.h"
 //#include "pado_weighted_para.20190131.no_temp_queue_but_atomic_opts.h"
 //#include "pado.20190130.vectorization.h"
-#include "pado.20190201.vec_with_extra_label_array.h"
+//#include "pado.20190201.vec_with_extra_label_array.h"
+//#include "pado.20190203.bp_checking_vec.h"
 
 using namespace PADO;
 
@@ -54,26 +56,30 @@ void pado(const char filename[])
 
 //	NUM_THREADS = 40;
 //	omp_set_num_threads(NUM_THREADS);
-//	WeightedVertexCentricPLL VCPLL(G);
-//////	ParaVertexCentricPLL VCPLL(G);
-	VertexCentricPLL VCPLL(G);
-	VCPLL.switch_labels_to_old_id(rank2id, rank);
+////	WeightedVertexCentricPLL VCPLL(G);
+//	ParaVertexCentricPLL VCPLL(G);
+////	VertexCentricPLL VCPLL(G);
+//	VCPLL.switch_labels_to_old_id(rank2id, rank);
 
 
-//	for (inti t_num = 1; t_num <= 32; t_num *= 2) {
-//		NUM_THREADS = t_num;
-//		omp_set_num_threads(NUM_THREADS);
+	for (inti t_num = 1; t_num <= 32; t_num *= 2) {
+		NUM_THREADS = t_num;
+		omp_set_num_threads(NUM_THREADS);
 //		WeightedVertexCentricPLL VCPLL(G);
-//		VCPLL.switch_labels_to_old_id(rank2id, rank);
-//		puts("");
-//	}
-//	{
-//		NUM_THREADS = 40;
-//		omp_set_num_threads(NUM_THREADS);
+		ParaVertexCentricPLL *VCPLL = new ParaVertexCentricPLL(G);
+		VCPLL->switch_labels_to_old_id(rank2id, rank);
+		delete VCPLL;
+		puts("");
+	}
+	{
+		NUM_THREADS = 40;
+		omp_set_num_threads(NUM_THREADS);
 //		WeightedVertexCentricPLL VCPLL(G);
-//		VCPLL.switch_labels_to_old_id(rank2id, rank);
-//		puts("");
-//	}
+		ParaVertexCentricPLL *VCPLL = new ParaVertexCentricPLL(G);
+		VCPLL->switch_labels_to_old_id(rank2id, rank);
+		delete VCPLL;
+		puts("");
+	}
 
 }
 
