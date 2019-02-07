@@ -62,17 +62,17 @@ void pado(const char filename[])
 //	VCPLL.switch_labels_to_old_id(rank2id, rank);
 
 
-	for (inti t_num = 1; t_num <= 32; t_num *= 2) {
-		NUM_THREADS = t_num;
-		omp_set_num_threads(NUM_THREADS);
-//		WeightedVertexCentricPLL VCPLL(G);
-		ParaVertexCentricPLL *VCPLL = new ParaVertexCentricPLL(G);
-		VCPLL->switch_labels_to_old_id(rank2id, rank);
-		delete VCPLL;
-		puts("");
-	}
+//	for (inti t_num = 1; t_num <= 32; t_num *= 2) {
+//		NUM_THREADS = t_num;
+//		omp_set_num_threads(NUM_THREADS);
+////		WeightedVertexCentricPLL VCPLL(G);
+//		ParaVertexCentricPLL *VCPLL = new ParaVertexCentricPLL(G);
+//		VCPLL->switch_labels_to_old_id(rank2id, rank);
+//		delete VCPLL;
+//		puts("");
+//	}
 	{
-		NUM_THREADS = 40;
+		NUM_THREADS = 1;
 		omp_set_num_threads(NUM_THREADS);
 //		WeightedVertexCentricPLL VCPLL(G);
 		ParaVertexCentricPLL *VCPLL = new ParaVertexCentricPLL(G);

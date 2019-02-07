@@ -375,232 +375,107 @@ inline void ParaVertexCentricPLL::bit_parallel_labeling(
 			}
 		}
 	} else {
-		// Parallel version
-		vector< vector<weighti> > tmp_d(num_v, vector<weighti>(BITPARALLEL_SIZE, WEIGHTI_MAX));
-		vector< vector<std::pair<uint64_t, uint64_t> > > tmp_s(num_v, vector<std::pair<uint64_t, uint64_t> >(BITPARALLEL_SIZE, make_pair(0, 0))); // first is S_r^{-1}, second is S_r^{0}
-		vector<idi> que(num_v); // active queue
-		vector<uint8_t> is_active(num_v, 0);
-		idi end_que = 0;
-		vector<idi> backup_queue(num_v);
-		idi end_backup_queue = 0;
-		vector< bitset<BITPARALLEL_SIZE> > active_v_roots(num_v, bitset<BITPARALLEL_SIZE>(0)); // record which roots the active vertex is active for
-
-		// Select roots and their neighbors
-		{
-//			idi r = 0;
-//			for (inti i_bpspt = 0; i_bpspt < BITPARALLEL_SIZE; ++i_bpspt) {
-//				while (r < num_v && used_bp_roots[r]) {
-//					++r;
-//				}
-//				if (r == num_v) {
-//					for (idi v = 0; v < num_v; ++v) {
-//						L[v].bp_dist[i_bpspt] = SMALLI_MAX;
-//					}
-//					continue;
-//				}
-//				used_bp_roots[r] = 1;
-//
-//				que[end_que++] = r;
-//				active_v_roots[r].set(i_bpspt);
-//				tmp_d[r][i_bpspt] = 0;
-//
-//				int ns = 0; // number of selected neighbor, default 64
-//				// the edge of one vertex in G is ordered decreasingly to rank, lower rank first, so here need to traverse edges backward
-//				idi i_bound = G.vertices[r] - 1;
-//				idi i_start = i_bound + G.out_degrees[r];
-//				for (idi i = i_start; i > i_bound; --i) {
-//					idi v = G.out_edges[i];
-//					if (!used_bp_roots[v]) {
-//						used_bp_roots[v] = 1;
-//						// Algo3:line4: for every v in S_r, (dist[v], S_r^{-1}[v], S_r^{0}[v]) <- (1, {v}, empty_set)
-//						backup_queue[end_backup_queue++] = v;
-//						active_v_roots[v].set(i_bpspt);
-//						tmp_d[v][i_bpspt] = 1;
-//						tmp_s[v][i_bpspt].first = 1ULL << ns;
-//						if (++ns == 64) break;
-//					}
-//				}
-//			}
-
-			// Parallel selecting
-			// The Roots at first
-#pragma omp parallel for
-			for (inti r_i = 0; r_i < BITPARALLEL_SIZE; ++r_i) {
-				used_bp_roots[r_i] = 1;
-				que[r_i] = r_i;
-				active_v_roots[r_i].set(r_i);
-				tmp_d[r_i][r_i] = 0;
+		// Parallel version: Naive parallel enqueue
+		std::vector<weighti> tmp_d(num_v); // distances from the root to every v
+		std::vector<std::pair<uint64_t, uint64_t> > tmp_s(num_v); // first is S_r^{-1}, second is S_r^{0}
+		std::vector<idi> que(num_v); // active queue
+		std::vector<std::pair<idi, idi> > sibling_es(num_e); // siblings, their distances to the root are equal (have difference of 0)
+		std::vector<std::pair<idi, idi> > child_es(num_e); // child and father, their distances to the root have difference of 1.
+		idi r = 0; // root r
+		for (inti i_bpspt = 0; i_bpspt < BITPARALLEL_SIZE; ++i_bpspt) {
+			while (r < num_v && used_bp_roots[r]) {
+				++r;
 			}
-			end_que = BITPARALLEL_SIZE;
-			// The neighbors of roots
-			vector<idi> offsets_tmp_queue(BITPARALLEL_SIZE);
-#pragma omp parallel for
-			for (idi i = 0; i < BITPARALLEL_SIZE; ++i) {
-				offsets_tmp_queue[i] = i * 64; // Every root has up to 64 neighbors
+			if (r == num_v) {
+				for (idi v = 0; v < num_v; ++v) {
+					L[v].bp_dist[i_bpspt] = SMALLI_MAX;
+				}
+				continue;
 			}
-			vector<idi> tmp_queue(BITPARALLEL_SIZE * 64);
-			vector<idi> sizes_tmp_queue(BITPARALLEL_SIZE, 0);
-#pragma omp parallel for
-			for (inti r_i = 0; r_i < BITPARALLEL_SIZE; ++r_i) {
-				inti ns = 0;
-				// Select neighbors, rank from high to low (in graph the neighbors are stored as low to high)
-				idi i_bound = G.vertices[r_i] - 1;
-				idi i_start = i_bound + G.out_degrees[r_i];
-				for (idi i = i_start; i > i_bound; --i) {
-					idi v = G.out_edges[i];
-					if (CAS(&used_bp_roots[v], (uint8_t) 0, (uint8_t) 1)) { // used_bp_roots[v] = 1;
-						// Algo3:line4: for every v in S_r, (dist[v], S_r^{-1}[v], S_r^{0}[v]) <- (1, {v}, empty_set)
-						tmp_queue[offsets_tmp_queue[r_i] + sizes_tmp_queue[r_i]++] = v;
-//						backup_queue[end_backup_queue++] = v;
-						active_v_roots[v].set(r_i);
-						tmp_d[v][r_i] = 1;
-						tmp_s[v][r_i].first = 1ULL << ns;
-						if (++ns == 64) break;
-					}
+			used_bp_roots[r] = 1;
+
+			fill(tmp_d.begin(), tmp_d.end(), SMALLI_MAX);
+			fill(tmp_s.begin(), tmp_s.end(), std::make_pair(0, 0));
+
+			idi que_t0 = 0, que_t1 = 0, que_h = 0;
+			que[que_h++] = r;
+			tmp_d[r] = 0;
+			que_t1 = que_h;
+
+			int ns = 0; // number of selected neighbor, default 64
+			// the edge of one vertex in G is ordered decreasingly to rank, lower rank first, so here need to traverse edges backward
+			idi i_bound = G.vertices[r] - 1;
+			idi i_start = i_bound + G.out_degrees[r];
+			for (idi i = i_start; i > i_bound; --i) {
+				idi v = G.out_edges[i];
+				if (!used_bp_roots[v]) {
+					used_bp_roots[v] = 1;
+					// Algo3:line4: for every v in S_r, (dist[v], S_r^{-1}[v], S_r^{0}[v]) <- (1, {v}, empty_set)
+					que[que_h++] = v;
+					tmp_d[v] = 1;
+					tmp_s[v].first = 1ULL << ns;
+					if (++ns == 64) break;
 				}
 			}
-			idi total_new = prefix_sum_for_offsets(sizes_tmp_queue);
-			collect_into_queue(
-					tmp_queue,
-					offsets_tmp_queue,
-					sizes_tmp_queue,
-					total_new,
-					backup_queue,
-					end_backup_queue);
-		}
 
-		// Process the queue
-		{
-			vector<uint8_t> tmp_is_active(num_v, 0); // correspond to is_active
-			weighti d = 0;
-			while (0 != end_que) {
-				// Prepare for parallel que
-				vector<idi> offsets_tmp_queue(end_que);
-#pragma omp parallel for
-				for (idi i_q = 0; i_q < end_que; ++i_q) {
-					offsets_tmp_queue[i_q] = G.out_degrees[que[i_q]];
-				}
-				idi num_neighbors = prefix_sum_for_offsets(offsets_tmp_queue);
-				// que
-				vector<idi> tmp_queue(num_neighbors);
-				vector<idi> sizes_tmp_queue(end_que, 0);
-				// Prepare for parallel siblings and children
-				vector<idi> offsets_r_id(end_que);
-#pragma omp parallel for
-				for (idi i_q = 0; i_q < end_que; ++i_q) {
-					offsets_r_id[i_q] = offsets_tmp_queue[i_q] * BITPARALLEL_SIZE;
-				}
-				idi num_r_id = num_neighbors * BITPARALLEL_SIZE;
-				// Siblings
-				vector< pair<idi, idi>> siblings(num_r_id); // .first is neighbor id, .second is root id
-				vector<idi> sizes_siblings(end_que, 0);
-				// Children
-				vector< pair<idi, idi>> children(num_r_id); // .first is neighbor id, .second is root id
-				vector<idi> sizes_children(end_que, 0);
+			for (weighti d = 0; que_t0 < que_h; ++d) {
+				idi num_sibling_es = 0, num_child_es = 0;
 
-
-#pragma omp parallel for
-				for (idi i_q = 0; i_q < end_que; ++i_q) {
-					idi v = que[i_q];
-					is_active[v] = 0; // reset is_active
-					// Traverse v's neighbors
+				for (idi que_i = que_t0; que_i < que_t1; ++que_i) {
+					idi v = que[que_i];
 					idi i_start = G.vertices[v];
 					idi i_bound = i_start + G.out_degrees[v];
 					for (idi i = i_start; i < i_bound; ++i) {
 						idi tv = G.out_edges[i];
-						for (inti r_i = 0; r_i < BITPARALLEL_SIZE; ++r_i) {
-							if (!active_v_roots[v][r_i]) {
-								continue;
+						weighti td = d + 1;
+
+						if (d > tmp_d[tv]) {
+							;
+						}
+						else if (d == tmp_d[tv]) {
+							if (v < tv) { // ??? Why need v < tv !!! Because it's a undirected graph.
+								sibling_es[num_sibling_es].first  = v;
+								sibling_es[num_sibling_es].second = tv;
+								++num_sibling_es;
+//								tmp_s[v].second |= tmp_s[tv].first;
+//								tmp_s[tv].second |= tmp_s[v].first;
 							}
-							if (d > tmp_d[tv][r_i]) {
-								;
-							} else if (d == tmp_d[tv][r_i]) {
-								// Siblings
-								if (v < tv) { // ??? Why need v < tv !!! Because it's a undirected graph.
-									idi &tmp_size = sizes_siblings[i_q];
-									siblings[offsets_r_id[i_q] + tmp_size].first = tv;
-									siblings[offsets_r_id[i_q] + tmp_size].second = r_i;
-									++tmp_size;
-								}
-							} else { // d < tmp_d[tv]
-								// Children
-								if (CAS(&tmp_d[tv][r_i], WEIGHTI_MAX, (weighti) (d + 1))) { // tmp_d[tv][r_i] = d + 1
-									if (CAS(&tmp_is_active[tv], (uint8_t) 0, (uint8_t) 1)) { // tmp_is_active[tv] = 1
-										tmp_queue[offsets_tmp_queue[i_q] + sizes_tmp_queue[i_q]++] = tv;
-									}
-								}
-		//						if (tmp_d[tv][r_i] == SMALLI_MAX) {
-		//							que[que_h++] = tv; // Need parallel enqueue
-		//							tmp_d[tv][r_i] = d + 1;
-		//						}
-								idi &tmp_size = sizes_children[i_q];
-								children[offsets_r_id[i_q] + tmp_size].first = tv;
-								children[offsets_r_id[i_q] + tmp_size].second = r_i;
-								++tmp_size;
+						} else { // d < tmp_d[tv]
+							if (tmp_d[tv] == SMALLI_MAX) {
+								que[que_h++] = tv;
+								tmp_d[tv] = td;
 							}
+							child_es[num_child_es].first  = v;
+							child_es[num_child_es].second = tv;
+							++num_child_es;
+//							tmp_s[tv].first  |= tmp_s[v].first;
+//							tmp_s[tv].second |= tmp_s[v].second;
 						}
 					}
-					active_v_roots[v].reset();
 				}
-				// Sibling
-#pragma omp parallel for schedule(dynamic)
-				for (idi i_q = 0; i_q < end_que; ++i_q) {
-					idi v = que[i_q];
-					idi i_s_start = offsets_r_id[i_q];
-					idi i_s_bound = i_s_start + sizes_siblings[i_q];
-					for (idi i_s = i_s_start; i_s < i_s_bound; ++i_s) {
-						idi w = siblings[i_s].first;
-						idi r = siblings[i_s].second;
-						__sync_or_and_fetch(&tmp_s[v][r].second, tmp_s[w][r].first);
-						__sync_or_and_fetch(&tmp_s[w][r].second, tmp_s[v][r].first);
-					}
+
+				for (idi i = 0; i < num_sibling_es; ++i) {
+					idi v = sibling_es[i].first, w = sibling_es[i].second;
+					tmp_s[v].second |= tmp_s[w].first;
+					tmp_s[w].second |= tmp_s[v].first;
 				}
-//				// should directly process tmp_sibling_es and r_id_tmp_sibling_es; otherwise the buffer is too large
-
-				// Child
-#pragma omp parallel for schedule(dynamic)
-				for (idi i_q = 0; i_q < end_que; ++i_q) {
-					idi v = que[i_q];
-					idi i_c_start = offsets_r_id[i_q];
-					idi i_c_bound = i_c_start + sizes_children[i_q];
-					for (idi i_c = i_c_start; i_c < i_c_bound; ++i_c) {
-						idi c = children[i_c].first;
-						idi r = children[i_c].second;
-						__sync_or_and_fetch(&tmp_s[c][r].first, tmp_s[v][r].first);
-						__sync_or_and_fetch(&tmp_s[c][r].second, tmp_s[v][r].second);
-						active_v_roots[c].set(r); // Mark which root reaches this vertex
-					}
+				for (idi i = 0; i < num_child_es; ++i) {
+					idi v = child_es[i].first, c = child_es[i].second;
+					tmp_s[c].first  |= tmp_s[v].first;
+					tmp_s[c].second |= tmp_s[v].second;
 				}
-//				// should directly process tmp_child_es and r_id_tmp_child_es; otherwise the buffer is too large
 
-				// Queue
-				idi total_new =prefix_sum_for_offsets(sizes_tmp_queue);
-				collect_into_queue(
-						tmp_queue,
-						offsets_tmp_queue,
-						sizes_tmp_queue,
-						total_new,
-						backup_queue,
-						end_backup_queue);
-
-				// Update status
-				que.swap(backup_queue);
-				end_que = end_backup_queue;
-				end_backup_queue = 0;
-				is_active.swap(tmp_is_active);
-				++d;
+				que_t0 = que_t1;
+				que_t1 = que_h;
 			}
-		}
 
-		// Record into Label L
 #pragma omp parallel for
-		for (idi v = 0; v < num_v; ++v) {
-			for (inti r_i = 0; r_i < BITPARALLEL_SIZE; ++r_i) {
-				L[v].bp_dist[r_i] = tmp_d[v][r_i];
-				L[v].bp_sets_0[r_i] = tmp_s[v][r_i].first; // S_r^{-1}
-				L[v].bp_sets_1[r_i] = tmp_s[v][r_i].second & ~tmp_s[v][r_i].first; // Only need those r's neighbors who are not already in S_r^{-1}
-//				L[v].bp_sets[r_i][0] = tmp_s[v][r_i].first; // S_r^{-1}
-//				L[v].bp_sets[r_i][1] = tmp_s[v][r_i].second & ~tmp_s[v][r_i].first; // Only need those r's neighbors who are not already in S_r^{-1}
+			for (idi v = 0; v < num_v; ++v) {
+				L[v].bp_dist[i_bpspt] = tmp_d[v];
+				L[v].bp_sets_0[i_bpspt] = tmp_s[v].first; // S_r^{-1}
+				L[v].bp_sets_1[i_bpspt] = tmp_s[v].second & ~tmp_s[v].first; // Only need those r's neighbors who are not already in S_r^{-1}
+//				L[v].bp_sets[i_bpspt][0] = tmp_s[v].first; // S_r^{-1}
+//				L[v].bp_sets[i_bpspt][1] = tmp_s[v].second & ~tmp_s[v].first; // Only need those r's neighbors who are not already in S_r^{-1}
 			}
 		}
 	}

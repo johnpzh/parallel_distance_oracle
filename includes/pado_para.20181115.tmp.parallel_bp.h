@@ -200,8 +200,8 @@ private:
 
 	// Test only
 //	uint64_t normal_hit_count = 0;
-//	uint64_t bp_hit_count = 0;
-//	uint64_t total_check_count = 0;
+	uint64_t bp_hit_count = 0;
+	uint64_t total_check_count = 0;
 	double initializing_time = 0;
 	double candidating_time = 0;
 	double adding_time = 0;
@@ -248,8 +248,9 @@ inline void ParaVertexCentricPLL::bit_parallel_labeling(
 	idi num_v = G.get_num_v();
 	idi num_e = G.get_num_e();
 
-	if (num_v <= BITPARALLEL_SIZE) {
-//	if (true) {}
+	if (num_v <= BITPARALLEL_SIZE)
+//	if (true)
+	{
 		// Sequential version
 		std::vector<weighti> tmp_d(num_v); // distances from the root to every v
 		std::vector<std::pair<uint64_t, uint64_t> > tmp_s(num_v); // first is S_r^{-1}, second is S_r^{0}
@@ -452,7 +453,7 @@ inline void ParaVertexCentricPLL::bit_parallel_labeling(
 			while (0 != end_que) {
 				// Prepare for parallel que
 				vector<idi> offsets_tmp_queue(end_que);
-#pragma omp parallel for
+//#pragma omp parallel for
 				for (idi i_q = 0; i_q < end_que; ++i_q) {
 					offsets_tmp_queue[i_q] = G.out_degrees[que[i_q]];
 				}
@@ -462,7 +463,7 @@ inline void ParaVertexCentricPLL::bit_parallel_labeling(
 				vector<idi> sizes_tmp_queue(end_que, 0);
 				// Prepare for parallel siblings and children
 				vector<idi> offsets_r_id(end_que);
-#pragma omp parallel for
+//#pragma omp parallel for
 				for (idi i_q = 0; i_q < end_que; ++i_q) {
 					offsets_r_id[i_q] = offsets_tmp_queue[i_q] * BITPARALLEL_SIZE;
 				}
@@ -475,7 +476,7 @@ inline void ParaVertexCentricPLL::bit_parallel_labeling(
 				vector<idi> sizes_children(end_que, 0);
 
 
-#pragma omp parallel for
+//#pragma omp parallel for
 				for (idi i_q = 0; i_q < end_que; ++i_q) {
 					idi v = que[i_q];
 					is_active[v] = 0; // reset is_active
@@ -1062,7 +1063,7 @@ inline void ParaVertexCentricPLL::push_labels(
 			} // CHANGED!
 
 			// Bit Parallel Checking: if label_real_id to v_tail has shorter distance already
-//			++total_check_count;
+			++total_check_count;
 			const IndexType &L_label = L[label_real_id];
 			bool no_need_add = false;
 			_mm_prefetch(&L_label.bp_dist[0], _MM_HINT_T0);
@@ -1077,7 +1078,7 @@ inline void ParaVertexCentricPLL::push_labels(
 		            ? -1 : 0;
 		        if (td <= iter) {
 		        	no_need_add = true;
-//		        	++bp_hit_count;
+		        	++bp_hit_count;
 		        	break;
 		        }
 		      }
@@ -1144,7 +1145,7 @@ inline bool ParaVertexCentricPLL::distance_query(
 			const vector< vector<smalli> > &dist_matrix,
 			smalli iter)
 {
-//	++total_check_count;
+	++total_check_count;
 //	distance_query_time -= WallTimer::get_time_mark();
 
 	idi cand_real_id = cand_root_id + roots_start;
@@ -1874,6 +1875,7 @@ void ParaVertexCentricPLL::construct(const Graph &G)
 //	free(used_bp_roots);
 
 	// Test
+	setlocale(LC_NUMERIC, ""); // For print large number with comma
 	printf("Threads: %u Batch_size: %u\n", NUM_THREADS, BATCH_SIZE);
 	printf("BP_labeling: %.2f %.2f%%\n", bp_labeling_time, bp_labeling_time / time_labeling * 100);
 	printf("BP_Roots_Size: %u\n", BITPARALLEL_SIZE);
@@ -1886,9 +1888,9 @@ void ParaVertexCentricPLL::construct(const Graph &G)
 	printf("Adding: %.2f %.2f%%\n", adding_time, adding_time / time_labeling * 100);
 //		printf("\tdistance_query_time: %f (%f%%)\n", distance_query_time, distance_query_time / adding_time * 100);
 //		printf("\ttotal_check_count: %llu\n", total_check_count);
-//		printf("\tbp_hit_count (to total_check): %llu (%f%%)\n",
-//						bp_hit_count,
-//						bp_hit_count * 100.0 / total_check_count);
+		printf("bp_hit_count: %'llu %f%%\n",
+						bp_hit_count,
+						bp_hit_count * 100.0 / total_check_count);
 //		printf("\tnormal_hit_count (to total_check, to normal_check): %llu (%f%%, %f%%)\n",
 //						normal_hit_count,
 //						normal_hit_count * 100.0 / total_check_count,
@@ -1917,7 +1919,7 @@ void ParaVertexCentricPLL::construct(const Graph &G)
 	cache_miss.print();
 #endif
 
-	printf("Labeling: %f\n\n", time_labeling);
+	printf("Labeling: %f\n", time_labeling);
 	// End test
 }
 
@@ -1968,7 +1970,7 @@ void ParaVertexCentricPLL::switch_labels_to_old_id(
 			}
 		}
 	}
-	printf("Label sum: %u (%u), mean: %f\n", label_sum, test_label_sum, label_sum * 1.0 / num_v);
+	printf("Label sum: %u %u mean: %f\n", label_sum, test_label_sum, label_sum * 1.0 / num_v);
 
 //	// Try to print
 //	for (idi v = 0; v < num_v; ++v) {
@@ -1982,53 +1984,53 @@ void ParaVertexCentricPLL::switch_labels_to_old_id(
 //		puts("");
 //	}
 
-	// Try query
-	idi u;
-	idi v;
-	while (std::cin >> u >> v) {
-		weighti dist = WEIGHTI_MAX;
-		// Bit Parallel Check
-		const IndexType &idx_u = L[rank[u]];
-		const IndexType &idx_v = L[rank[v]];
-
-		for (inti i = 0; i < BITPARALLEL_SIZE; ++i) {
-			int td = idx_v.bp_dist[i] + idx_u.bp_dist[i];
-			if (td - 2 <= dist) {
-				td +=
-					(idx_v.bp_sets[i][0] & idx_u.bp_sets[i][0]) ? -2 :
-					((idx_v.bp_sets[i][0] & idx_u.bp_sets[i][1])
-							| (idx_v.bp_sets[i][1] & idx_u.bp_sets[i][0]))
-							? -1 : 0;
-				if (td < dist) {
-					dist = td;
-				}
-			}
-		}
-
-		// Normal Index Check
-		const auto &Lu = new_L[u];
-		const auto &Lv = new_L[v];
-//		unsorted_map<idi, weighti> markers;
-		map<idi, weighti> markers;
-		for (idi i = 0; i < Lu.size(); ++i) {
-			markers[Lu[i].first] = Lu[i].second;
-		}
-		for (idi i = 0; i < Lv.size(); ++i) {
-			const auto &tmp_l = markers.find(Lv[i].first);
-			if (tmp_l == markers.end()) {
-				continue;
-			}
-			int d = tmp_l->second + Lv[i].second;
-			if (d < dist) {
-				dist = d;
-			}
-		}
-		if (dist == 255) {
-			printf("2147483647\n");
-		} else {
-			printf("%u\n", dist);
-		}
-	}
+//	// Try query
+//	idi u;
+//	idi v;
+//	while (std::cin >> u >> v) {
+//		weighti dist = WEIGHTI_MAX;
+//		// Bit Parallel Check
+//		const IndexType &idx_u = L[rank[u]];
+//		const IndexType &idx_v = L[rank[v]];
+//
+//		for (inti i = 0; i < BITPARALLEL_SIZE; ++i) {
+//			int td = idx_v.bp_dist[i] + idx_u.bp_dist[i];
+//			if (td - 2 <= dist) {
+//				td +=
+//					(idx_v.bp_sets[i][0] & idx_u.bp_sets[i][0]) ? -2 :
+//					((idx_v.bp_sets[i][0] & idx_u.bp_sets[i][1])
+//							| (idx_v.bp_sets[i][1] & idx_u.bp_sets[i][0]))
+//							? -1 : 0;
+//				if (td < dist) {
+//					dist = td;
+//				}
+//			}
+//		}
+//
+//		// Normal Index Check
+//		const auto &Lu = new_L[u];
+//		const auto &Lv = new_L[v];
+////		unsorted_map<idi, weighti> markers;
+//		map<idi, weighti> markers;
+//		for (idi i = 0; i < Lu.size(); ++i) {
+//			markers[Lu[i].first] = Lu[i].second;
+//		}
+//		for (idi i = 0; i < Lv.size(); ++i) {
+//			const auto &tmp_l = markers.find(Lv[i].first);
+//			if (tmp_l == markers.end()) {
+//				continue;
+//			}
+//			int d = tmp_l->second + Lv[i].second;
+//			if (d < dist) {
+//				dist = d;
+//			}
+//		}
+//		if (dist == 255) {
+//			printf("2147483647\n");
+//		} else {
+//			printf("%u\n", dist);
+//		}
+//	}
 }
 
 }
