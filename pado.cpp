@@ -21,13 +21,15 @@
 //#include "pado_para.h"
 //#include "pado_para.20181106.tmp.scalability.h"
 //#include "pado_para.20181115.tmp.parallel_bp.h"
-#include "pado_para.20190129.candidates_que.h"
+//#include "pado_para.20190129.candidates_que.h"
 //#include "pado_para.20190205.vec_DQ_vec_BPC.h"
 //#include "pado_weighted_para.20190129.parallel.h"
 //#include "pado_weighted_para.20190131.no_temp_queue_but_atomic_opts.h"
 //#include "pado.20190130.vectorization.h"
 //#include "pado.20190201.vec_with_extra_label_array.h"
 //#include "pado.20190203.bp_checking_vec.h"
+//#include "pado.20190207.seq_3-level-label_DQ.h"
+#include "pado.20190208.vec_3-level-label_DQ.h"
 
 using namespace PADO;
 
@@ -38,19 +40,9 @@ void pado(const char filename[])
 	Graph G(filename);
 	//printf("Ranking...\n"); fflush(stdout);//test
 	vector<idi> rank = G.make_rank();
-//	{ // test
-//		for (idi v = 0; v < rank.size(); ++v) {
-//			printf("vertices %u: rank %u\n", v, rank[v]);//test
-//		}
-//	}
 	vector<idi> rank2id = G.id_transfer(rank);
-//	{ //test
-//		for (idi rank = 0; rank < rank2id.size(); ++rank) {
-//			printf("rank: %u v: %u\n", rank, rank2id[rank]);
-//		}
-//	}
-	//G.print();
 	//printf("Labeling...\n"); fflush(stdout);//test
+
 	//WeightedVertexCentricPLL VCPLL(G);
 	//VCPLL.switch_labels_to_old_id(rank2id, rank);
 
@@ -58,29 +50,64 @@ void pado(const char filename[])
 //	omp_set_num_threads(NUM_THREADS);
 ////	WeightedVertexCentricPLL VCPLL(G);
 //	ParaVertexCentricPLL VCPLL(G);
-////	VertexCentricPLL VCPLL(G);
+	VertexCentricPLL VCPLL(G);
 //	VCPLL.switch_labels_to_old_id(rank2id, rank);
 
 
 //	for (inti t_num = 1; t_num <= 32; t_num *= 2) {
 //		NUM_THREADS = t_num;
 //		omp_set_num_threads(NUM_THREADS);
-////		WeightedVertexCentricPLL VCPLL(G);
 //		ParaVertexCentricPLL *VCPLL = new ParaVertexCentricPLL(G);
 //		VCPLL->switch_labels_to_old_id(rank2id, rank);
 //		delete VCPLL;
 //		puts("");
 //	}
-	{
-		NUM_THREADS = 1;
-		omp_set_num_threads(NUM_THREADS);
-//		WeightedVertexCentricPLL VCPLL(G);
-		ParaVertexCentricPLL *VCPLL = new ParaVertexCentricPLL(G);
-		VCPLL->switch_labels_to_old_id(rank2id, rank);
-		delete VCPLL;
-		puts("");
-	}
+//	{
+//		NUM_THREADS = 40;
+//		omp_set_num_threads(NUM_THREADS);
+//		ParaVertexCentricPLL *VCPLL = new ParaVertexCentricPLL(G);
+//		VCPLL->switch_labels_to_old_id(rank2id, rank);
+//		delete VCPLL;
+//		puts("");
+//	}
 
+	idi num_v = rank.size();
+	VCPLL.order_labels(rank2id, rank);
+
+//	// Test Input
+//	{
+//		idi a;
+//		idi b;
+//		while (std::cin >> a >> b) {
+//			inti d = VCPLL.query_distance(a, b, num_v);
+//			if (255 == d) {
+//				d = 2147483647;
+//			}
+//			printf("%u\n", VCPLL.query_distance(a, b, num_v));
+//		}
+//	}
+
+	// Benchmark
+	{
+		const inti num_queries = 1000000;
+		vector< pair<idi, idi> > queries(num_queries);
+		for (inti i = 0; i < num_queries; ++i) {
+			queries[i].first = rand() % num_v;
+			queries[i].second = rand() % num_v;
+		}
+		inti sum = 0;
+		double query_time = -WallTimer::get_time_mark();
+		for (inti i = 0; i < num_queries; ++i) {
+			sum += VCPLL.query_distance(queries[i].first, queries[i].second, num_v);
+//			VCPLL.query_distance(queries[i].first, queries[i].second, num_v);
+		}
+		query_time += WallTimer::get_time_mark();
+		printf("test_sum: %u\n", sum);//test
+		printf("query_time: %f seconds mean: %f microseconds\n", query_time, query_time / num_queries * 1E6);
+		printf("label_length_larger_than_16: %'llu %.2f%%\n",
+						VCPLL.length_larger_than_16.first,
+						100.0 * VCPLL.length_larger_than_16.first / VCPLL.length_larger_than_16.second);
+	}
 }
 
 int main(int argc, char *argv[])

@@ -46,6 +46,32 @@ def add_weights_to_graph():
                 out_line = in_line + " " + str(wt) + "\n"
                 fout.write(out_line)
 
+def random_labels():
+	if len(sys.argv) < 4:
+		print("Usage: python3 graph.py <output_file> <label_length> <num_vertices>")
+		exit()
+	with open(sys.argv[1], "w") as fout:
+		label_length = int(sys.argv[2])
+		num_v = int(sys.argv[3])
+		random.seed()
+		for v_i in range(num_v):
+			# A
+			Aset = set()
+			for i in range(label_length):
+				v = random.randint(0, num_v - 1);
+				Aset.add(v)
+			A = list(x for x in Aset)
+			A.sort()
+			fout.write(' '.join(str(a) for a in A) + '\n')
+			# B
+			Bset = set()
+			for i in range(label_length):
+				v = random.randint(0, num_v - 1);
+				Bset.add(v)
+			B = list(x for x in Bset)
+			B.sort()
+			fout.write(' '.join(str(b) for b in B) + '\n') 
+			
 if __name__ == '__main__':
 	# if len(sys.argv) < 2:
 	# 	print("Usage: python3 graph.py <arg>")
@@ -53,4 +79,5 @@ if __name__ == '__main__':
 	# create_graph(int(sys.argv[1]))
 	# adj_matrix_to_edgelist(sys.argv[1])
 	# query_input()
-    add_weights_to_graph()
+#     add_weights_to_graph()
+	random_labels()
