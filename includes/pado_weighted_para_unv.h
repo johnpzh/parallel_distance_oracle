@@ -696,7 +696,7 @@ inline weighti WeightedParaVertexCentricPLL<BATCH_SIZE>::distance_query(
 		}
 		weighti label_dist_v_c = Lv.distances[i_l] + roots_labels_buffer[cand_root_id][r];
 		if (label_dist_v_c <= tmp_dist_v_c) {
-			distance_query_time += WallTimer::get_time_mark();
+//			distance_query_time += WallTimer::get_time_mark();
 			//++l_l_hit_count;
 			return label_dist_v_c;
 		}
@@ -833,7 +833,7 @@ inline weighti WeightedParaVertexCentricPLL<BATCH_SIZE>::distance_query(
 		if (WEIGHTI_MAX != SI_c.vertices_dists[r_root_id]) {
 			weighti label_dist_v_c = SI_v.vertices_dists[r_root_id] + SI_c.vertices_dists[r_root_id];
 			if (label_dist_v_c <= tmp_dist_v_c) {
-				distance_query_time += WallTimer::get_time_mark();
+//				distance_query_time += WallTimer::get_time_mark();
 				//++vl_cl_hit_count;
 				return label_dist_v_c;
 			}
@@ -1969,7 +1969,7 @@ inline idi WeightedParaVertexCentricPLL<BATCH_SIZE>::prefix_sum_for_offsets(
 }
 
 // Collect elements in the tmp_queue into the queue
-template <inti BATCH_SIZE, typename T>
+template <inti BATCH_SIZE> template <typename T>
 inline void WeightedParaVertexCentricPLL<BATCH_SIZE>::collect_into_queue(
 //					vector<idi> &tmp_queue,
 					vector<T> &tmp_queue,
@@ -2006,7 +2006,7 @@ inline void WeightedParaVertexCentricPLL<BATCH_SIZE>::collect_into_queue(
 }
 
 // Function: thread-save enqueue. The queue has enough size already. An index points the end of the queue.
-template <inti BATCH_SIZE, typename T, typename Int>
+template <inti BATCH_SIZE> template <typename T, typename Int>
 inline void WeightedParaVertexCentricPLL<BATCH_SIZE>::TS_enqueue(
 		vector<T> &queue,
 		Int &end_queue,

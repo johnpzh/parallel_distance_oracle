@@ -1969,7 +1969,7 @@ inline idi WeightedParaVertexCentricPLLVec<BATCH_SIZE>::prefix_sum_for_offsets(
 }
 
 // Collect elements in the tmp_queue into the queue
-template <inti BATCH_SIZE, typename T>
+template <inti BATCH_SIZE> template <typename T>
 inline void WeightedParaVertexCentricPLLVec<BATCH_SIZE>::collect_into_queue(
 //					vector<idi> &tmp_queue,
 					vector<T> &tmp_queue,
@@ -2006,7 +2006,7 @@ inline void WeightedParaVertexCentricPLLVec<BATCH_SIZE>::collect_into_queue(
 }
 
 // Function: thread-save enqueue. The queue has enough size already. An index points the end of the queue.
-template <inti BATCH_SIZE, typename T, typename Int>
+template <inti BATCH_SIZE> template <typename T, typename Int>
 inline void WeightedParaVertexCentricPLLVec<BATCH_SIZE>::TS_enqueue(
 		vector<T> &queue,
 		Int &end_queue,

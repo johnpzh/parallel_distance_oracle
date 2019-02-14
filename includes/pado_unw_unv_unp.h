@@ -40,7 +40,7 @@ template <inti BATCH_SIZE = 1024>
 class VertexCentricPLL {
 //const inti NUM_P_INT = 16;
 private:
-	const inti BITPARALLEL_SIZE = 50;
+	static const inti BITPARALLEL_SIZE = 50;
 
 	// Structure for the type of label
 	struct IndexType {

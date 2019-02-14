@@ -56,7 +56,7 @@ template <inti BATCH_SIZE = 1024>
 class VertexCentricPLLVec {
 
 private:
-	const inti BITPARALLEL_SIZE = 50;
+	static const inti BITPARALLEL_SIZE = 50;
 	// Structure for the type of label
 	struct IndexType {
 //		struct Batch {
