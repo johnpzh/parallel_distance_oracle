@@ -29,7 +29,11 @@
 //#include "pado.20190201.vec_with_extra_label_array.h"
 //#include "pado.20190203.bp_checking_vec.h"
 //#include "pado.20190207.seq_3-level-label_DQ.h"
-#include "pado.20190208.vec_3-level-label_DQ.h"
+//#include "pado.20190208.vec_3-level-label_DQ.h"
+
+#include "pado_unw_unv_unp.h"
+#include "pado_unw_vec_unp.h"
+#include "pado_weighted_unv_unp.h"
 
 using namespace PADO;
 
@@ -50,7 +54,7 @@ void pado(const char filename[])
 //	omp_set_num_threads(NUM_THREADS);
 ////	WeightedVertexCentricPLL VCPLL(G);
 //	ParaVertexCentricPLL VCPLL(G);
-	VertexCentricPLL VCPLL(G);
+	VertexCentricPLL<1024> VCPLL(G);
 //	VCPLL.switch_labels_to_old_id(rank2id, rank);
 
 
@@ -110,49 +114,104 @@ void pado(const char filename[])
 	}
 }
 
+void usage_print()
+{
+	fprintf(stderr,
+			"Usage: ./pado <input_file> [-w 0|1] [-v 0|1] [-p 0|1]\n"
+			"\t-w: 0 means unweighted graph (default), 1 means weighted graph\n"
+			"\t-v: 0 means sequential version (default), 1 means AVX512 version (needs CPU support)\n"
+			"\t-p: 0 means single-thread version (default), 1 means multithread version\n");
+}
+
 int main(int argc, char *argv[])
 {
-//	// By Johnpzh
-//	char separator = ' ';
-//	//uint64_t kNum = 50;
-//	bool is_directed = false;
-//	uint64_t start_id = 1;
-//	int opt;
-//	if (argc < 3) {
-//		fprintf(stderr,
-//				"Usage: ./construct_index <input_data> <output_index> [-s | -t] [-d] [-i StartID]\n"
-//				"	-s: separator is space (default)\n"
-//				"	-t: separator is tab\n"
-//				"	-d: is directed graph\n"
-//				"	-i n: the start ID is n (default 0)\n");
-//
-//		exit(EXIT_FAILURE);
-//	}
-//	while ((opt = getopt(argc, argv, "stk:di:")) != -1) {
-//		switch (opt) {
-//		case 't':
-//			separator = '\t';
-//			break;
-//		case 'd':
-//			is_directed = true;
-//			break;
-//		case 'i':
-//			start_id = strtoul(optarg, NULL, 0);
-//			break;
-//		default:
-//			fprintf(stderr, "Error: unknown opt %c.\n", opt);
-//			exit(EXIT_FAILURE);
-//		}
-//	}
-//	// End by Johnpzh
-//	test_bit();
 	if (argc < 2) {
-		fprintf(stderr,
-				"Usage: ./pado <input_data>\n");
+		usage_print();
 		exit(EXIT_FAILURE);
 	}
+	bool is_weighted = false;
+	bool is_vectorized = false;
+	bool is_multithread = false;
+	int opt;
+	while ((opt = getopt(argc, argv, "w:v:p:")) != -1) {
+		switch(opt) {
+		case 'w':
+			if (strtoul(optarg, NULL, 0)) {
+				is_weighted = true;
+			}
+			break;
+		case 'v':
+			if (strtoul(optarg, NULL, 0)) {
+				is_vectorized = true;
+			}
+			break;
+		case 'p':
+			if (strtoul(optarg, NULL, 0)) {
+				is_multithread = true;
+			}
+			break;
+		default:
+			fprintf(stderr, "Error: unknown opt %c.\n", opt);
+			exit(EXIT_FAILURE);
+		}
+	}
 	setvbuf(stdout, NULL, _IONBF, 0); //  Set stdout no buffer
-	pado(argv[1]);
+//	pado(argv[1]);
+	if (!is_weighted) {
+		// Unweighted
+		if (!is_vectorized) {
+			// No vectorization
+			if (!is_multithread) {
+				// Single Thread
+				Graph G(argv[1]);
+				vector<idi> rank = G.make_rank();
+				vector<idi> rank2id = G.id_transfer(rank);
+				VertexCentricPLL<1024> VCPLL(G);
+				VCPLL.switch_labels_to_old_id(rank2id, rank);
+			} else {
+				// Multithread
+				// TODO
+			}
+		} else {
+			// Vectorization
+			if (!is_multithread) {
+				// Single Thread
+				Graph G(argv[1]);
+				vector<idi> rank = G.make_rank();
+				vector<idi> rank2id = G.id_transfer(rank);
+				VertexCentricPLLVec<1024> VCPLLvec(G);
+				VCPLLvec.switch_labels_to_old_id(rank2id, rank);
+			} else {
+				// Multithread
+				// TODO
+			}
+		}
+	} else {
+		// Weighted
+		if (!is_vectorized) {
+			// No vectorization
+			if (!is_multithread) {
+				// Single Thread
+				WeightedGraph G(argv[1]);
+				vector<idi> rank = G.make_rank();
+				vector<idi> rank2id = G.id_transfer(rank);
+				WeightedVertexCentricPLL<512> VCPLL(G);
+				VCPLL.switch_labels_to_old_id(rank2id, rank);
+			} else {
+				// Multithread
+				// TODO
+			}
+		} else {
+			// Vectorization
+			if (!is_multithread) {
+				// Single Thread
+				// TODO
+			} else {
+				// Multithread
+				// TODO
+			}
+		}
+	}
 	//printf("Done!\n");
 	return EXIT_SUCCESS;
 }

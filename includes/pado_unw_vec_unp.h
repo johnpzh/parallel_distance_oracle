@@ -5,8 +5,8 @@
  *      Author: Zhen Peng
  */
 
-#ifndef INCLUDES_PADO_H_
-#define INCLUDES_PADO_H_
+#ifndef INCLUDES_PADO_UNW_VEC_UNP_H_
+#define INCLUDES_PADO_UNW_VEC_UNP_H_
 
 #include <vector>
 #include <unordered_map>
@@ -31,29 +31,32 @@ using std::fill;
 
 namespace PADO {
 
-const inti BATCH_SIZE = 1024; // The size for regular batch and bit array.
-const inti BITPARALLEL_SIZE = 50;
+//static const inti BATCH_SIZE = 1024; // The size for regular batch and bit array.
+//static const inti BITPARALLEL_SIZE = 50;
 //inti BUFFER_SIZE = 32;
 
-// AVX-512 constant variables
-const inti NUM_P_INT = 16;
-const __m512i INF_v = _mm512_set1_epi32(WEIGHTI_MAX);
-const __m512i UNDEF_i32_v = _mm512_undefined_epi32();
-const __m512i LOWEST_BYTE_MASK = _mm512_set1_epi32(0xFF);
-const __m128i INF_v_128i = _mm_set1_epi8(-1);
-const inti NUM_P_BP_LABEL = 8;
-//const inti REMAINDER_BP = BITPARALLEL_SIZE % NUM_P_BP_LABEL;
-//const inti BOUND_BP_I = BITPARALLEL_SIZE - REMAINDER_BP;
-//const __mmask8 IN_EPI64_M = (__mmask8) ((uint8_t) 0xFF >> (NUM_P_BP_LABEL - REMAINDER_BP));
-//const __mmask16 IN_128I_M = (__mmask16) ((uint16_t) 0xFFFF >> (NUM_P_INT - REMAINDER_BP));
-const __m512i INF_v_epi64 = _mm512_set1_epi64(WEIGHTI_MAX);
-const __m512i ZERO_epi64_v = _mm512_set1_epi64(0);
-const __m512i MINUS_2_epi64_v = _mm512_set1_epi64(-2);
-const __m512i MINUS_1_epi64_v = _mm512_set1_epi64(-1);
+//// AVX-512 constant variables
+//const inti NUM_P_INT = 16;
+//const __m512i INF_v = _mm512_set1_epi32(WEIGHTI_MAX);
+//const __m512i UNDEF_i32_v = _mm512_undefined_epi32();
+//const __m512i LOWEST_BYTE_MASK = _mm512_set1_epi32(0xFF);
+//const __m128i INF_v_128i = _mm_set1_epi8(-1);
+//const inti NUM_P_BP_LABEL = 8;
+////const inti REMAINDER_BP = BITPARALLEL_SIZE % NUM_P_BP_LABEL;
+////const inti BOUND_BP_I = BITPARALLEL_SIZE - REMAINDER_BP;
+////const __mmask8 IN_EPI64_M = (__mmask8) ((uint8_t) 0xFF >> (NUM_P_BP_LABEL - REMAINDER_BP));
+////const __mmask16 IN_128I_M = (__mmask16) ((uint16_t) 0xFFFF >> (NUM_P_INT - REMAINDER_BP));
+//const __m512i INF_v_epi64 = _mm512_set1_epi64(WEIGHTI_MAX);
+//const __m512i ZERO_epi64_v = _mm512_set1_epi64(0);
+//const __m512i MINUS_2_epi64_v = _mm512_set1_epi64(-2);
+//const __m512i MINUS_1_epi64_v = _mm512_set1_epi64(-1);
 
 //// Batch based processing, 09/11/2018
-class VertexCentricPLL {
+template <inti BATCH_SIZE = 1024>
+class VertexCentricPLLVec {
+
 private:
+	static const inti BITPARALLEL_SIZE = 50;
 	// Structure for the type of label
 	struct IndexType {
 //		struct Batch {
@@ -114,6 +117,8 @@ private:
 	} __attribute__((aligned(64)));
 
 	vector<IndexType> L;
+
+
 	void construct(const Graph &G);
 	inline void bit_parallel_labeling(
 			const Graph &G,
@@ -245,8 +250,8 @@ private:
 
 
 public:
-	VertexCentricPLL() = default;
-	VertexCentricPLL(const Graph &G);
+	VertexCentricPLLVec() = default;
+	VertexCentricPLLVec(const Graph &G);
 
 	weighti query(
 			idi u,
@@ -259,12 +264,14 @@ public:
 
 }; // class VertexCentricPLL
 
-VertexCentricPLL::VertexCentricPLL(const Graph &G)
+template <inti BATCH_SIZE>
+VertexCentricPLLVec<BATCH_SIZE>::VertexCentricPLLVec(const Graph &G)
 {
 	construct(G);
 }
 
-inline void VertexCentricPLL::bit_parallel_labeling(
+template <inti BATCH_SIZE>
+inline void VertexCentricPLLVec<BATCH_SIZE>::bit_parallel_labeling(
 			const Graph &G,
 			vector<IndexType> &L,
 			vector<bool> &used_bp_roots)
@@ -420,7 +427,8 @@ inline void VertexCentricPLL::bit_parallel_labeling(
 // For a batch, initialize the temporary labels and real labels of roots;
 // traverse roots' labels to initialize distance buffer;
 // unset flag arrays is_active and got_labels
-inline void VertexCentricPLL::initialize(
+template <inti BATCH_SIZE>
+inline void VertexCentricPLLVec<BATCH_SIZE>::initialize(
 			vector<ShortIndex> &short_index,
 			vector< vector<weighti> > &dist_matrix,
 			vector<idi> &active_queue,
@@ -542,7 +550,8 @@ inline void VertexCentricPLL::initialize(
 }
 
 // Function that pushes v_head's labels to v_head's every neighbor
-inline void VertexCentricPLL::push_labels(
+template <inti BATCH_SIZE>
+inline void VertexCentricPLLVec<BATCH_SIZE>::push_labels(
 				idi v_head,
 				idi roots_start,
 				const Graph &G,
@@ -1059,7 +1068,8 @@ inline void VertexCentricPLL::push_labels(
 //	return true;
 //}
 
-inline bool VertexCentricPLL::distance_check_vec_core(
+template <inti BATCH_SIZE>
+inline bool VertexCentricPLLVec<BATCH_SIZE>::distance_check_vec_core(
 		vector<weighti> &dists_buffer,
 		vector<idi> &ids_buffer,
 		idi size_buffer,
@@ -1135,7 +1145,8 @@ inline bool VertexCentricPLL::distance_check_vec_core(
 
 // traverse vertex v_id's labels;
 // return false if shorter distance exists already, return true if the cand_root_id can be added into v_id's label.
-inline bool VertexCentricPLL::distance_query(
+template <inti BATCH_SIZE>
+inline bool VertexCentricPLLVec<BATCH_SIZE>::distance_query(
 			idi cand_root_id,
 			idi v_id,
 			idi roots_start,
@@ -1273,7 +1284,8 @@ inline bool VertexCentricPLL::distance_query(
 // Function inserts candidate cand_root_id into vertex v_id's labels;
 // update the distance buffer dist_matrix;
 // but it only update the v_id's labels' vertices array;
-inline void VertexCentricPLL::insert_label_only(
+template <inti BATCH_SIZE>
+inline void VertexCentricPLLVec<BATCH_SIZE>::insert_label_only(
 				idi cand_root_id,
 				idi v_id,
 				idi roots_start,
@@ -1293,7 +1305,8 @@ inline void VertexCentricPLL::insert_label_only(
 }
 
 // Function updates those index arrays in v_id's label only if v_id has been inserted new labels
-inline void VertexCentricPLL::update_label_indices(
+template <inti BATCH_SIZE>
+inline void VertexCentricPLLVec<BATCH_SIZE>::update_label_indices(
 				idi v_id,
 				idi inserted_count,
 				vector<IndexType> &L,
@@ -1329,7 +1342,8 @@ inline void VertexCentricPLL::update_label_indices(
 // Function to reset dist_matrix the distance buffer to INF
 // Traverse every root's labels to reset its distance buffer elements to INF.
 // In this way to reduce the cost of initialization of the next batch.
-inline void VertexCentricPLL::reset_at_end(
+template <inti BATCH_SIZE>
+inline void VertexCentricPLLVec<BATCH_SIZE>::reset_at_end(
 				idi roots_start,
 				inti roots_size,
 				vector<IndexType> &L,
@@ -1375,7 +1389,8 @@ inline void VertexCentricPLL::reset_at_end(
 //	}
 }
 
-inline void VertexCentricPLL::batch_process(
+template <inti BATCH_SIZE>
+inline void VertexCentricPLLVec<BATCH_SIZE>::batch_process(
 						const Graph &G,
 						idi b_id,
 						idi roots_start, // start id of roots
@@ -1537,8 +1552,8 @@ inline void VertexCentricPLL::batch_process(
 }
 
 
-
-void VertexCentricPLL::construct(const Graph &G)
+template <inti BATCH_SIZE>
+void VertexCentricPLLVec<BATCH_SIZE>::construct(const Graph &G)
 {
 	idi num_v = G.get_num_v();
 	L.resize(num_v);
@@ -1666,7 +1681,8 @@ void VertexCentricPLL::construct(const Graph &G)
 	// End test
 }
 
-void VertexCentricPLL::switch_labels_to_old_id(
+template <inti BATCH_SIZE>
+void VertexCentricPLLVec<BATCH_SIZE>::switch_labels_to_old_id(
 								const vector<idi> &rank2id,
 								const vector<idi> &rank)
 {

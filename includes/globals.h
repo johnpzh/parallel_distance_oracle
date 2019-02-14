@@ -14,6 +14,7 @@
 #include <sys/time.h>
 #include <string>
 #include <vector>
+#include <immintrin.h>
 #include <string.h>
 #include <locale.h>
 #include <papi.h>
@@ -32,6 +33,21 @@ typedef uint32_t inti;
 const uint8_t WEIGHTI_MAX = UCHAR_MAX;
 const uint8_t SMALLI_MAX = UCHAR_MAX;
 
+// AVX-512 constant variables
+const inti NUM_P_INT = 16;
+const __m512i INF_v = _mm512_set1_epi32(WEIGHTI_MAX);
+const __m512i UNDEF_i32_v = _mm512_undefined_epi32();
+const __m512i LOWEST_BYTE_MASK = _mm512_set1_epi32(0xFF);
+const __m128i INF_v_128i = _mm_set1_epi8(-1);
+const inti NUM_P_BP_LABEL = 8;
+//const inti REMAINDER_BP = BITPARALLEL_SIZE % NUM_P_BP_LABEL;
+//const inti BOUND_BP_I = BITPARALLEL_SIZE - REMAINDER_BP;
+//const __mmask8 IN_EPI64_M = (__mmask8) ((uint8_t) 0xFF >> (NUM_P_BP_LABEL - REMAINDER_BP));
+//const __mmask16 IN_128I_M = (__mmask16) ((uint16_t) 0xFFFF >> (NUM_P_INT - REMAINDER_BP));
+const __m512i INF_v_epi64 = _mm512_set1_epi64(WEIGHTI_MAX);
+const __m512i ZERO_epi64_v = _mm512_set1_epi64(0);
+const __m512i MINUS_2_epi64_v = _mm512_set1_epi64(-2);
+const __m512i MINUS_1_epi64_v = _mm512_set1_epi64(-1);
 
 // Compare and Swap
 template <typename V_T>
