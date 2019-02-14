@@ -5,8 +5,8 @@
  *      Author: Zhen Peng
  */
 
-#ifndef INCLUDES_PADO_H_
-#define INCLUDES_PADO_H_
+#ifndef INCLUDES_PADO_UNW_PARA_UNV_H_
+#define INCLUDES_PADO_UNW_PARA_UNV_H_
 
 #include <vector>
 #include <unordered_map>
@@ -30,14 +30,15 @@ using std::min;
 using std::fill;
 
 namespace PADO {
-inti NUM_THREADS = 4;
-const inti BATCH_SIZE = 1024; // The size for regular batch and bit array.
+//inti NUM_THREADS = 4;
+//const inti BATCH_SIZE = 1024; // The size for regular batch and bit array.
 //const inti BITPARALLEL_SIZE = 50;
 //const inti THRESHOLD_PARALLEL = 80;
 
 
 
 //// Batch based processing, 09/11/2018
+template <inti BATCH_SIZE = 1024>
 class ParaVertexCentricPLL {
 private:
 	const inti BITPARALLEL_SIZE = 50;
@@ -242,12 +243,14 @@ public:
 
 }; // class ParaVertexCentricPLL
 
-ParaVertexCentricPLL::ParaVertexCentricPLL(const Graph &G)
+template <inti BATCH_SIZE>
+ParaVertexCentricPLL<BATCH_SIZE>::ParaVertexCentricPLL(const Graph &G)
 {
 	construct(G);
 }
 
-inline void ParaVertexCentricPLL::bit_parallel_labeling(
+template <inti BATCH_SIZE>
+inline void ParaVertexCentricPLL<BATCH_SIZE>::bit_parallel_labeling(
 			const Graph &G,
 			vector<IndexType> &L,
 			vector<uint8_t> &used_bp_roots) // CAS needs array
@@ -648,7 +651,8 @@ inline void ParaVertexCentricPLL::bit_parallel_labeling(
 // For a batch, initialize the temporary labels and real labels of roots;
 // traverse roots' labels to initialize distance buffer;
 // unset flag arrays is_active and got_labels
-inline void ParaVertexCentricPLL::initialize(
+template <inti BATCH_SIZE>
+inline void ParaVertexCentricPLL<BATCH_SIZE>::initialize(
 			vector<ShortIndex> &short_index,
 			vector< vector<smalli> > &dist_matrix,
 			vector<idi> &active_queue,
@@ -877,7 +881,8 @@ inline void ParaVertexCentricPLL::initialize(
 }
 
 // Function that pushes v_head's labels to v_head's every neighbor
-inline void ParaVertexCentricPLL::push_labels(
+template <inti BATCH_SIZE>
+inline void ParaVertexCentricPLL<BATCH_SIZE>::push_labels(
 				idi v_head,
 				idi roots_start,
 				const Graph &G,
@@ -1023,7 +1028,8 @@ inline void ParaVertexCentricPLL::push_labels(
 // traverse vertex v_id's labels;
 // return the distance between v_id and cand_root_id based on existing labels.
 // return false if shorter distance exists already, return true if the cand_root_id can be added into v_id's label.
-inline bool ParaVertexCentricPLL::distance_query(
+template <inti BATCH_SIZE>
+inline bool ParaVertexCentricPLL<BATCH_SIZE>::distance_query(
 			idi cand_root_id,
 			idi v_id,
 			idi roots_start,
@@ -1080,7 +1086,8 @@ inline bool ParaVertexCentricPLL::distance_query(
 // Function inserts candidate cand_root_id into vertex v_id's labels;
 // update the distance buffer dist_matrix;
 // but it only update the v_id's labels' vertices array;
-inline void ParaVertexCentricPLL::insert_label_only(
+template <inti BATCH_SIZE>
+inline void ParaVertexCentricPLL<BATCH_SIZE>::insert_label_only(
 				idi cand_root_id,
 				idi v_id,
 				idi roots_start,
@@ -1098,7 +1105,8 @@ inline void ParaVertexCentricPLL::insert_label_only(
 }
 
 // Function updates those index arrays in v_id's label only if v_id has been inserted new labels
-inline void ParaVertexCentricPLL::update_label_indices(
+template <inti BATCH_SIZE>
+inline void ParaVertexCentricPLL<BATCH_SIZE>::update_label_indices(
 				idi v_id,
 				idi inserted_count,
 				vector<IndexType> &L,
@@ -1129,7 +1137,8 @@ inline void ParaVertexCentricPLL::update_label_indices(
 // Function to reset dist_matrix the distance buffer to INF
 // Traverse every root's labels to reset its distance buffer elements to INF.
 // In this way to reduce the cost of initialization of the next batch.
-inline void ParaVertexCentricPLL::reset_at_end(
+template <inti BATCH_SIZE>
+inline void ParaVertexCentricPLL<BATCH_SIZE>::reset_at_end(
 				idi roots_start,
 				inti roots_size,
 				vector<IndexType> &L,
@@ -1213,7 +1222,8 @@ inline void ParaVertexCentricPLL::reset_at_end(
 //	}
 }
 
-inline void ParaVertexCentricPLL::batch_process(
+template <inti BATCH_SIZE>
+inline void ParaVertexCentricPLL<BATCH_SIZE>::batch_process(
 						const Graph &G,
 						idi b_id,
 						idi roots_start, // start id of roots
@@ -1494,7 +1504,8 @@ inline void ParaVertexCentricPLL::batch_process(
 
 
 
-void ParaVertexCentricPLL::construct(const Graph &G)
+template <inti BATCH_SIZE>
+void ParaVertexCentricPLL<BATCH_SIZE>::construct(const Graph &G)
 {
 	initializing_time -= WallTimer::get_time_mark();
 
@@ -1644,7 +1655,8 @@ void ParaVertexCentricPLL::construct(const Graph &G)
 }
 
 // Function to get the prefix sum of elements in offsets
-inline idi ParaVertexCentricPLL::prefix_sum_for_offsets(
+template <inti BATCH_SIZE>
+inline idi ParaVertexCentricPLL<BATCH_SIZE>::prefix_sum_for_offsets(
 									vector<idi> &offsets)
 {
 	idi size_offsets = offsets.size();
@@ -1772,8 +1784,8 @@ inline idi ParaVertexCentricPLL::prefix_sum_for_offsets(
 }
 
 // Collect elements in the tmp_queue into the queue
-template <typename T>
-inline void ParaVertexCentricPLL::collect_into_queue(
+template <inti BATCH_SIZE, typename T>
+inline void ParaVertexCentricPLL<BATCH_SIZE>::collect_into_queue(
 //					vector<idi> &tmp_queue,
 					vector<T> &tmp_queue,
 					vector<idi> &offsets_tmp_queue, // the locations in tmp_queue for writing from tmp_queue
@@ -1809,8 +1821,8 @@ inline void ParaVertexCentricPLL::collect_into_queue(
 }
 
 // Function: thread-save enqueue. The queue has enough size already. An index points the end of the queue.
-template <typename T, typename Int>
-inline void ParaVertexCentricPLL::TS_enqueue(
+template <inti BATCH_SIZE, typename T, typename Int>
+inline void ParaVertexCentricPLL<BATCH_SIZE>::TS_enqueue(
 		vector<T> &queue,
 		Int &end_queue,
 		const T &e)
@@ -1825,7 +1837,8 @@ inline void ParaVertexCentricPLL::TS_enqueue(
 }
 
 
-void ParaVertexCentricPLL::switch_labels_to_old_id(
+template <inti BATCH_SIZE>
+void ParaVertexCentricPLL<BATCH_SIZE>::switch_labels_to_old_id(
 								const vector<idi> &rank2id,
 								const vector<idi> &rank)
 {

@@ -5,8 +5,8 @@
  *      Author: Zhen Peng
  */
 
-#ifndef INCLUDES_PADO_WEIGHTED_H_
-#define INCLUDES_PADO_WEIGHTED_H_
+#ifndef INCLUDES_PADO_WEIGHTED_UNV_UNP_H_
+#define INCLUDES_PADO_WEIGHTED_UNV_UNP_H_
 
 #include <vector>
 #include <unordered_map>

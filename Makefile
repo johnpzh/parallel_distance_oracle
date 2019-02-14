@@ -2,7 +2,7 @@
 #CXXFLAGS =	-O0 -g -Wall -Wextra -fmessage-length=0 -std=c++14 -fopenmp
 
 CXX = icpc
-CXXFLAGS =	-O3 -g -w2 -fmessage-length=0 -std=c++14 -fopenmp
+CXXFLAGS =	-O0 -g -w2 -fmessage-length=0 -std=c++14 -fopenmp
 
 OBJS =		pado.o
 

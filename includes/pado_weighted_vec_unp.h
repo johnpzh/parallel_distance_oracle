@@ -5,8 +5,8 @@
  *      Author: Zhen Peng
  */
 
-#ifndef INCLUDES_PADO_WEIGHTED_H_
-#define INCLUDES_PADO_WEIGHTED_H_
+#ifndef INCLUDES_PADO_WEIGHTED_VEC_UNP_H_
+#define INCLUDES_PADO_WEIGHTED_VEC_UNP_H_
 
 #include <vector>
 #include <unordered_map>
@@ -32,18 +32,19 @@ using std::fill;
 namespace PADO {
 
 //const inti BATCH_SIZE = 1024; // The size for regular batch and bit array.
-	inti BATCH_SIZE = 512; // Here is for the whole graph, so make it non-const
+//	inti BATCH_SIZE = 512; // Here is for the whole graph, so make it non-const
 //const inti BITPARALLEL_SIZE = 50; // Weighted graphs cannot use Bit Parallel technique
 
-	// AVX-512 constant variables
-	static const inti NUM_P_INT = 16;
-	static const __m512i INF_v = _mm512_set1_epi32(WEIGHTI_MAX);
-	static const __m512i UNDEF_i32_v = _mm512_undefined_epi32();
-	static const __m512i LOWEST_BYTE_MASK = _mm512_set1_epi32(0xFF);
-	static const __m128i INF_v_128i = _mm_set1_epi8(-1);
+//	// AVX-512 constant variables
+//	static const inti NUM_P_INT = 16;
+//	static const __m512i INF_v = _mm512_set1_epi32(WEIGHTI_MAX);
+//	static const __m512i UNDEF_i32_v = _mm512_undefined_epi32();
+//	static const __m512i LOWEST_BYTE_MASK = _mm512_set1_epi32(0xFF);
+//	static const __m128i INF_v_128i = _mm_set1_epi8(-1);
 
 //// Batch based processing, 09/11/2018
-class WeightedVertexCentricPLL {
+template <inti BATCH_SIZE = 512>
+class WeightedVertexCentricPLLVec {
 private:
 	// Structure for the type of label
 	struct IndexType {
@@ -225,8 +226,8 @@ private:
 
 
 public:
-	WeightedVertexCentricPLL() = default;
-	WeightedVertexCentricPLL(const WeightedGraph &G);
+	WeightedVertexCentricPLLVec() = default;
+	WeightedVertexCentricPLLVec(const WeightedGraph &G);
 
 	weighti query(
 			idi u,
@@ -239,7 +240,8 @@ public:
 
 }; // class WeightedVertexCentricPLL
 
-WeightedVertexCentricPLL::WeightedVertexCentricPLL(const WeightedGraph &G)
+template <inti BATCH_SIZE>
+WeightedVertexCentricPLLVec<BATCH_SIZE>::WeightedVertexCentricPLLVec(const WeightedGraph &G)
 {
 	construct(G);
 }
@@ -248,7 +250,8 @@ WeightedVertexCentricPLL::WeightedVertexCentricPLL(const WeightedGraph &G)
 // For a batch, initialize the temporary labels and real labels of roots;
 // traverse roots' labels to initialize distance buffer;
 // unset flag arrays is_active and got_labels
-inline void WeightedVertexCentricPLL::initialize_tables(
+template <inti BATCH_SIZE>
+inline void WeightedVertexCentricPLLVec<BATCH_SIZE>::initialize_tables(
 			vector<ShortIndex> &short_index,
 			vector< vector<weighti> > &roots_labels_buffer,
 			vector<idi> &active_queue,
@@ -375,7 +378,8 @@ inline void WeightedVertexCentricPLL::initialize_tables(
 //}
 
 // Function that pushes v_head's labels to v_head's every neighbor
-inline void WeightedVertexCentricPLL::send_messages(
+template <inti BATCH_SIZE>
+inline void WeightedVertexCentricPLLVec<BATCH_SIZE>::send_messages(
 				idi v_head,
 				idi roots_start,
 				const WeightedGraph &G,
@@ -549,7 +553,8 @@ inline void WeightedVertexCentricPLL::send_messages(
 
 //Function: to see if v_id and cand_root_id can have other path already cover the candidate distance
 // If there was other path, return the shortest distance. If there was not, return INF
-inline weighti WeightedVertexCentricPLL::distance_query(
+template <inti BATCH_SIZE>
+inline weighti WeightedVertexCentricPLLVec<BATCH_SIZE>::distance_query(
 					idi v_id,
 					idi cand_root_id,
 					//const vector< vector<weighti> > &dists_table,
@@ -942,7 +947,8 @@ inline weighti WeightedVertexCentricPLL::distance_query(
 }
 
 // Function: reset distance table dists_table
-inline void WeightedVertexCentricPLL::reset_tables(
+template <inti BATCH_SIZE>
+inline void WeightedVertexCentricPLLVec<BATCH_SIZE>::reset_tables(
 		vector<ShortIndex> &short_index,
 		idi roots_start,
 		inti roots_size,
@@ -979,7 +985,8 @@ inline void WeightedVertexCentricPLL::reset_tables(
 
 // Function: after finishing the label tables in the short_index, build the index according to it.
 // And also reset the has_new_labels_queue
-inline void WeightedVertexCentricPLL::update_index(
+template <inti BATCH_SIZE>
+inline void WeightedVertexCentricPLLVec<BATCH_SIZE>::update_index(
 		vector<IndexType> &L,
 		vector<ShortIndex> &short_index,
 		idi roots_start,
@@ -1013,7 +1020,8 @@ inline void WeightedVertexCentricPLL::update_index(
 // so s starts to send its shorter distance between s and t to all its neighbors. According to the distance sent,
 // all active neighbors will update their distance table elements and reset their label table elements. The 
 // process continue untill no active vertices.
-inline void WeightedVertexCentricPLL::send_back(
+template <inti BATCH_SIZE>
+inline void WeightedVertexCentricPLLVec<BATCH_SIZE>::send_back(
 		idi s,
 		idi r_root_id,
 		const WeightedGraph &G,
@@ -1115,7 +1123,8 @@ inline void WeightedVertexCentricPLL::send_back(
 //}
 
 // Function: at the end of every batch, filter out wrong and redundant labels
-inline void WeightedVertexCentricPLL::filter_out_labels(
+template <inti BATCH_SIZE>
+inline void WeightedVertexCentricPLLVec<BATCH_SIZE>::filter_out_labels(
 		const vector<idi> &has_new_labels_queue,
 		idi end_has_new_labels_queue,
 		vector<ShortIndex> &short_index,
@@ -1249,7 +1258,8 @@ inline void WeightedVertexCentricPLL::filter_out_labels(
 	}
 }
 
-inline void WeightedVertexCentricPLL::vertex_centric_labeling_in_batches(
+template <inti BATCH_SIZE>
+inline void WeightedVertexCentricPLLVec<BATCH_SIZE>::vertex_centric_labeling_in_batches(
 						const WeightedGraph &G,
 						idi b_id,
 						idi roots_start, // start id of roots
@@ -1462,8 +1472,8 @@ inline void WeightedVertexCentricPLL::vertex_centric_labeling_in_batches(
 }
 
 
-
-void WeightedVertexCentricPLL::construct(const WeightedGraph &G)
+template <inti BATCH_SIZE>
+void WeightedVertexCentricPLLVec<BATCH_SIZE>::construct(const WeightedGraph &G)
 {
 	idi num_v = G.get_num_v();
 	L.resize(num_v);
@@ -1589,7 +1599,8 @@ void WeightedVertexCentricPLL::construct(const WeightedGraph &G)
 }
 
 // Function: assign lanes of vindex in base_addr as int a.
-inline void WeightedVertexCentricPLL::int_i32scatter_epi8(
+template <inti BATCH_SIZE>
+inline void WeightedVertexCentricPLLVec<BATCH_SIZE>::int_i32scatter_epi8(
 		weighti *base_addr, 
 		__m512i vindex, 
 		weighti a)
@@ -1600,7 +1611,8 @@ inline void WeightedVertexCentricPLL::int_i32scatter_epi8(
 	}
 }
 // Function: according to mask k, assign lanes of vindex in base_addr as a
-inline void WeightedVertexCentricPLL::int_mask_i32scatter_epi8(
+template <inti BATCH_SIZE>
+inline void WeightedVertexCentricPLLVec<BATCH_SIZE>::int_mask_i32scatter_epi8(
 		weighti *base_addr, 
 		__mmask16 k, 
 		__m512i vindex, 
@@ -1619,7 +1631,8 @@ inline void WeightedVertexCentricPLL::int_mask_i32scatter_epi8(
 //epi32_mask_i32scatter_epi8(); // tmp_dist_r_t_v to SI_v_tail.candidates_dists
 
 // Function: according to mask, assign corresponding lanes in 'a' into base_addr and plus index offsets in vindex
-inline void WeightedVertexCentricPLL::epi32_mask_i32scatter_epi8(
+template <inti BATCH_SIZE>
+inline void WeightedVertexCentricPLLVec<BATCH_SIZE>::epi32_mask_i32scatter_epi8(
 		weighti *base_addr,
 		__mmask16 mask,
 		__m512i vindex,
@@ -1636,7 +1649,8 @@ inline void WeightedVertexCentricPLL::epi32_mask_i32scatter_epi8(
 }
 
 // Function: according to mask, put corresponding lanes in 'a' into the queue.
-inline void WeightedVertexCentricPLL::epi32_mask_unpack_into_queue(
+template <inti BATCH_SIZE>
+inline void WeightedVertexCentricPLLVec<BATCH_SIZE>::epi32_mask_unpack_into_queue(
 		vector<inti> &queue,
 		inti &end_queue,
 		__mmask16 mask,
@@ -1675,7 +1689,8 @@ inline void WeightedVertexCentricPLL::epi32_mask_unpack_into_queue(
 //	}
 //}
 
-void WeightedVertexCentricPLL::switch_labels_to_old_id(
+template <inti BATCH_SIZE>
+void WeightedVertexCentricPLLVec<BATCH_SIZE>::switch_labels_to_old_id(
 								const vector<idi> &rank2id,
 								const vector<idi> &rank)
 {

@@ -95,8 +95,8 @@ Graph::Graph(const char *filename)
 //	construct(filename);
 
 	ifstream ifin(filename);
-	if (ifin.bad()) {
-		fprintf(stderr, "Error: cannot open file %s.\n", filename);
+	if (!ifin.is_open()) {
+		fprintf(stderr, "Error: cannot open file %s\n", filename);
 		exit(EXIT_FAILURE);
 	}
 	string line;
@@ -271,8 +271,8 @@ WeightedGraph::WeightedGraph(const char *filename)
 //	construct(filename);
 
 	ifstream ifin(filename);
-	if (ifin.bad()) {
-		fprintf(stderr, "Error: cannot open file %s.\n", filename);
+	if (!ifin.is_open()) {
+		fprintf(stderr, "Error: cannot open file %s\n", filename);
 		exit(EXIT_FAILURE);
 	}
 	string line;

@@ -49,6 +49,10 @@ const __m512i ZERO_epi64_v = _mm512_set1_epi64(0);
 const __m512i MINUS_2_epi64_v = _mm512_set1_epi64(-2);
 const __m512i MINUS_1_epi64_v = _mm512_set1_epi64(-1);
 
+// Parallel Number of Threads
+inti NUM_THREADS = 4;
+
+// Utility Functions
 // Compare and Swap
 template <typename V_T>
 //inline bool CAS(V_T *ptr, V_T old_val, V_T new_val)
@@ -67,6 +71,7 @@ inline bool CAS(void *ptr, V_T old_val, V_T new_val)
 }
 
 
+// Class for Timer
 class WallTimer {
 private:
 	double start = 0.0;
@@ -109,6 +114,7 @@ public:
 
 //// For PAPI, cache miss rate and instruction counts
 //// PAPI test results
+//// I named it L2 historically but actually it measures L3 cache.
 //class L2CacheMissRate {
 //public:
 //	void measure_start()
@@ -171,6 +177,7 @@ public:
 
 // For PAPI, cache miss rate
 // PAPI test results
+// I named it L2 historically but actually it measures L3 cache.
 class L2CacheMissRate {
 public:
 	void measure_start()

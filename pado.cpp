@@ -33,7 +33,12 @@
 
 #include "pado_unw_unv_unp.h"
 #include "pado_unw_vec_unp.h"
+#include "pado_unw_para_unv.h"
+#include "pado_unw_para_vec.h"
 #include "pado_weighted_unv_unp.h"
+#include "pado_weighted_vec_unp.h"
+#include "pado_weighted_para_unv.h"
+#include "pado_weighted_para_vec.h"
 
 using namespace PADO;
 
@@ -125,9 +130,12 @@ void usage_print()
 
 int main(int argc, char *argv[])
 {
+	string filename;
 	if (argc < 2) {
 		usage_print();
 		exit(EXIT_FAILURE);
+	} else {
+		filename = string(argv[1]);
 	}
 	bool is_weighted = false;
 	bool is_vectorized = false;
@@ -138,16 +146,19 @@ int main(int argc, char *argv[])
 		case 'w':
 			if (strtoul(optarg, NULL, 0)) {
 				is_weighted = true;
+				printf("w\n");
 			}
 			break;
 		case 'v':
 			if (strtoul(optarg, NULL, 0)) {
 				is_vectorized = true;
+				printf("v\n");
 			}
 			break;
 		case 'p':
 			if (strtoul(optarg, NULL, 0)) {
 				is_multithread = true;
+				printf("p\n");
 			}
 			break;
 		default:
@@ -163,27 +174,39 @@ int main(int argc, char *argv[])
 			// No vectorization
 			if (!is_multithread) {
 				// Single Thread
-				Graph G(argv[1]);
+				Graph G(filename.c_str());
 				vector<idi> rank = G.make_rank();
 				vector<idi> rank2id = G.id_transfer(rank);
 				VertexCentricPLL<1024> VCPLL(G);
 				VCPLL.switch_labels_to_old_id(rank2id, rank);
 			} else {
 				// Multithread
-				// TODO
+				NUM_THREADS = 40;
+				omp_set_num_threads(NUM_THREADS);
+				Graph G(filename.c_str());
+				vector<idi> rank = G.make_rank();
+				vector<idi> rank2id = G.id_transfer(rank);
+				ParaVertexCentricPLL<1024> VCPLL(G);
+				VCPLL.switch_labels_to_old_id(rank2id, rank);
 			}
 		} else {
 			// Vectorization
 			if (!is_multithread) {
 				// Single Thread
-				Graph G(argv[1]);
+				Graph G(filename.c_str());
 				vector<idi> rank = G.make_rank();
 				vector<idi> rank2id = G.id_transfer(rank);
 				VertexCentricPLLVec<1024> VCPLLvec(G);
 				VCPLLvec.switch_labels_to_old_id(rank2id, rank);
 			} else {
 				// Multithread
-				// TODO
+				NUM_THREADS = 40;
+				omp_set_num_threads(NUM_THREADS);
+				Graph G(filename.c_str());
+				vector<idi> rank = G.make_rank();
+				vector<idi> rank2id = G.id_transfer(rank);
+				ParaVertexCentricPLLVec<1024> VCPLL(G);
+				VCPLL.switch_labels_to_old_id(rank2id, rank);
 			}
 		}
 	} else {
@@ -192,23 +215,39 @@ int main(int argc, char *argv[])
 			// No vectorization
 			if (!is_multithread) {
 				// Single Thread
-				WeightedGraph G(argv[1]);
+				WeightedGraph G(filename.c_str());
 				vector<idi> rank = G.make_rank();
 				vector<idi> rank2id = G.id_transfer(rank);
 				WeightedVertexCentricPLL<512> VCPLL(G);
 				VCPLL.switch_labels_to_old_id(rank2id, rank);
 			} else {
 				// Multithread
-				// TODO
+				NUM_THREADS = 40;
+				omp_set_num_threads(NUM_THREADS);
+				WeightedGraph G(filename.c_str());
+				vector<idi> rank = G.make_rank();
+				vector<idi> rank2id = G.id_transfer(rank);
+				WeightedParaVertexCentricPLL<512> VCPLL(G);
+				VCPLL.switch_labels_to_old_id(rank2id, rank);
 			}
 		} else {
 			// Vectorization
 			if (!is_multithread) {
 				// Single Thread
-				// TODO
+				WeightedGraph G(filename.c_str());
+				vector<idi> rank = G.make_rank();
+				vector<idi> rank2id = G.id_transfer(rank);
+				WeightedVertexCentricPLLVec<512> VCPLL(G);
+				VCPLL.switch_labels_to_old_id(rank2id, rank);
 			} else {
 				// Multithread
-				// TODO
+				NUM_THREADS = 40;
+				omp_set_num_threads(NUM_THREADS);
+				WeightedGraph G(filename.c_str());
+				vector<idi> rank = G.make_rank();
+				vector<idi> rank2id = G.id_transfer(rank);
+				WeightedParaVertexCentricPLLVec<512> VCPLL(G);
+				VCPLL.switch_labels_to_old_id(rank2id, rank);
 			}
 		}
 	}
