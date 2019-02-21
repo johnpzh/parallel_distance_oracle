@@ -9,8 +9,10 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
+#include <omp.h>
 #include "globals.h"
 #include "graph.h"
+
 //#include "pado.h"
 //#include "pado.20190130.tmp.candidates_bitmap.h"
 //#include "pado_weighted.20190111.batch_process_vectorized_dist_query.h"
@@ -107,7 +109,7 @@ void pado(const char filename[])
 		inti sum = 0;
 		double query_time = -WallTimer::get_time_mark();
 		for (inti i = 0; i < num_queries; ++i) {
-			sum += VCPLL.query_distance(queries[i].first, queries[i].second, num_v);
+			sum += VCPLL.query_distance(queries[i].first, queries[i].second);
 //			VCPLL.query_distance(queries[i].first, queries[i].second, num_v);
 		}
 		query_time += WallTimer::get_time_mark();
@@ -122,20 +124,22 @@ void pado(const char filename[])
 void usage_print()
 {
 	fprintf(stderr,
-			"Usage: ./pado <input_file> [-w 0|1] [-v 0|1] [-p 0|1]\n"
-			"\t-w: 0 means unweighted graph (default), 1 means weighted graph\n"
-			"\t-v: 0 means sequential version (default), 1 means AVX512 version (needs CPU support)\n"
-			"\t-p: 0 means single-thread version (default), 1 means multithread version\n");
+			"Usage: ./pado <input_file> <output_index> [-w 0|1] [-v 0|1] [-p 0|1]\n"
+			"\t-w: 0 for unweighted graph (default), 1 for weighted graph\n"
+			"\t-v: 0 for sequential version (default), 1 for AVX512 version (needs CPU support)\n"
+			"\t-p: 0 for single-thread version (default), 1 for multithread version\n");
 }
 
 int main(int argc, char *argv[])
 {
-	string filename;
-	if (argc < 2) {
+	string input_file;
+	string output_index;
+	if (argc < 3) {
 		usage_print();
 		exit(EXIT_FAILURE);
 	} else {
-		filename = string(argv[1]);
+		input_file = string(argv[1]);
+		output_index = string(argv[2]);
 	}
 	bool is_weighted = false;
 	bool is_vectorized = false;
@@ -146,19 +150,16 @@ int main(int argc, char *argv[])
 		case 'w':
 			if (strtoul(optarg, NULL, 0)) {
 				is_weighted = true;
-				printf("w\n");
 			}
 			break;
 		case 'v':
 			if (strtoul(optarg, NULL, 0)) {
 				is_vectorized = true;
-				printf("v\n");
 			}
 			break;
 		case 'p':
 			if (strtoul(optarg, NULL, 0)) {
 				is_multithread = true;
-				printf("p\n");
 			}
 			break;
 		default:
@@ -166,47 +167,61 @@ int main(int argc, char *argv[])
 			exit(EXIT_FAILURE);
 		}
 	}
-	setvbuf(stdout, NULL, _IONBF, 0); //  Set stdout no buffer
+	setvbuf(stdout, NULL, _IONBF, 0); //  Set stdout no buffer.
+	setlocale(LC_NUMERIC, ""); // Print large integer in comma format.
 //	pado(argv[1]);
 	if (!is_weighted) {
 		// Unweighted
 		if (!is_vectorized) {
 			// No vectorization
 			if (!is_multithread) {
+				printf("unw unv unp\n");//test
 				// Single Thread
-				Graph G(filename.c_str());
+				double loading_time = -WallTimer::get_time_mark();
+				Graph G(input_file.c_str());
 				vector<idi> rank = G.make_rank();
 				vector<idi> rank2id = G.id_transfer(rank);
-				VertexCentricPLL<1024> VCPLL(G);
-				VCPLL.switch_labels_to_old_id(rank2id, rank);
+				loading_time += WallTimer::get_time_mark();
+				printf("loading_time: %.2f\n", loading_time);
+				VertexCentricPLL<1024> *VCPLL = new VertexCentricPLL<1024>(G); // 1024 is the batch size
+//				VCPLL->switch_labels_to_old_id(rank2id, rank);
+				VCPLL->store_index_to_file(output_index.c_str(), rank2id);
+				delete VCPLL;
 			} else {
+				printf("unw unv PARA\n");//test
 				// Multithread
 				NUM_THREADS = 40;
 				omp_set_num_threads(NUM_THREADS);
-				Graph G(filename.c_str());
+				Graph G(input_file.c_str());
 				vector<idi> rank = G.make_rank();
 				vector<idi> rank2id = G.id_transfer(rank);
-				ParaVertexCentricPLL<1024> VCPLL(G);
-				VCPLL.switch_labels_to_old_id(rank2id, rank);
+				ParaVertexCentricPLL<1024> *VCPLL = new ParaVertexCentricPLL<1024>(G);
+//				VCPLL->switch_labels_to_old_id(rank2id, rank);
+				VCPLL->store_index_to_file(output_index.c_str(), rank2id);
+				delete VCPLL;
 			}
 		} else {
 			// Vectorization
 			if (!is_multithread) {
+				printf("unw VEC unp\n");//test
 				// Single Thread
-				Graph G(filename.c_str());
+				Graph G(input_file.c_str());
 				vector<idi> rank = G.make_rank();
 				vector<idi> rank2id = G.id_transfer(rank);
-				VertexCentricPLLVec<1024> VCPLLvec(G);
-				VCPLLvec.switch_labels_to_old_id(rank2id, rank);
+				VertexCentricPLLVec<1024> *VCPLL = new VertexCentricPLLVec<1024>(G);
+				VCPLL->store_index_to_file(output_index.c_str(), rank2id);
+				delete VCPLL;
 			} else {
+				printf("unw VEC PARA\n");//test
 				// Multithread
 				NUM_THREADS = 40;
 				omp_set_num_threads(NUM_THREADS);
-				Graph G(filename.c_str());
+				Graph G(input_file.c_str());
 				vector<idi> rank = G.make_rank();
 				vector<idi> rank2id = G.id_transfer(rank);
-				ParaVertexCentricPLLVec<1024> VCPLL(G);
-				VCPLL.switch_labels_to_old_id(rank2id, rank);
+				ParaVertexCentricPLLVec<1024> *VCPLL = new ParaVertexCentricPLLVec<1024>(G);
+				VCPLL->store_index_to_file(output_index.c_str(), rank2id);
+				delete VCPLL;
 			}
 		}
 	} else {
@@ -214,40 +229,48 @@ int main(int argc, char *argv[])
 		if (!is_vectorized) {
 			// No vectorization
 			if (!is_multithread) {
+				printf("W unv unp\n");//test
 				// Single Thread
-				WeightedGraph G(filename.c_str());
+				WeightedGraph G(input_file.c_str());
 				vector<idi> rank = G.make_rank();
 				vector<idi> rank2id = G.id_transfer(rank);
-				WeightedVertexCentricPLL<512> VCPLL(G);
-				VCPLL.switch_labels_to_old_id(rank2id, rank);
+				WeightedVertexCentricPLL<512> *VCPLL = new WeightedVertexCentricPLL<512>(G); // 512 is the batch size
+				VCPLL->store_index_to_file(output_index.c_str(), rank2id);
+				delete VCPLL;
 			} else {
+				printf("W unv PARA\n");//test
 				// Multithread
 				NUM_THREADS = 40;
 				omp_set_num_threads(NUM_THREADS);
-				WeightedGraph G(filename.c_str());
+				WeightedGraph G(input_file.c_str());
 				vector<idi> rank = G.make_rank();
 				vector<idi> rank2id = G.id_transfer(rank);
-				WeightedParaVertexCentricPLL<512> VCPLL(G);
-				VCPLL.switch_labels_to_old_id(rank2id, rank);
+				WeightedParaVertexCentricPLL<512> *VCPLL = new WeightedParaVertexCentricPLL<512>(G);
+				VCPLL->store_index_to_file(output_index.c_str(), rank2id);
+				delete VCPLL;
 			}
 		} else {
 			// Vectorization
 			if (!is_multithread) {
+				printf("W VEC unp\n");//test
 				// Single Thread
-				WeightedGraph G(filename.c_str());
+				WeightedGraph G(input_file.c_str());
 				vector<idi> rank = G.make_rank();
 				vector<idi> rank2id = G.id_transfer(rank);
-				WeightedVertexCentricPLLVec<512> VCPLL(G);
-				VCPLL.switch_labels_to_old_id(rank2id, rank);
+				WeightedVertexCentricPLLVec<512> *VCPLL = new WeightedVertexCentricPLLVec<512>(G);
+				VCPLL->store_index_to_file(output_index.c_str(), rank2id);
+				delete VCPLL;
 			} else {
+				printf("W VEC PARA\n");//test
 				// Multithread
 				NUM_THREADS = 40;
 				omp_set_num_threads(NUM_THREADS);
-				WeightedGraph G(filename.c_str());
+				WeightedGraph G(input_file.c_str());
 				vector<idi> rank = G.make_rank();
 				vector<idi> rank2id = G.id_transfer(rank);
-				WeightedParaVertexCentricPLLVec<512> VCPLL(G);
-				VCPLL.switch_labels_to_old_id(rank2id, rank);
+				WeightedParaVertexCentricPLLVec<512> *VCPLL = new WeightedParaVertexCentricPLLVec<512>(G);
+				VCPLL->store_index_to_file(output_index.c_str(), rank2id);
+				delete VCPLL;
 			}
 		}
 	}

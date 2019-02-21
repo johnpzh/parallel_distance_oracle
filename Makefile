@@ -11,17 +11,20 @@ OBJS =		pado.o
 INCLUDES_DIR = includes
 INCLUDES = -I$(INCLUDES_DIR)
 
-TARGET =	pado
+TARGET =	pado query_distance
 
 .PHONY: all clean
 
 all:	$(TARGET) 
 
-$(TARGET):	$(OBJS)
-	$(CXX) $(CXXFLAGS) -o $(TARGET) $(OBJS) $(LIBS)
+pado: $(OBJS)
+	$(CXX) $(CXXFLAGS) -o $@ $(OBJS) $(LIBS)
 	
 pado.o: pado.cpp $(INCLUDES_DIR)/*.h
 	$(CXX) $(CXXFLAGS) -o $@ -c $< $(INCLUDES)	
+
+query_distance: query_distance.cpp $(INCLUDES_DIR)/*.h
+	$(CXX) $(CXXFLAGS) -o $@ $< $(INCLUDES)
 
 clean:
 	rm -f $(OBJS) $(TARGET)

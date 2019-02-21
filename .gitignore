@@ -2,6 +2,7 @@
 .cproject
 .project
 .settings/
+.pydevproject
 *.txt
 *.o
 *.xlsx
@@ -9,4 +10,8 @@
 *.dSYM/
 *.swp
 *.swo
+*.index
+*.otprpt
+tags
+index
 /Default/

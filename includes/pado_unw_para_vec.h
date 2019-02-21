@@ -58,7 +58,13 @@ template <inti BATCH_SIZE = 1024>
 class ParaVertexCentricPLLVec {
 private:
 	static const inti BITPARALLEL_SIZE = 50;
+	idi num_v_ = 0;
 	const inti THRESHOLD_PARALLEL = 80;
+	static const inti NUM_P_BP_LABEL = 8;
+	static const inti REMAINDER_BP = BITPARALLEL_SIZE % NUM_P_BP_LABEL;
+	static const inti BOUND_BP_I = BITPARALLEL_SIZE - REMAINDER_BP;
+	static const __mmask8 IN_EPI64_M = (__mmask8) ((uint8_t) 0xFF >> (NUM_P_BP_LABEL - REMAINDER_BP));
+	static const __mmask16 IN_128I_M = (__mmask16) ((uint16_t) 0xFFFF >> (NUM_P_INT - REMAINDER_BP));
 
 	// Structure for the type of label
 	struct IndexType {
@@ -97,7 +103,7 @@ private:
 	    idi last_size = 0; // The size of labels in the last iteration
 		vector<idi> vertices; // Vertices in the label, preresented as temperory ID
 		vector<weighti> label_dists; // Used for SIMD, storing distances of labels.
-	} __attribute__((aligned(64)));
+	}; //__attribute__((aligned(64)));
 
 	// Structure for the type of temporary label
 	struct ShortIndex {
@@ -111,9 +117,20 @@ private:
 		vector<inti> candidates_que = vector<inti>(BATCH_SIZE);
 		inti end_candidates_que = 0;
 		vector<uint8_t> is_candidate = vector<uint8_t>(BATCH_SIZE, 0);
-	} __attribute__((aligned(64)));
+	}; //__attribute__((aligned(64)));
+
+	// Structure of the public ordered index for distance queries.
+	struct IndexOrdered {
+		weighti bp_dist[BITPARALLEL_SIZE];
+		uint64_t bp_sets[BITPARALLEL_SIZE][2]; // [0]: S^{-1}, [1]: S^{0}
+
+		vector<idi> label_id;
+		vector<weighti> label_dists;
+	};
 
 	vector<IndexType> L;
+	vector<IndexOrdered> Index; // Ordered labels for original vertex ID
+
 	void construct(const Graph &G);
 	inline void bit_parallel_labeling(
 				const Graph &G,
@@ -232,9 +249,9 @@ private:
 //	uint64_t normal_hit_count = 0;
 //	uint64_t bp_hit_count = 0;
 //	uint64_t total_check_count = 0;
-	double initializing_time = 0;
-	double candidating_time = 0;
-	double adding_time = 0;
+//	double initializing_time = 0;
+//	double candidating_time = 0;
+//	double adding_time = 0;
 //	double distance_query_time = 0;
 //	double init_index_time = 0;
 //	double init_dist_matrix_time = 0;
@@ -258,8 +275,22 @@ public:
 	void switch_labels_to_old_id(
 					const vector<idi> &rank2id,
 					const vector<idi> &rank);
+	void store_index_to_file(
+			const char *filename,
+			const vector<idi> &rank2id);
+	void load_index_from_file(
+			const char *filename);
+	void order_labels(
+			const vector<idi> &rank2id,
+			const vector<idi> &rank);
+	weighti query_distance(
+			idi a,
+			idi b);
 
 }; // class ParaVertexCentricPLLVec
+
+template <inti BATCH_SIZE>
+const inti ParaVertexCentricPLLVec<BATCH_SIZE>::BITPARALLEL_SIZE;
 
 template <inti BATCH_SIZE>
 ParaVertexCentricPLLVec<BATCH_SIZE>::ParaVertexCentricPLLVec(const Graph &G)
@@ -906,10 +937,10 @@ inline void ParaVertexCentricPLLVec<BATCH_SIZE>::push_labels(
 				const vector<uint8_t> &used_bp_roots,
 				smalli iter)
 {
-	const inti REMAINDER_BP = BITPARALLEL_SIZE % NUM_P_BP_LABEL;
-	const inti BOUND_BP_I = BITPARALLEL_SIZE - REMAINDER_BP;
-	const __mmask8 IN_EPI64_M = (__mmask8) ((uint8_t) 0xFF >> (NUM_P_BP_LABEL - REMAINDER_BP));
-	const __mmask16 IN_128I_M = (__mmask16) ((uint16_t) 0xFFFF >> (NUM_P_INT - REMAINDER_BP));
+//	const inti REMAINDER_BP = BITPARALLEL_SIZE % NUM_P_BP_LABEL;
+//	const inti BOUND_BP_I = BITPARALLEL_SIZE - REMAINDER_BP;
+//	const __mmask8 IN_EPI64_M = (__mmask8) ((uint8_t) 0xFF >> (NUM_P_BP_LABEL - REMAINDER_BP));
+//	const __mmask16 IN_128I_M = (__mmask16) ((uint16_t) 0xFFFF >> (NUM_P_INT - REMAINDER_BP));
 	__m512i iter_v = _mm512_set1_epi64(iter);
 	__m512i iter_plus_2_v = _mm512_set1_epi64(iter + 2);
 
@@ -1381,7 +1412,7 @@ inline void ParaVertexCentricPLLVec<BATCH_SIZE>::batch_process(
 //						const vector<bool> &used_bp_roots)
 {
 
-	initializing_time -= WallTimer::get_time_mark();
+//	initializing_time -= WallTimer::get_time_mark();
 //	static const idi num_v = G.get_num_v();
 //	static vector<idi> active_queue(num_v);
 //	static idi end_active_queue = 0;
@@ -1412,11 +1443,11 @@ inline void ParaVertexCentricPLLVec<BATCH_SIZE>::batch_process(
 			used_bp_roots);
 
 	smalli iter = 0; // The iterator, also the distance for current iteration
-	initializing_time += WallTimer::get_time_mark();
+//	initializing_time += WallTimer::get_time_mark();
 
 
 	while (0 != end_active_queue) {
-		candidating_time -= WallTimer::get_time_mark();
+//		candidating_time -= WallTimer::get_time_mark();
 		++iter;
 
 		// Pushing
@@ -1493,11 +1524,11 @@ inline void ParaVertexCentricPLLVec<BATCH_SIZE>::batch_process(
 			end_active_queue = 0; // Set the active_queue empty
 		}
 
-		candidating_time += WallTimer::get_time_mark();
+//		candidating_time += WallTimer::get_time_mark();
 		if (end_candidate_queue == 0) {
 			break;
 		}
-		adding_time -= WallTimer::get_time_mark();
+//		adding_time -= WallTimer::get_time_mark();
 		// Adding
 //		printf("adding...\n");//test
 		{
@@ -1594,12 +1625,12 @@ inline void ParaVertexCentricPLLVec<BATCH_SIZE>::batch_process(
 						end_active_queue);
 			end_candidate_queue = 0; // Set the candidate_queue empty
 		}
-		adding_time += WallTimer::get_time_mark();
+//		adding_time += WallTimer::get_time_mark();
 	}
 
 
 	// Reset the dist_matrix
-	initializing_time -= WallTimer::get_time_mark();
+//	initializing_time -= WallTimer::get_time_mark();
 //	init_dist_matrix_time -= WallTimer::get_time_mark();
 	reset_at_end(
 			roots_start,
@@ -1607,7 +1638,7 @@ inline void ParaVertexCentricPLLVec<BATCH_SIZE>::batch_process(
 			L,
 			dist_matrix);
 //	init_dist_matrix_time += WallTimer::get_time_mark();
-	initializing_time += WallTimer::get_time_mark();
+//	initializing_time += WallTimer::get_time_mark();
 
 
 //	double total_time = time_can + time_add;
@@ -1620,9 +1651,10 @@ inline void ParaVertexCentricPLLVec<BATCH_SIZE>::batch_process(
 template <inti BATCH_SIZE>
 void ParaVertexCentricPLLVec<BATCH_SIZE>::construct(const Graph &G)
 {
-	initializing_time -= WallTimer::get_time_mark();
+//	initializing_time -= WallTimer::get_time_mark();
 
 	idi num_v = G.get_num_v();
+	num_v_ = num_v;
 	L.resize(num_v);
 	idi remainer = num_v % BATCH_SIZE;
 	idi b_i_bound = num_v / BATCH_SIZE;
@@ -1644,16 +1676,16 @@ void ParaVertexCentricPLLVec<BATCH_SIZE>::construct(const Graph &G)
 //	uint8_t *once_candidated = (uint8_t *) calloc(num_v, sizeof(uint8_t)); // need raw integer type to do CAS.
 	vector<uint8_t> once_candidated(num_v, 0);
 
-	initializing_time += WallTimer::get_time_mark();
+//	initializing_time += WallTimer::get_time_mark();
 	double time_labeling = -WallTimer::get_time_mark();
 
-	double bp_labeling_time = -WallTimer::get_time_mark();
+//	double bp_labeling_time = -WallTimer::get_time_mark();
 //	printf("BP labeling...\n"); //test
 	bit_parallel_labeling(
 						G,
 						L,
 						used_bp_roots);
-	bp_labeling_time += WallTimer::get_time_mark();
+//	bp_labeling_time += WallTimer::get_time_mark();
 
 
 	for (idi b_i = 0; b_i < b_i_bound; ++b_i) {
@@ -1721,15 +1753,15 @@ void ParaVertexCentricPLLVec<BATCH_SIZE>::construct(const Graph &G)
 
 	// Test
 	printf("Threads: %u Batch_size: %u\n", NUM_THREADS, BATCH_SIZE);
-	printf("BP_labeling: %.2f %.2f%%\n", bp_labeling_time, bp_labeling_time / time_labeling * 100);
+//	printf("BP_labeling: %.2f %.2f%%\n", bp_labeling_time, bp_labeling_time / time_labeling * 100);
 	printf("BP_Roots_Size: %u\n", BITPARALLEL_SIZE);
-	printf("Initializing: %.2f %.2f%%\n", initializing_time, initializing_time / time_labeling * 100);
+//	printf("Initializing: %.2f %.2f%%\n", initializing_time, initializing_time / time_labeling * 100);
 //		printf("\tinit_start_reset_time: %f (%f%%)\n", init_start_reset_time, init_start_reset_time / initializing_time * 100);
 //		printf("\tinit_index_time: %f (%f%%)\n", init_index_time, init_index_time / initializing_time * 100);
 //			printf("\t\tinit_indicators_time: %f (%f%%)\n", init_indicators_time, init_indicators_time / init_index_time * 100);
 //		printf("\tinit_dist_matrix_time: %f (%f%%)\n", init_dist_matrix_time, init_dist_matrix_time / initializing_time * 100);
-	printf("Candidating: %.2f %.2f%%\n", candidating_time, candidating_time / time_labeling * 100);
-	printf("Adding: %.2f %.2f%%\n", adding_time, adding_time / time_labeling * 100);
+//	printf("Candidating: %.2f %.2f%%\n", candidating_time, candidating_time / time_labeling * 100);
+//	printf("Adding: %.2f %.2f%%\n", adding_time, adding_time / time_labeling * 100);
 //		printf("\tdistance_query_time: %f (%f%%)\n", distance_query_time, distance_query_time / adding_time * 100);
 //		printf("\ttotal_check_count: %llu\n", total_check_count);
 //		printf("\tbp_hit_count (to total_check): %llu (%f%%)\n",
@@ -1923,6 +1955,353 @@ inline void ParaVertexCentricPLLVec<BATCH_SIZE>::TS_enqueue(
 		new_i = old_i + 1;
 	}
 	queue[old_i] = e;
+}
+template <inti BATCH_SIZE>
+void ParaVertexCentricPLLVec<BATCH_SIZE>::store_index_to_file(
+								const char *filename,
+								const vector<idi> &rank2id)
+{
+	ofstream fout(filename);
+	if (!fout.is_open()) {
+		fprintf(stderr, "Error: cannot open file %s\n", filename);
+		exit(EXIT_FAILURE);
+	}
+	idi num_v = rank2id.size();
+	vector< vector< pair<idi, weighti> > > ordered_L(num_v);
+	Index.resize(num_v);
+	// Store into file the number of vertices and the number of bit-parallel roots.
+	fout.write((char *) &num_v, sizeof(num_v));
+	fout.write((char *) &BITPARALLEL_SIZE, sizeof(BITPARALLEL_SIZE));
+
+	// Traverse the L, put them into Index (ordered labels)
+	for (idi v_id = 0; v_id < num_v; ++v_id) {
+		idi new_v = rank2id[v_id];
+		IndexOrdered & Iv = Index[new_v];
+		const IndexType &Lv = L[v_id];
+		auto &OLv = ordered_L[new_v];
+		// Bit-parallel Labels
+		memcpy(&Iv.bp_dist, &Lv.bp_dist, BITPARALLEL_SIZE * sizeof(weighti));
+		for (inti b_i = 0; b_i < BITPARALLEL_SIZE; ++b_i) {
+			Iv.bp_sets[b_i][0] = Lv.bp_sets_0[b_i];
+			Iv.bp_sets[b_i][1] = Lv.bp_sets_1[b_i];
+		}
+
+		// Normal Labels
+//		// Traverse v_id's all existing labels
+//		for (inti b_i = 0; b_i < Lv.batches.size(); ++b_i) {
+//			idi id_offset = Lv.batches[b_i].batch_id * BATCH_SIZE;
+//			idi dist_start_index = Lv.batches[b_i].start_index;
+//			idi dist_bound_index = dist_start_index + Lv.batches[b_i].size;
+//			// Traverse dist_matrix
+//			for (idi dist_i = dist_start_index; dist_i < dist_bound_index; ++dist_i) {
+//				idi v_start_index = Lv.distances[dist_i].start_index;
+//				idi v_bound_index = v_start_index + Lv.distances[dist_i].size;
+//				inti dist = Lv.distances[dist_i].dist;
+//				for (idi v_i = v_start_index; v_i < v_bound_index; ++v_i) {
+//					idi tail = Lv.vertices[v_i] + id_offset;
+////					idi new_tail = rank2id[tail];
+////					new_L[new_v].push_back(make_pair(new_tail, dist));
+//					OLv.push_back(make_pair(tail, dist));
+//				}
+//			}
+//		}
+		for (idi l_i = 0; l_i < Lv.vertices.size(); ++l_i) {
+			OLv.push_back(make_pair(Lv.vertices[l_i], Lv.label_dists[l_i]));
+		}
+		// Sort
+		sort(OLv.begin(), OLv.end());
+		// Store into Index
+		inti size_labels = OLv.size();
+		Iv.label_id.resize(size_labels + 1); // Adding one for Sentinel
+		Iv.label_dists.resize(size_labels + 1); // Adding one for Sentinel
+		for (inti l_i = 0; l_i < size_labels; ++l_i) {
+			Iv.label_id[l_i] = OLv[l_i].first;
+			Iv.label_dists[l_i] = OLv[l_i].second;
+		}
+		Iv.label_id[size_labels] = num_v; // Sentinel
+		Iv.label_dists[size_labels] = WEIGHTI_MAX; // Sentinel
+	}
+
+	uint64_t labels_count = 0;
+	// Traverse the Index, store labels into file
+	for (idi v_id = 0; v_id < num_v; ++v_id) {
+		IndexOrdered & Iv = Index[v_id];
+		// Store Bit-parallel Labels into file.
+		for (inti b_i = 0; b_i < BITPARALLEL_SIZE; ++b_i) {
+			weighti d = Iv.bp_dist[b_i];
+			uint64_t s0 = Iv.bp_sets[b_i][0];
+			uint64_t s1 = Iv.bp_sets[b_i][1];
+			fout.write((char *) &d, sizeof(d));
+			fout.write((char *) &s0, sizeof(s0));
+			fout.write((char *) &s1, sizeof(s1));
+		}
+
+		// Normal Labels
+		// Store Labels into file.
+		idi size_labels = Iv.label_id.size();
+		labels_count += size_labels;
+		fout.write((char *) &size_labels, sizeof(size_labels));
+		for (idi l_i = 0; l_i < size_labels; ++l_i) {
+			idi l = Iv.label_id[l_i];
+			weighti d = Iv.label_dists[l_i];
+			fout.write((char *) &l, sizeof(l));
+			fout.write((char *) &d, sizeof(d));
+		}
+	}
+	printf("Label_size: %'lu mean: %f\n", labels_count, static_cast<double>(labels_count) / num_v);
+	fout.close();
+}
+
+template <inti BATCH_SIZE>
+void ParaVertexCentricPLLVec<BATCH_SIZE>::load_index_from_file(
+								const char *filename)
+{
+	ifstream fin(filename);
+	if (!fin.is_open()) {
+		fprintf(stderr, "Error: cannot open file %s\n", filename);
+		exit(EXIT_FAILURE);
+	}
+	idi num_v;
+	// Load from file the number of vertices and the number of bit-parallel roots.
+	fin.read((char *) &num_v, sizeof(num_v));
+	fin.read((char *) &BITPARALLEL_SIZE, sizeof(BITPARALLEL_SIZE));
+	num_v_ = num_v;
+	Index.resize(num_v);
+	uint64_t labels_count = 0;
+	// Load labels for every vertex
+	for (idi v_id = 0; v_id < num_v; ++v_id) {
+		IndexOrdered &Iv = Index[v_id];
+		// Load Bit-parallel Labels from file.
+		for (inti b_i = 0; b_i < BITPARALLEL_SIZE; ++b_i) {
+			fin.read((char *) &Iv.bp_dist[b_i], sizeof(Iv.bp_dist[b_i]));
+			fin.read((char *) &Iv.bp_sets[b_i][0], sizeof(Iv.bp_sets[b_i][0]));
+			fin.read((char *) &Iv.bp_sets[b_i][1], sizeof(Iv.bp_sets[b_i][1]));
+		}
+
+		// Normal Labels
+		// Load Labels from file.
+		idi size_labels;
+		fin.read((char *) &size_labels, sizeof(size_labels));
+		labels_count += size_labels;
+		Iv.label_id.resize(size_labels + 1);
+		Iv.label_dists.resize(size_labels + 1);
+		for (idi l_i = 0; l_i < size_labels; ++l_i) {
+			fin.read((char *) &Iv.label_id[l_i], sizeof(Iv.label_id[l_i]));
+			fin.read((char *) &Iv.label_dists[l_i], sizeof(Iv.label_dists[l_i]));
+		}
+		Iv.label_id[size_labels] = num_v; // Sentinel
+		Iv.label_dists[size_labels] = (weighti) -1; // Sentinel
+	}
+	printf("Label_size_loaded: %'lu mean: %f\n", labels_count, static_cast<double>(labels_count) / num_v);
+	fin.close();
+}
+
+
+template <inti BATCH_SIZE>
+void ParaVertexCentricPLLVec<BATCH_SIZE>::order_labels(
+								const vector<idi> &rank2id,
+								const vector<idi> &rank)
+{
+	idi num_v = rank.size();
+	vector< vector< pair<idi, weighti> > > ordered_L(num_v);
+	idi labels_count = 0;
+	Index.resize(num_v);
+
+	// Traverse the L, put them into Index (ordered labels)
+	for (idi v_id = 0; v_id < num_v; ++v_id) {
+		idi new_v = rank2id[v_id];
+		IndexOrdered & Iv = Index[new_v];
+		const IndexType &Lv = L[v_id];
+		auto &OLv = ordered_L[new_v];
+		// Bit-parallel Labels
+		memcpy(&Iv.bp_dist, &Lv.bp_dist, BITPARALLEL_SIZE * sizeof(weighti));
+		for (inti b_i = 0; b_i < BITPARALLEL_SIZE; ++b_i) {
+			Iv.bp_sets[b_i][0] = Lv.bp_sets_0[b_i];
+			Iv.bp_sets[b_i][1] = Lv.bp_sets_1[b_i];
+		}
+
+		// Normal Labels
+		// Traverse v_id's all existing labels
+		for (idi l_i = 0; l_i < Lv.vertices.size(); ++l_i) {
+			OLv.push_back(make_pair(Lv.vertices[l_i], Lv.label_dists[l_i]));
+		}
+		// Sort
+		sort(OLv.begin(), OLv.end());
+		// Store into Index
+		inti size_labels = OLv.size();
+		labels_count += size_labels;
+		Iv.label_id.resize(size_labels + 1); // Adding one for Sentinel
+		Iv.label_dists.resize(size_labels + 1); // Adding one for Sentinel
+		for (inti l_i = 0; l_i < size_labels; ++l_i) {
+			Iv.label_id[l_i] = OLv[l_i].first;
+			Iv.label_dists[l_i] = OLv[l_i].second;
+		}
+		Iv.label_id[size_labels] = num_v; // Sentinel
+		Iv.label_dists[size_labels] = WEIGHTI_MAX; // Sentinel
+	}
+	printf("Label_size: %u mean: %f\n", labels_count, static_cast<double>(labels_count) / num_v);
+//	// Test
+//	{
+//		puts("Asserting...");
+//		for (idi v_id = 0; v_id < num_v; ++v_id) {
+//			const IndexType &Lv = L[v_id];
+//			const IndexOrdered &Iv = Index[rank2id[v_id]];
+//			// Bit-parallel Labels
+//			for (inti b_i = 0; b_i < BITPARALLEL_SIZE; ++b_i) {
+//				assert(Lv.bp_dist[b_i] == Iv.bp_dist[b_i]);
+//				assert(Lv.bp_sets[b_i][0] == Iv.bp_sets[b_i][0]);
+//				assert(Lv.bp_sets[b_i][1] == Iv.bp_sets[b_i][1]);
+//			}
+//			// Normal Labels
+//			assert(Lv.vertices.size() == Iv.label_id.size());
+//			assert(Lv.vertices.size() == Iv.label_dists.size());
+////			{
+////				inti bound_i = Iv.label_id.size() > 10 ? 10 : Iv.label_id.size();
+////				printf("V %u:", rank2id[v_id]);
+////				for (inti i = 0; i < bound_i; ++i) {
+////					printf(" (%u, %u)", Iv.label_id[i], Iv.label_dists[i]);
+////				}
+////				puts("");
+////			}
+//
+//		}
+//		puts("Asserted.");
+//	}
+}
+
+template <inti BATCH_SIZE>
+weighti ParaVertexCentricPLLVec<BATCH_SIZE>::query_distance(
+								idi a,
+								idi b)
+{
+	idi num_v = num_v_;
+	if (a >= num_v || b >= num_v) {
+		return a == b ? 0 : WEIGHTI_MAX;
+	}
+
+//	// A is shorter than B
+//	IndexOrdered &Ia = (Index[a].label_id.size() < Index[b].label_id.size()) ? Index[a] : Index[b];
+//	IndexOrdered &Ib = (Index[a].label_id.size() < Index[b].label_id.size()) ? Index[b] : Index[a];
+
+//	// A is longer than B
+//	IndexOrdered &Ia = (Index[a].label_id.size() > Index[b].label_id.size()) ? Index[a] : Index[b];
+//	IndexOrdered &Ib = (Index[a].label_id.size() > Index[b].label_id.size()) ? Index[b] : Index[a];
+
+	IndexOrdered &Ia = Index[a];
+	IndexOrdered &Ib = Index[b];
+
+//	const IndexOrdered &Ia = Index[a];
+//	const IndexOrdered &Ib = Index[b];
+	inti d = WEIGHTI_MAX;
+
+	_mm_prefetch(&Ia.label_id[0], _MM_HINT_T0);
+	_mm_prefetch(&Ib.label_id[0], _MM_HINT_T0);
+	_mm_prefetch(&Ia.label_dists[0], _MM_HINT_T0);
+	_mm_prefetch(&Ib.label_dists[0], _MM_HINT_T0);
+
+	// Bit-Parallel Labels
+	for (int i = 0; i < BITPARALLEL_SIZE; ++i) {
+		int td = Ia.bp_dist[i] + Ib.bp_dist[i];
+		if (td - 2 <= d) {
+			td +=
+				(Ia.bp_sets[i][0] & Ib.bp_sets[i][0]) ? -2 :
+					((Ia.bp_sets[i][0] & Ib.bp_sets[i][1]) | (Ia.bp_sets[i][1] & Ib.bp_sets[i][0]))
+					? -1 : 0;
+
+			if (td < d) {
+				d = td;
+			}
+		}
+	}
+
+	// Normal Labels (ordered)
+//	// Vectorizaed Version
+//	vector<idi> &A = Ia.label_id;
+//	vector<idi> &B = Ib.label_id;
+//	idi len_B = B.size() - 1;
+////	idi len_B = B.size();
+//	idi bound_b_base_i = len_B - (len_B % NUM_P_INT);
+//	idi a_i = 0;
+//	idi b_base_i = 0;
+//	idi len_A = A.size() - 1;
+////	idi len_A = A.size();
+//	++length_larger_than_16.second;
+//	if (len_B >= 16) {
+//		++length_larger_than_16.first;
+//	}
+//	while (a_i < len_A && b_base_i < bound_b_base_i) {
+//		int a = A[a_i];
+//		__m512i a_v = _mm512_set1_epi32(a);
+//
+//		// Packed b
+//		__m512i b_v = _mm512_loadu_epi32(&B[b_base_i]); // @suppress("Function cannot be resolved")
+//		__mmask16 is_equal_m = _mm512_cmpeq_epi32_mask(a_v, b_v);
+//		if (is_equal_m) {
+////			if (a == num_v) {
+////				break;  // Sentinel
+////			}
+//			inti td = Ia.label_dists[a_i] + Ib.label_dists[b_base_i + (idi) (log2(is_equal_m))];
+//			if (td < d) {
+//				d = td;
+//			}
+//
+//			// Advance index
+//			if (is_equal_m & (__mmask16) 0x8000) {
+//				++a_i;
+//				b_base_i += NUM_P_INT;
+//			} else {
+//				a_i += (a < B[b_base_i + NUM_P_INT - 1]) ? 1 : 0;
+//				b_base_i += (B[b_base_i + NUM_P_INT - 1] < a) ? NUM_P_INT : 0;
+//			}
+//		} else {
+//			// Advance index
+//			a_i += (a < B[b_base_i + NUM_P_INT - 1]) ? 1 : 0;
+//			b_base_i += (B[b_base_i + NUM_P_INT - 1] < a) ? NUM_P_INT : 0;
+//		}
+//	}
+//	while (a_i < len_A && b_base_i < len_B) {
+//		if (A[a_i] == B[b_base_i]) {
+////			if (a == num_v) {
+////				break;  // Sentinel
+////			}
+//			inti td = Ia.label_dists[a_i] + Ib.label_dists[b_base_i];
+//			if (td < d) {
+//				d = td;
+//			}
+//
+//			// Advance index
+//			++a_i;
+//			++b_base_i;
+//		} else {
+//			// Advance index
+//			a_i += (A[a_i] < B[b_base_i]) ? 1 : 0;
+//			b_base_i += (B[b_base_i] < A[a_i]) ? 1 : 0;
+//		}
+//	}
+
+	// Sequential Version
+	for (idi i1 = 0, i2 = 0; ; ) {
+		idi v1 = Ia.label_id[i1], v2 = Ib.label_id[i2];
+		if (v1 == v2) {
+			if (v1 == num_v) {
+				break;  // Sentinel
+			}
+			inti td = Ia.label_dists[i1] + Ib.label_dists[i2];
+			if (td < d) {
+				d = td;
+			}
+			++i1;
+			++i2;
+		} else {
+			i1 += v1 < v2 ? 1 : 0;
+			i2 += v1 > v2 ? 1 : 0;
+		}
+	}
+
+	if (d >= WEIGHTI_MAX - 2) {
+		d = WEIGHTI_MAX;
+	}
+	return d;
 }
 
 

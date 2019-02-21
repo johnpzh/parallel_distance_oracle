@@ -164,3 +164,102 @@ if [[ ! -f ${dataname}.txt ]]; then
 	mv com-friendster.ungraph.txt ${dataname}.txt
 	sed -i '/^[#%]/ d' ${dataname}.txt
 fi
+
+# Road Graph
+# BAY
+cd $dout
+dataname=road_bay
+mkdir -p $dataname
+cd $dataname
+if [[ ! -f ${dataname}.txt ]]; then
+	wget -c http://www.dis.uniroma1.it/challenge9/data/USA-road-d/USA-road-d.BAY.gr.gz && gunzip -k USA-road-d.BAY.gr.gz
+	mv USA-road-d.BAY.gr ${dataname}.txt
+	sed '/^[cp]/ d' ${dataname}.txt > ${dataname}.tmp
+	cut -d ' ' -f 2,3 < ${dataname}.tmp > ${dataname}.txt
+	sed -i 'n; d' ${dataname}.txt
+	rm ${dataname}.tmp
+fi
+
+# FLA
+cd $dout
+dataname=road_fla
+mkdir -p $dataname
+cd $dataname
+if [[ ! -f ${dataname}.txt ]]; then
+	wget -c http://www.dis.uniroma1.it/challenge9/data/USA-road-d/USA-road-d.FLA.gr.gz && gunzip -k USA-road-d.FLA.gr.gz
+	mv USA-road-d.FLA.gr ${dataname}.txt
+	sed '/^[cp]/ d' ${dataname}.txt > ${dataname}.tmp
+	cut -d ' ' -f 2,3 < ${dataname}.tmp > ${dataname}.txt
+	sed -i 'n; d' ${dataname}.txt
+	rm ${dataname}.tmp
+fi
+
+# CAL
+cd $dout
+dataname=road_cal
+mkdir -p $dataname
+cd $dataname
+if [[ ! -f ${dataname}.txt ]]; then
+	wget -c http://www.dis.uniroma1.it/challenge9/data/USA-road-d/USA-road-d.CAL.gr.gz && gunzip -k USA-road-d.CAL.gr.gz
+	mv USA-road-d.CAL.gr ${dataname}.txt
+	sed '/^[cp]/ d' ${dataname}.txt > ${dataname}.tmp
+	cut -d ' ' -f 2,3 < ${dataname}.tmp > ${dataname}.txt
+	sed -i 'n; d' ${dataname}.txt
+	rm ${dataname}.tmp
+fi
+
+# E
+cd $dout
+dataname=road_e
+mkdir -p $dataname
+cd $dataname
+if [[ ! -f ${dataname}.txt ]]; then
+	wget -c http://www.dis.uniroma1.it/challenge9/data/USA-road-d/USA-road-d.E.gr.gz && gunzip -k USA-road-d.E.gr.gz
+	mv USA-road-d.E.gr ${dataname}.txt
+	sed '/^[cp]/ d' ${dataname}.txt > ${dataname}.tmp
+	cut -d ' ' -f 2,3 < ${dataname}.tmp > ${dataname}.txt
+	sed -i 'n; d' ${dataname}.txt
+	rm ${dataname}.tmp
+fi
+
+# W
+cd $dout
+dataname=road_w
+mkdir -p $dataname
+cd $dataname
+if [[ ! -f ${dataname}.txt ]]; then
+	wget -c http://www.dis.uniroma1.it/challenge9/data/USA-road-d/USA-road-d.W.gr.gz && gunzip -k USA-road-d.W.gr.gz
+	mv USA-road-d.W.gr ${dataname}.txt
+	sed '/^[cp]/ d' ${dataname}.txt > ${dataname}.tmp
+	cut -d ' ' -f 2,3 < ${dataname}.tmp > ${dataname}.txt
+	sed -i 'n; d' ${dataname}.txt
+	rm ${dataname}.tmp
+fi
+
+# CTR
+cd $dout
+dataname=road_ctr
+mkdir -p $dataname
+cd $dataname
+if [[ ! -f ${dataname}.txt ]]; then
+	wget -c http://www.dis.uniroma1.it/challenge9/data/USA-road-d/USA-road-d.CTR.gr.gz && gunzip -k USA-road-d.CTR.gr.gz
+	mv USA-road-d.CTR.gr ${dataname}.txt
+	sed '/^[cp]/ d' ${dataname}.txt > ${dataname}.tmp
+	cut -d ' ' -f 2,3 < ${dataname}.tmp > ${dataname}.txt
+	sed -i 'n; d' ${dataname}.txt
+	rm ${dataname}.tmp
+fi
+
+# USA
+cd $dout
+dataname=road_usa
+mkdir -p $dataname
+cd $dataname
+if [[ ! -f ${dataname}.txt ]]; then
+	wget -c http://www.dis.uniroma1.it/challenge9/data/USA-road-d/USA-road-d.USA.gr.gz && gunzip -k USA-road-d.USA.gr.gz
+	mv USA-road-d.USA.gr ${dataname}.txt
+	sed '/^[cp]/ d' ${dataname}.txt > ${dataname}.tmp
+	cut -d ' ' -f 2,3 < ${dataname}.tmp > ${dataname}.txt
+	sed -i 'n; d' ${dataname}.txt
+	rm ${dataname}.tmp
+fi

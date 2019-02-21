@@ -46,11 +46,12 @@ namespace PADO {
 template <inti BATCH_SIZE = 512>
 class WeightedVertexCentricPLL {
 private:
+	idi num_v_ = 0;
 	// Structure for the type of label
 	struct IndexType {
 		vector<idi> vertices; // Vertices in the label, preresented as temperory ID
 		vector<weighti> distances;
-	} __attribute__((aligned(64)));
+	}; //__attribute__((aligned(64)));
 
 	// Structure for the type of temporary label
 	struct ShortIndex {
@@ -89,9 +90,16 @@ private:
 			vertices_dists.resize(num_roots, WEIGHTI_MAX);
 			reached_roots_que.resize(num_roots);
 		}
-	} __attribute__((aligned(64)));
+	}; //__attribute__((aligned(64)));
+
+	// Structure of the public ordered index for distance queries.
+	struct IndexOrdered {
+		vector<idi> label_id;
+		vector<weighti> label_dists;
+	};
 
 	vector<IndexType> L;
+	vector<IndexOrdered> Index; // Ordered labels for original vertex ID
 
 	void construct(const WeightedGraph &G);
 	inline void vertex_centric_labeling_in_batches(
@@ -202,13 +210,13 @@ private:
 	//uint64_t vc_cc_hit_count = 0;
 //	uint64_t total_candidates_num = 0;
 //	uint64_t set_candidates_num = 0;
-	uint64_t monotone_count = 0;
-	uint64_t checked_count = 0;
-	double initializing_time = 0;
-	double candidating_time = 0;
-	double adding_time = 0;
-	double distance_query_time = 0;
-	double correction_time = 0;
+//	uint64_t monotone_count = 0;
+//	uint64_t checked_count = 0;
+//	double initializing_time = 0;
+//	double candidating_time = 0;
+//	double adding_time = 0;
+//	double distance_query_time = 0;
+//	double correction_time = 0;
 //	double init_index_time = 0;
 //	double init_dist_matrix_time = 0;
 //	double init_start_reset_time = 0;
@@ -237,6 +245,17 @@ public:
 	void switch_labels_to_old_id(
 					const vector<idi> &rank2id,
 					const vector<idi> &rank);
+	void store_index_to_file(
+			const char *filename,
+			const vector<idi> &rank2id);
+	void load_index_from_file(
+			const char *filename);
+	void order_labels(
+			const vector<idi> &rank2id,
+			const vector<idi> &rank);
+	weighti query_distance(
+			idi a,
+			idi b);
 
 }; // class WeightedVertexCentricPLL
 template <inti BATCH_SIZE>
@@ -564,7 +583,7 @@ inline weighti WeightedVertexCentricPLL<BATCH_SIZE>::distance_query(
 					weighti tmp_dist_v_c)
 {
 	//++check_count;
-	distance_query_time -= WallTimer::get_time_mark();
+//	distance_query_time -= WallTimer::get_time_mark();
 	//static const __m512i INF_v = _mm512_set1_epi32(WEIGHTI_MAX);
 	//static const __m512i UNDEF_i32_v = _mm512_undefined_epi32();
 	//static const __m512i LOWEST_BYTE_MASK = _mm512_set1_epi32(0xFF);
@@ -655,7 +674,7 @@ inline weighti WeightedVertexCentricPLL<BATCH_SIZE>::distance_query(
 		}
 		weighti label_dist_v_c = Lv.distances[i_l] + roots_labels_buffer[cand_root_id][r];
 		if (label_dist_v_c <= tmp_dist_v_c) {
-			distance_query_time += WallTimer::get_time_mark();
+//			distance_query_time += WallTimer::get_time_mark();
 			//++l_l_hit_count;
 			return label_dist_v_c;
 		}
@@ -791,7 +810,7 @@ inline weighti WeightedVertexCentricPLL<BATCH_SIZE>::distance_query(
 		if (WEIGHTI_MAX != SI_c.vertices_dists[r_root_id]) {
 			weighti label_dist_v_c = SI_v.vertices_dists[r_root_id] + SI_c.vertices_dists[r_root_id];
 			if (label_dist_v_c <= tmp_dist_v_c) {
-				distance_query_time += WallTimer::get_time_mark();
+//				distance_query_time += WallTimer::get_time_mark();
 				//++vl_cl_hit_count;
 				return label_dist_v_c;
 			}
@@ -943,7 +962,7 @@ inline weighti WeightedVertexCentricPLL<BATCH_SIZE>::distance_query(
 //		}
 //	}
 
-	distance_query_time += WallTimer::get_time_mark();
+//	distance_query_time += WallTimer::get_time_mark();
 	return WEIGHTI_MAX;
 }
 
@@ -1138,9 +1157,9 @@ inline void WeightedVertexCentricPLL<BATCH_SIZE>::filter_out_labels(
 		ShortIndex &SI_v = short_index[v_id];
 
 		// Monotone check
-		++checked_count;
+//		++checked_count;
 		if (SI_v.are_dists_monotone) {
-			++monotone_count;
+//			++monotone_count;
 			SI_v.max_dist_batch = 0;
 			continue;
 		} else {
@@ -1278,7 +1297,7 @@ inline void WeightedVertexCentricPLL<BATCH_SIZE>::vertex_centric_labeling_in_bat
 						idi end_has_new_labels_queue,
 						vector<bool> &has_new_labels)
 {
-	initializing_time -= WallTimer::get_time_mark();
+//	initializing_time -= WallTimer::get_time_mark();
 
 	// At the beginning of a batch, initialize the labels L and distance buffer dist_matrix;
 	initialize_tables(
@@ -1294,12 +1313,12 @@ inline void WeightedVertexCentricPLL<BATCH_SIZE>::vertex_centric_labeling_in_bat
 			has_new_labels);
 
 //	weighti iter = 0; // The iterator, also the distance for current iteration
-	initializing_time += WallTimer::get_time_mark();
+//	initializing_time += WallTimer::get_time_mark();
 
 
 	while (0 != end_active_queue) {
 		// First stage, sending distances.
-		candidating_time -= WallTimer::get_time_mark();
+//		candidating_time -= WallTimer::get_time_mark();
 //		candidating_ins_count.measure_start();
 		// Traverse the active queue, every active vertex sends distances to its neighbors
 		for (idi i_queue = 0; i_queue < end_active_queue; ++i_queue) {
@@ -1318,8 +1337,8 @@ inline void WeightedVertexCentricPLL<BATCH_SIZE>::vertex_centric_labeling_in_bat
 		}
 		end_active_queue = 0; // Set the active_queue empty
 //		candidating_ins_count.measure_stop();
-		candidating_time += WallTimer::get_time_mark();
-		adding_time -= WallTimer::get_time_mark();
+//		candidating_time += WallTimer::get_time_mark();
+//		adding_time -= WallTimer::get_time_mark();
 //		adding_ins_count.measure_start();
 
 		// Traverse vertices in the has_cand_queue to insert labels
@@ -1422,20 +1441,20 @@ inline void WeightedVertexCentricPLL<BATCH_SIZE>::vertex_centric_labeling_in_bat
 		}
 		end_has_cand_queue = 0; // Set the has_cand_queue empty
 //		adding_ins_count.measure_stop();
-		adding_time += WallTimer::get_time_mark();
+//		adding_time += WallTimer::get_time_mark();
 	}
 
 	// Filter out wrong and redundant labels in this batch
-	correction_time -= WallTimer::get_time_mark();
+//	correction_time -= WallTimer::get_time_mark();
 	filter_out_labels(
 			has_new_labels_queue,
 			end_has_new_labels_queue,
 			short_index,
 			roots_start);
-	correction_time += WallTimer::get_time_mark();
+//	correction_time += WallTimer::get_time_mark();
 
 	// Reset dists_table and short_index
-	initializing_time -= WallTimer::get_time_mark();
+//	initializing_time -= WallTimer::get_time_mark();
 	reset_tables(
 			short_index,
 			roots_start,
@@ -1463,7 +1482,7 @@ inline void WeightedVertexCentricPLL<BATCH_SIZE>::vertex_centric_labeling_in_bat
 //			L,
 //			dist_matrix);
 //	init_dist_matrix_time += WallTimer::get_time_mark();
-	initializing_time += WallTimer::get_time_mark();
+//	initializing_time += WallTimer::get_time_mark();
 
 
 //	double total_time = time_can + time_add;
@@ -1476,6 +1495,7 @@ template <inti BATCH_SIZE>
 void WeightedVertexCentricPLL<BATCH_SIZE>::construct(const WeightedGraph &G)
 {
 	idi num_v = G.get_num_v();
+	num_v_ = num_v;
 	L.resize(num_v);
 	idi remainer = num_v % BATCH_SIZE;
 	idi b_i_bound = num_v / BATCH_SIZE;
@@ -1556,14 +1576,14 @@ void WeightedVertexCentricPLL<BATCH_SIZE>::construct(const WeightedGraph &G)
 	setlocale(LC_NUMERIC, ""); // For print large number with comma
 	printf("BATCH_SIZE: %u\n", BATCH_SIZE);
 //	printf("BP_Size: %u\n", BITPARALLEL_SIZE);
-	printf("Initializing: %f %.2f%%\n", initializing_time, initializing_time / time_labeling * 100);
+//	printf("Initializing: %f %.2f%%\n", initializing_time, initializing_time / time_labeling * 100);
 //		printf("\tinit_start_reset_time: %f (%f%%)\n", init_start_reset_time, init_start_reset_time / initializing_time * 100);
 //		printf("\tinit_index_time: %f (%f%%)\n", init_index_time, init_index_time / initializing_time * 100);
 //			printf("\t\tinit_indicators_time: %f (%f%%)\n", init_indicators_time, init_indicators_time / init_index_time * 100);
 //		printf("\tinit_dist_matrix_time: %f (%f%%)\n", init_dist_matrix_time, init_dist_matrix_time / initializing_time * 100);
-	printf("Candidating: %f %.2f%%\n", candidating_time, candidating_time / time_labeling * 100);
-	printf("Adding: %f %.2f%%\n", adding_time, adding_time / time_labeling * 100);
-		printf("distance_query_time: %f %.2f%%\n", distance_query_time, distance_query_time / time_labeling * 100);
+//	printf("Candidating: %f %.2f%%\n", candidating_time, candidating_time / time_labeling * 100);
+//	printf("Adding: %f %.2f%%\n", adding_time, adding_time / time_labeling * 100);
+//		printf("distance_query_time: %f %.2f%%\n", distance_query_time, distance_query_time / time_labeling * 100);
 //		printf("SIMD_utilization: %.2f%% %'lu %'lu\n", 100.0 * simd_util.first / simd_util.second, simd_util.first, simd_util.second);
 //		printf("SIMD_full_ratio: %.2f%% %'lu %'lu\n", 100.0 * simd_full_count.first / simd_full_count.second, simd_full_count.first, simd_full_count.second);
 		//printf("check_count: %'lu\n", check_count);
@@ -1593,8 +1613,8 @@ void WeightedVertexCentricPLL<BATCH_SIZE>::construct(const WeightedGraph &G)
 //	printf("BP_Labeling: "); bp_labeling_ins_count.print();
 //	printf("BP_Checking: "); bp_checking_ins_count.print();
 //	printf("distance_query: "); dist_query_ins_count.print();
-	printf("Correction: %f %.2f%%\n", correction_time, 100.0 * correction_time / time_labeling);
-	printf("Monotone_count: %'lu %.2f%%\n", monotone_count, 100.0 * monotone_count / checked_count);
+//	printf("Correction: %f %.2f%%\n", correction_time, 100.0 * correction_time / time_labeling);
+//	printf("Monotone_count: %'lu %.2f%%\n", monotone_count, 100.0 * monotone_count / checked_count);
 	printf("Total_labeling_time: %.2f seconds\n", time_labeling);
 }
 
@@ -1688,6 +1708,313 @@ inline void WeightedVertexCentricPLL<BATCH_SIZE>::epi32_mask_unpack_into_queue(
 //		base_addr[vindex[i]] = tmp_a[i];
 //	}
 //}
+
+
+template <inti BATCH_SIZE>
+void WeightedVertexCentricPLL<BATCH_SIZE>::store_index_to_file(
+								const char *filename,
+								const vector<idi> &rank2id)
+{
+	ofstream fout(filename);
+	if (!fout.is_open()) {
+		fprintf(stderr, "Error: cannot open file %s\n", filename);
+		exit(EXIT_FAILURE);
+	}
+	idi num_v = rank2id.size();
+	vector< vector< pair<idi, weighti> > > ordered_L(num_v);
+	Index.resize(num_v);
+	// Store into file the number of vertices and the number of bit-parallel roots.
+	fout.write((char *) &num_v, sizeof(num_v));
+
+	// Traverse the L, put them into Index (ordered labels)
+	for (idi v_id = 0; v_id < num_v; ++v_id) {
+		idi new_v = rank2id[v_id];
+		IndexOrdered & Iv = Index[new_v];
+		const IndexType &Lv = L[v_id];
+		auto &OLv = ordered_L[new_v];
+
+		// Normal Labels
+		// Traverse v_id's all existing labels
+//		for (inti b_i = 0; b_i < Lv.batches.size(); ++b_i) {
+//			idi id_offset = Lv.batches[b_i].batch_id * BATCH_SIZE;
+//			idi dist_start_index = Lv.batches[b_i].start_index;
+//			idi dist_bound_index = dist_start_index + Lv.batches[b_i].size;
+//			// Traverse dist_matrix
+//			for (idi dist_i = dist_start_index; dist_i < dist_bound_index; ++dist_i) {
+//				idi v_start_index = Lv.distances[dist_i].start_index;
+//				idi v_bound_index = v_start_index + Lv.distances[dist_i].size;
+//				inti dist = Lv.distances[dist_i].dist;
+//				for (idi v_i = v_start_index; v_i < v_bound_index; ++v_i) {
+//					idi tail = Lv.vertices[v_i] + id_offset;
+////					idi new_tail = rank2id[tail];
+////					new_L[new_v].push_back(make_pair(new_tail, dist));
+//					OLv.push_back(make_pair(tail, dist));
+//				}
+//			}
+//		}
+
+		for (idi l_i = 0; l_i < Lv.vertices.size(); ++l_i) {
+			OLv.push_back(make_pair(Lv.vertices[l_i], Lv.distances[l_i]));
+		}
+		// Sort
+		sort(OLv.begin(), OLv.end());
+		// Store into Index
+		inti size_labels = OLv.size();
+		Iv.label_id.resize(size_labels + 1); // Adding one for Sentinel
+		Iv.label_dists.resize(size_labels + 1); // Adding one for Sentinel
+		for (inti l_i = 0; l_i < size_labels; ++l_i) {
+			Iv.label_id[l_i] = OLv[l_i].first;
+			Iv.label_dists[l_i] = OLv[l_i].second;
+		}
+		Iv.label_id[size_labels] = num_v; // Sentinel
+		Iv.label_dists[size_labels] = WEIGHTI_MAX; // Sentinel
+	}
+
+	uint64_t labels_count = 0;
+	// Traverse the Index, store labels into file
+	for (idi v_id = 0; v_id < num_v; ++v_id) {
+		IndexOrdered & Iv = Index[v_id];
+
+		// Normal Labels
+		// Store Labels into file.
+		idi size_labels = Iv.label_id.size();
+		labels_count += size_labels;
+		fout.write((char *) &size_labels, sizeof(size_labels));
+		for (idi l_i = 0; l_i < size_labels; ++l_i) {
+			idi l = Iv.label_id[l_i];
+			weighti d = Iv.label_dists[l_i];
+			fout.write((char *) &l, sizeof(l));
+			fout.write((char *) &d, sizeof(d));
+		}
+	}
+	printf("Label_size: %'lu mean: %f\n", labels_count, static_cast<double>(labels_count) / num_v);
+	fout.close();
+}
+
+template <inti BATCH_SIZE>
+void WeightedVertexCentricPLL<BATCH_SIZE>::load_index_from_file(
+								const char *filename)
+{
+	ifstream fin(filename);
+	if (!fin.is_open()) {
+		fprintf(stderr, "Error: cannot open file %s\n", filename);
+		exit(EXIT_FAILURE);
+	}
+	idi num_v;
+	// Load from file the number of vertices and the number of bit-parallel roots.
+	fin.read((char *) &num_v, sizeof(num_v));
+	num_v_ = num_v;
+	Index.resize(num_v);
+	uint64_t labels_count = 0;
+	// Load labels for every vertex
+	for (idi v_id = 0; v_id < num_v; ++v_id) {
+		IndexOrdered &Iv = Index[v_id];
+		// Normal Labels
+		// Load Labels from file.
+		idi size_labels;
+		fin.read((char *) &size_labels, sizeof(size_labels));
+		labels_count += size_labels;
+		Iv.label_id.resize(size_labels + 1);
+		Iv.label_dists.resize(size_labels + 1);
+		for (idi l_i = 0; l_i < size_labels; ++l_i) {
+			fin.read((char *) &Iv.label_id[l_i], sizeof(Iv.label_id[l_i]));
+			fin.read((char *) &Iv.label_dists[l_i], sizeof(Iv.label_dists[l_i]));
+		}
+		Iv.label_id[size_labels] = num_v; // Sentinel
+		Iv.label_dists[size_labels] = (weighti) -1; // Sentinel
+	}
+	printf("Label_size_loaded: %'lu mean: %f\n", labels_count, static_cast<double>(labels_count) / num_v);
+	fin.close();
+}
+
+
+template <inti BATCH_SIZE>
+void WeightedVertexCentricPLL<BATCH_SIZE>::order_labels(
+								const vector<idi> &rank2id,
+								const vector<idi> &rank)
+{
+	idi num_v = rank.size();
+	vector< vector< pair<idi, weighti> > > ordered_L(num_v);
+	idi labels_count = 0;
+	Index.resize(num_v);
+
+	// Traverse the L, put them into Index (ordered labels)
+	for (idi v_id = 0; v_id < num_v; ++v_id) {
+		idi new_v = rank2id[v_id];
+		IndexOrdered & Iv = Index[new_v];
+		const IndexType &Lv = L[v_id];
+		auto &OLv = ordered_L[new_v];
+		// Bit-parallel Labels
+
+		// Normal Labels
+		// Traverse v_id's all existing labels
+		for (idi l_i = 0; l_i < Lv.vertices.size(); ++l_i) {
+			OLv.push_back(make_pair(Lv.vertices[l_i], Lv.distances[l_i]));
+		}
+		// Sort
+		sort(OLv.begin(), OLv.end());
+		// Store into Index
+		inti size_labels = OLv.size();
+		labels_count += size_labels;
+		Iv.label_id.resize(size_labels + 1); // Adding one for Sentinel
+		Iv.label_dists.resize(size_labels + 1); // Adding one for Sentinel
+		for (inti l_i = 0; l_i < size_labels; ++l_i) {
+			Iv.label_id[l_i] = OLv[l_i].first;
+			Iv.label_dists[l_i] = OLv[l_i].second;
+		}
+		Iv.label_id[size_labels] = num_v; // Sentinel
+		Iv.label_dists[size_labels] = WEIGHTI_MAX; // Sentinel
+	}
+	printf("Label_size: %u mean: %f\n", labels_count, static_cast<double>(labels_count) / num_v);
+//	// Test
+//	{
+//		puts("Asserting...");
+//		for (idi v_id = 0; v_id < num_v; ++v_id) {
+//			const IndexType &Lv = L[v_id];
+//			const IndexOrdered &Iv = Index[rank2id[v_id]];
+//			// Bit-parallel Labels
+//			for (inti b_i = 0; b_i < BITPARALLEL_SIZE; ++b_i) {
+//				assert(Lv.bp_dist[b_i] == Iv.bp_dist[b_i]);
+//				assert(Lv.bp_sets[b_i][0] == Iv.bp_sets[b_i][0]);
+//				assert(Lv.bp_sets[b_i][1] == Iv.bp_sets[b_i][1]);
+//			}
+//			// Normal Labels
+//			assert(Lv.vertices.size() == Iv.label_id.size());
+//			assert(Lv.vertices.size() == Iv.label_dists.size());
+////			{
+////				inti bound_i = Iv.label_id.size() > 10 ? 10 : Iv.label_id.size();
+////				printf("V %u:", rank2id[v_id]);
+////				for (inti i = 0; i < bound_i; ++i) {
+////					printf(" (%u, %u)", Iv.label_id[i], Iv.label_dists[i]);
+////				}
+////				puts("");
+////			}
+//
+//		}
+//		puts("Asserted.");
+//	}
+}
+
+template <inti BATCH_SIZE>
+weighti WeightedVertexCentricPLL<BATCH_SIZE>::query_distance(
+								idi a,
+								idi b)
+{
+	idi num_v = num_v_;
+	if (a >= num_v || b >= num_v) {
+		return a == b ? 0 : WEIGHTI_MAX;
+	}
+
+//	// A is shorter than B
+//	IndexOrdered &Ia = (Index[a].label_id.size() < Index[b].label_id.size()) ? Index[a] : Index[b];
+//	IndexOrdered &Ib = (Index[a].label_id.size() < Index[b].label_id.size()) ? Index[b] : Index[a];
+
+//	// A is longer than B
+//	IndexOrdered &Ia = (Index[a].label_id.size() > Index[b].label_id.size()) ? Index[a] : Index[b];
+//	IndexOrdered &Ib = (Index[a].label_id.size() > Index[b].label_id.size()) ? Index[b] : Index[a];
+
+	IndexOrdered &Ia = Index[a];
+	IndexOrdered &Ib = Index[b];
+
+//	const IndexOrdered &Ia = Index[a];
+//	const IndexOrdered &Ib = Index[b];
+	inti d = WEIGHTI_MAX;
+
+	_mm_prefetch(&Ia.label_id[0], _MM_HINT_T0);
+	_mm_prefetch(&Ib.label_id[0], _MM_HINT_T0);
+	_mm_prefetch(&Ia.label_dists[0], _MM_HINT_T0);
+	_mm_prefetch(&Ib.label_dists[0], _MM_HINT_T0);
+
+
+	// Normal Labels (ordered)
+//	// Vectorizaed Version
+//	vector<idi> &A = Ia.label_id;
+//	vector<idi> &B = Ib.label_id;
+//	idi len_B = B.size() - 1;
+////	idi len_B = B.size();
+//	idi bound_b_base_i = len_B - (len_B % NUM_P_INT);
+//	idi a_i = 0;
+//	idi b_base_i = 0;
+//	idi len_A = A.size() - 1;
+////	idi len_A = A.size();
+//	++length_larger_than_16.second;
+//	if (len_B >= 16) {
+//		++length_larger_than_16.first;
+//	}
+//	while (a_i < len_A && b_base_i < bound_b_base_i) {
+//		int a = A[a_i];
+//		__m512i a_v = _mm512_set1_epi32(a);
+//
+//		// Packed b
+//		__m512i b_v = _mm512_loadu_epi32(&B[b_base_i]); // @suppress("Function cannot be resolved")
+//		__mmask16 is_equal_m = _mm512_cmpeq_epi32_mask(a_v, b_v);
+//		if (is_equal_m) {
+////			if (a == num_v) {
+////				break;  // Sentinel
+////			}
+//			inti td = Ia.label_dists[a_i] + Ib.label_dists[b_base_i + (idi) (log2(is_equal_m))];
+//			if (td < d) {
+//				d = td;
+//			}
+//
+//			// Advance index
+//			if (is_equal_m & (__mmask16) 0x8000) {
+//				++a_i;
+//				b_base_i += NUM_P_INT;
+//			} else {
+//				a_i += (a < B[b_base_i + NUM_P_INT - 1]) ? 1 : 0;
+//				b_base_i += (B[b_base_i + NUM_P_INT - 1] < a) ? NUM_P_INT : 0;
+//			}
+//		} else {
+//			// Advance index
+//			a_i += (a < B[b_base_i + NUM_P_INT - 1]) ? 1 : 0;
+//			b_base_i += (B[b_base_i + NUM_P_INT - 1] < a) ? NUM_P_INT : 0;
+//		}
+//	}
+//	while (a_i < len_A && b_base_i < len_B) {
+//		if (A[a_i] == B[b_base_i]) {
+////			if (a == num_v) {
+////				break;  // Sentinel
+////			}
+//			inti td = Ia.label_dists[a_i] + Ib.label_dists[b_base_i];
+//			if (td < d) {
+//				d = td;
+//			}
+//
+//			// Advance index
+//			++a_i;
+//			++b_base_i;
+//		} else {
+//			// Advance index
+//			a_i += (A[a_i] < B[b_base_i]) ? 1 : 0;
+//			b_base_i += (B[b_base_i] < A[a_i]) ? 1 : 0;
+//		}
+//	}
+
+	// Sequential Version
+	for (idi i1 = 0, i2 = 0; ; ) {
+		idi v1 = Ia.label_id[i1], v2 = Ib.label_id[i2];
+		if (v1 == v2) {
+			if (v1 == num_v) {
+				break;  // Sentinel
+			}
+			inti td = Ia.label_dists[i1] + Ib.label_dists[i2];
+			if (td < d) {
+				d = td;
+			}
+			++i1;
+			++i2;
+		} else {
+			i1 += v1 < v2 ? 1 : 0;
+			i2 += v1 > v2 ? 1 : 0;
+		}
+	}
+
+	if (d >= WEIGHTI_MAX - 2) {
+		d = WEIGHTI_MAX;
+	}
+	return d;
+}
 
 template <inti BATCH_SIZE>
 void WeightedVertexCentricPLL<BATCH_SIZE>::switch_labels_to_old_id(

@@ -80,6 +80,9 @@ public:
 	{
 		idi count = 0;
 		for (idi v_i = 0; v_i < num_v; ++v_i) {
+//			if (1 == out_degrees[v_i]) {
+//				++count;
+//			}
 			if (1 == out_degrees[v_i] || 2 == out_degrees[v_i]) {
 				++count;
 			}

@@ -79,5 +79,5 @@ if __name__ == '__main__':
 	# create_graph(int(sys.argv[1]))
 	# adj_matrix_to_edgelist(sys.argv[1])
 	# query_input()
-#     add_weights_to_graph()
-	random_labels()
+     add_weights_to_graph()
+	# random_labels()
