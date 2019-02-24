@@ -337,9 +337,14 @@ inline void VertexCentricPLLVec<BATCH_SIZE>::bit_parallel_labeling(
 
 		int ns = 0; // number of selected neighbor, default 64
 		// the edge of one vertex in G is ordered decreasingly to rank, lower rank first, so here need to traverse edges backward
-		idi i_bound = G.vertices[r] - 1;
-		idi i_start = i_bound + G.out_degrees[r];
-		for (idi i = i_start; i > i_bound; --i) {
+		// There was a bug cost countless time: the unsigned iterator i might decrease to zero and then flip to the INF.
+//		idi i_bound = G.vertices[r] - 1;
+//		idi i_start = i_bound + G.out_degrees[r];
+//		for (idi i = i_start; i > i_bound; --i) {}
+		idi d_i_bound = G.out_degrees[r];
+		idi i_start = G.vertices[r] + d_i_bound - 1;
+		for (idi d_i = 0; d_i < d_i_bound; ++d_i) {
+			idi i = i_start - d_i;
 			idi v = G.out_edges[i];
 			if (!used_bp_roots[v]) {
 				used_bp_roots[v] = true;
@@ -1793,7 +1798,7 @@ void VertexCentricPLLVec<BATCH_SIZE>::store_index_to_file(
 
 		// Normal Labels
 		// Store Labels into file.
-		idi size_labels = Iv.label_id.size();
+		idi size_labels = Iv.label_id.size() - 1; // Remove the Sentinel
 		labels_count += size_labels;
 		fout.write((char *) &size_labels, sizeof(size_labels));
 		for (idi l_i = 0; l_i < size_labels; ++l_i) {

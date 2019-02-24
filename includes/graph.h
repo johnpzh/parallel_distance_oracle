@@ -24,7 +24,6 @@ using std::istringstream;
 using std::make_pair;
 using std::pair;
 using std::sort;
-using std::stable_sort;
 using std::max;
 
 namespace PADO
@@ -156,11 +155,15 @@ void Graph::construct(const vector< pair<idi, idi> > &edge_list)
 // Rank according to degrees
 vector<idi> Graph::make_rank() const
 {
-	vector< pair<idi, idi> > degree2id;
+	vector< pair<double, idi> > degree2id;
+	//vector< pair<idi, idi> > degree2id;
 	for (idi v = 0; v < num_v; ++v) {
-		degree2id.push_back(make_pair(out_degrees[v], v));
+		// Add a random value here to diffuse nearby vertices, according to PLL's implementation.
+		// Somehow it decreases the label size a little bit.
+		degree2id.push_back(make_pair(out_degrees[v] + (double) rand() / RAND_MAX, v));
+		//degree2id.push_back(make_pair(out_degrees[v], v));
 	}
-	stable_sort(degree2id.rbegin(), degree2id.rend());
+	sort(degree2id.rbegin(), degree2id.rend());
 	vector<idi> rank(num_v);
 	for (idi r = 0; r < num_v; ++r) {
 		rank[degree2id[r].second] = r;
@@ -347,11 +350,15 @@ void WeightedGraph::construct(
 // Rank according to degrees
 vector<idi> WeightedGraph::make_rank()
 {
-	vector< pair<idi, idi> > degree2id;
+	vector< pair<double, idi> > degree2id;
+	//vector< pair<idi, idi> > degree2id;
 	for (idi v = 0; v < num_v; ++v) {
-		degree2id.push_back(make_pair(out_degrees[v], v));
+		// Add a random value here to diffuse nearby vertices, according to PLL's implementation.
+		// Somehow it decreases the label size a little bit.
+		degree2id.push_back(make_pair(out_degrees[v] + (double) rand() / RAND_MAX, v));
+		//degree2id.push_back(make_pair(out_degrees[v], v));
 	}
-	stable_sort(degree2id.rbegin(), degree2id.rend());
+	sort(degree2id.rbegin(), degree2id.rend());
 	vector<idi> rank(num_v);
 	for (idi r = 0; r < num_v; ++r) {
 		rank[degree2id[r].second] = r;

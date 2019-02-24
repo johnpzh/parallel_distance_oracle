@@ -315,9 +315,14 @@ inline void ParaVertexCentricPLL<BATCH_SIZE>::bit_parallel_labeling(
 
 			int ns = 0; // number of selected neighbor, default 64
 			// the edge of one vertex in G is ordered decreasingly to rank, lower rank first, so here need to traverse edges backward
-			idi i_bound = G.vertices[r] - 1;
-			idi i_start = i_bound + G.out_degrees[r];
-			for (idi i = i_start; i > i_bound; --i) {
+			// There was a bug cost countless time: the unsigned iterator i might decrease to zero and then flip to the INF.
+	//		idi i_bound = G.vertices[r] - 1;
+	//		idi i_start = i_bound + G.out_degrees[r];
+	//		for (idi i = i_start; i > i_bound; --i) {}
+			idi d_i_bound = G.out_degrees[r];
+			idi i_start = G.vertices[r] + d_i_bound - 1;
+			for (idi d_i = 0; d_i < d_i_bound; ++d_i) {
+				idi i = i_start - d_i;
 				idi v = G.out_edges[i];
 				if (!used_bp_roots[v]) {
 					used_bp_roots[v] = 1;
@@ -416,9 +421,14 @@ inline void ParaVertexCentricPLL<BATCH_SIZE>::bit_parallel_labeling(
 
 			int ns = 0; // number of selected neighbor, default 64
 			// the edge of one vertex in G is ordered decreasingly to rank, lower rank first, so here need to traverse edges backward
-			idi i_bound = G.vertices[r] - 1;
-			idi i_start = i_bound + G.out_degrees[r];
-			for (idi i = i_start; i > i_bound; --i) {
+			// There was a bug cost countless time: the unsigned iterator i might decrease to zero and then flip to the INF.
+	//		idi i_bound = G.vertices[r] - 1;
+	//		idi i_start = i_bound + G.out_degrees[r];
+	//		for (idi i = i_start; i > i_bound; --i) {}
+			idi d_i_bound = G.out_degrees[r];
+			idi i_start = G.vertices[r] + d_i_bound - 1;
+			for (idi d_i = 0; d_i < d_i_bound; ++d_i) {
+				idi i = i_start - d_i;
 				idi v = G.out_edges[i];
 				if (!used_bp_roots[v]) {
 					used_bp_roots[v] = 1;
@@ -1561,13 +1571,13 @@ void ParaVertexCentricPLL<BATCH_SIZE>::construct(const Graph &G)
 //	initializing_time += WallTimer::get_time_mark();
 	double time_labeling = -WallTimer::get_time_mark();
 
-	double bp_labeling_time = -WallTimer::get_time_mark();
+	//double bp_labeling_time = -WallTimer::get_time_mark();
 //	printf("BP labeling...\n"); //test
 	bit_parallel_labeling(
 						G,
 						L,
 						used_bp_roots);
-	bp_labeling_time += WallTimer::get_time_mark();
+	//bp_labeling_time += WallTimer::get_time_mark();
 
 
 	for (idi b_i = 0; b_i < b_i_bound; ++b_i) {
@@ -1635,7 +1645,7 @@ void ParaVertexCentricPLL<BATCH_SIZE>::construct(const Graph &G)
 
 	// Test
 	printf("Threads: %u Batch_size: %u\n", NUM_THREADS, BATCH_SIZE);
-	printf("BP_labeling: %.2f %.2f%%\n", bp_labeling_time, bp_labeling_time / time_labeling * 100);
+	//printf("BP_labeling: %.2f %.2f%%\n", bp_labeling_time, bp_labeling_time / time_labeling * 100);
 	printf("BP_Roots_Size: %u\n", BITPARALLEL_SIZE);
 //	printf("Initializing: %.2f %.2f%%\n", initializing_time, initializing_time / time_labeling * 100);
 //		printf("\tinit_start_reset_time: %f (%f%%)\n", init_start_reset_time, init_start_reset_time / initializing_time * 100);
@@ -1941,7 +1951,7 @@ void ParaVertexCentricPLL<BATCH_SIZE>::store_index_to_file(
 
 		// Normal Labels
 		// Store Labels into file.
-		idi size_labels = Iv.label_id.size();
+		idi size_labels = Iv.label_id.size() - 1; // Remove the Sentinel
 		labels_count += size_labels;
 		fout.write((char *) &size_labels, sizeof(size_labels));
 		for (idi l_i = 0; l_i < size_labels; ++l_i) {

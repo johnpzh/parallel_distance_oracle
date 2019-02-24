@@ -1777,7 +1777,7 @@ void WeightedVertexCentricPLLVec<BATCH_SIZE>::store_index_to_file(
 
 		// Normal Labels
 		// Store Labels into file.
-		idi size_labels = Iv.label_id.size();
+		idi size_labels = Iv.label_id.size() - 1; // Remove the Sentinel
 		labels_count += size_labels;
 		fout.write((char *) &size_labels, sizeof(size_labels));
 		for (idi l_i = 0; l_i < size_labels; ++l_i) {
