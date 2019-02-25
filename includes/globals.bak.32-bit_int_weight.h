@@ -28,16 +28,16 @@ namespace PADO {
 typedef uint32_t idi; // unsigned int
 //typedef int weighti;
 typedef uint8_t weighti;
-//typedef int32_t weightiLarge;
-typedef int16_t weightiLarge;
+typedef int32_t weightiLarge;
+//typedef int16_t weightiLarge;
 typedef uint8_t smalli;
 typedef uint32_t inti;
 
 
 //const int WEIGHTI_MAX = INT_MAX;
 const uint8_t WEIGHTI_MAX = UCHAR_MAX;
-//const int32_t WEIGHTILARGE_MAX = INT_MAX;
-const int16_t WEIGHTILARGE_MAX = SHRT_MAX;
+const int32_t WEIGHTILARGE_MAX = INT_MAX;
+//const int16_t WEIGHTILARGE_MAX = USHRT_MAX;
 const uint8_t SMALLI_MAX = UCHAR_MAX;
 
 // AVX-512 constant variables
@@ -70,8 +70,6 @@ inline bool CAS(void *ptr, V_T old_val, V_T new_val)
 {
 	if (1 == sizeof(V_T)) {
 		return __sync_bool_compare_and_swap((uint8_t *) ptr, *((uint8_t *) &old_val), *((uint8_t *) &new_val));
-	} else if (2 == sizeof(V_T)) {
-		return __sync_bool_compare_and_swap((uint16_t *) ptr, *((uint16_t *) &old_val), *((uint16_t *) &new_val));
 	} else if (4 == sizeof(V_T)) {
 		return __sync_bool_compare_and_swap((uint32_t *) ptr, *((uint32_t *) &old_val), *((uint32_t *) &new_val));
 	} else if (8 == sizeof(V_T)) {

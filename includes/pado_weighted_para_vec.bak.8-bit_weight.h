@@ -3,11 +3,10 @@
  *
  *  Created on: Dec 18, 2018
  *      Author: Zhen Peng
- *    Modified: 02/24/2019: change weight type from 8-bit int to 32-bit int.
  */
 
-#ifndef INCLUDES_PADO_WEIGHTED_UNV_UNP_H_
-#define INCLUDES_PADO_WEIGHTED_UNV_UNP_H_
+#ifndef INCLUDES_PADO_WEIGHTED_PARA_VEC_H_
+#define INCLUDES_PADO_WEIGHTED_PARA_VEC_H_
 
 #include <vector>
 #include <unordered_map>
@@ -21,6 +20,7 @@
 #include <cmath>
 #include "globals.h"
 #include "graph.h"
+#include "omp.h"
 
 using std::vector;
 using std::unordered_map;
@@ -32,26 +32,27 @@ using std::fill;
 
 namespace PADO {
 
+//inti NUM_THREADS = 10;
 //const inti BATCH_SIZE = 1024; // The size for regular batch and bit array.
-//	inti BATCH_SIZE = 512; // Here is for the whole graph, so make it non-const
+//inti BATCH_SIZE = 512; // Here is for the whole graph, so make it non-const
 //const inti BITPARALLEL_SIZE = 50; // Weighted graphs cannot use Bit Parallel technique
 
-//	// AVX-512 constant variables
-//	static const inti NUM_P_INT = 16;
-//	static const __m512i INF_v = _mm512_set1_epi32(WEIGHTI_MAX);
-//	static const __m512i UNDEF_i32_v = _mm512_undefined_epi32();
-//	static const __m512i LOWEST_BYTE_MASK = _mm512_set1_epi32(0xFF);
-//	static const __m128i INF_v_128i = _mm_set1_epi8(-1);
+//// AVX-512 constant variables
+//const inti NUM_P_INT = 16;
+//const __m512i INF_v = _mm512_set1_epi32(WEIGHTI_MAX);
+//const __m512i UNDEF_i32_v = _mm512_undefined_epi32();
+//const __m512i LOWEST_BYTE_MASK = _mm512_set1_epi32(0xFF);
+//const __m128i INF_v_128i = _mm_set1_epi8(-1);
 
 //// Batch based processing, 09/11/2018
 template <inti BATCH_SIZE = 512>
-class WeightedVertexCentricPLL {
+class WeightedParaVertexCentricPLLVec {
 private:
 	idi num_v_ = 0;
 	// Structure for the type of label
 	struct IndexType {
 		vector<idi> vertices; // Vertices in the label, preresented as temperory ID
-		vector<weightiLarge> distances;
+		vector<weighti> distances;
 	}; //__attribute__((aligned(64)));
 
 	// Structure for the type of temporary label
@@ -60,14 +61,14 @@ private:
 		vector<inti> candidates_que;
 		inti end_candidates_que = 0;
 		// Use a array to store distances of candidates; length of roots_size
-		vector<weightiLarge> candidates_dists; // record the distances to candidates. If candidates_dists[c] = INF, then c is NOT a candidate
+		vector<weighti> candidates_dists; // record the distances to candidates. If candidates_dists[c] = INF, then c is NOT a candidate
 			// The candidates_dists is also used for distance query.
 
 		// Use a queue to store temporary labels in this batch; use it so don't need to traverse vertices_dists.
 		vector<inti> vertices_que; // Elements in vertices_que are roots_id, not real id
 		idi end_vertices_que = 0;
 		// Use an array to store distances to roots; length of roots_size
-		vector<weightiLarge> vertices_dists; // labels_table
+		vector<weighti> vertices_dists; // labels_table
 
 		// Usa a queue to record which roots have reached this vertex in this batch.
 		// It is used for reset the dists_table
@@ -79,16 +80,16 @@ private:
 		idi end_last_new_roots = 0;
 
 		// Monotone checker
-		bool are_dists_monotone = true;
-		weightiLarge max_dist_batch = 0;
+		bool are_dists_monotone = 1;
+		weighti max_dist_batch = 0;
 
 		ShortIndex() = default;
 		explicit ShortIndex(idi num_roots) {
 			candidates_que.resize(num_roots);
-			candidates_dists.resize(num_roots, WEIGHTILARGE_MAX);
+			candidates_dists.resize(num_roots, WEIGHTI_MAX);
 			last_new_roots.resize(num_roots);
 			vertices_que.resize(num_roots);
-			vertices_dists.resize(num_roots, WEIGHTILARGE_MAX);
+			vertices_dists.resize(num_roots, WEIGHTI_MAX);
 			reached_roots_que.resize(num_roots);
 		}
 	}; //__attribute__((aligned(64)));
@@ -96,7 +97,7 @@ private:
 	// Structure of the public ordered index for distance queries.
 	struct IndexOrdered {
 		vector<idi> label_id;
-		vector<weightiLarge> label_dists;
+		vector<weighti> label_dists;
 	};
 
 	vector<IndexType> L;
@@ -111,19 +112,19 @@ private:
 			vector<IndexType> &L,
 			vector<idi> &active_queue,
 			idi end_active_queue,
-			vector<bool> &is_active,
+			vector<uint8_t> &is_active,
 			vector<idi> &has_cand_queue,
 			idi end_has_cand_queue,
-			vector<bool> &has_candidates,
-			vector< vector<weightiLarge> > &dists_table,
-			vector< vector<weightiLarge> > &roots_labels_buffer,
+			vector<uint8_t> &has_candidates,
+			vector< vector<weighti> > &dists_table,
+			vector< vector<weighti> > &roots_labels_buffer,
 			vector<ShortIndex> &short_index,
 			vector<idi> &has_new_labels_queue,
 			idi end_has_new_labels_queue,
-			vector<bool> &has_new_labels);
+			vector<uint8_t> &has_new_labels);
 	inline void initialize_tables(
 			vector<ShortIndex> &short_index,
-			vector< vector<weightiLarge> > &roots_labels_buffer,
+			vector< vector<weighti> > &roots_labels_buffer,
 			vector<idi> &active_queue,
 			idi &end_active_queue,
 			idi roots_start,
@@ -131,31 +132,34 @@ private:
 			vector<IndexType> &L,
 			vector<idi> &has_new_labels_queue,
 			idi &end_has_new_labels_queue,
-			vector<bool> &has_new_labels);
+			vector<uint8_t> &has_new_labels);
 	inline void send_messages(
 			idi v_head,
 			idi roots_start,
 			const WeightedGraph &G,
-			vector< vector<weightiLarge> > &dists_table,
+			vector< vector<weighti> > &dists_table,
 			vector<ShortIndex> &short_index,
-			vector<idi> &has_cand_queue,
-			idi &end_has_cand_queue,
-			vector<bool> &has_candidates);
-	inline weightiLarge distance_query(
+//			vector<idi> &has_cand_queue,
+//			idi &end_has_cand_queue,
+			vector<idi> &tmp_has_cand_queue,
+			idi &size_tmp_has_cand_queue,
+			idi offset_tmp_queue,
+			vector<uint8_t> &has_candidates);
+	inline weighti distance_query(
 			idi v_id,
 			idi cand_root_id,
-			const vector< vector<weightiLarge> > &roots_labels_buffer,
+			const vector< vector<weighti> > &roots_labels_buffer,
 			const vector<ShortIndex> &short_index,
 			const vector<IndexType> &L,
 			idi roots_start,
-			weightiLarge tmp_dist_v_c);
+			weighti tmp_dist_v_c);
 	inline void reset_tables(
 			vector<ShortIndex> &short_index,
 			idi roots_start,
 			inti roots_size,
 			const vector<IndexType> &L,
-			vector< vector<weightiLarge> > &dists_table,
-			vector< vector<weightiLarge> > &roots_labels_buffer,
+			vector< vector<weighti> > &dists_table,
+			vector< vector<weighti> > &roots_labels_buffer,
 			const vector<idi> &has_new_labels_queue,
 			idi end_has_new_labels_queue);
 	inline void update_index(
@@ -164,30 +168,32 @@ private:
 			idi roots_start,
 			vector<idi> &has_new_labels_queue,
 			idi &end_has_new_labels_queue,
-			vector<bool> &has_new_labels);
-	inline void send_back(
-			idi s,
-			idi r_root_id,
-			const WeightedGraph &G,
-			vector< vector<weightiLarge> > &dists_table,
-			vector<ShortIndex> &short_index,
-			idi roots_start);
+			vector<uint8_t> &has_new_labels);
+	// DEPRECATED!
+//	inline void send_back(
+//			idi s,
+//			idi r_root_id,
+//			const WeightedGraph &G,
+//			vector< vector<weighti> > &dists_table,
+//			vector<ShortIndex> &short_index,
+//			idi roots_start);
 	inline void filter_out_labels(
 			const vector<idi> &has_new_labels_queue,
 			idi end_has_new_labels_queue,
 			vector<ShortIndex> &short_index,
 			idi roots_start);
+	// Some AVX512 interfaces
 	inline void int_i32scatter_epi8(
-			uint8_t *base_addr,
+			weighti *base_addr, 
 			__m512i vindex, 
-			uint8_t a);
+			weighti a);
 	inline void int_mask_i32scatter_epi8(
-			uint8_t *base_addr,
+			weighti *base_addr, 
 			__mmask16 k, 
 			__m512i vindex, 
-			uint8_t a);
+			weighti a);
 	inline void epi32_mask_i32scatter_epi8(
-			uint8_t *base_addr,
+			weighti *base_addr,
 			__mmask16 mask,
 			__m512i vindex,
 			__m512i a);
@@ -196,6 +202,22 @@ private:
 			inti &end_queue,
 			__mmask16 mask,
 			__m512i a);
+	// Some parallel interfaces
+	inline idi prefix_sum_for_offsets(
+				vector<idi> &offsets);
+	template <typename T>
+	inline void collect_into_queue(
+				vector<T> &tmp_queue,
+				vector<idi> &offsets_tmp_queue, // the locations in tmp_queue for writing from tmp_queue
+				vector<idi> &offsets_queue, // the locations in queue for writing into queue.
+				idi num_elements, // total number of elements which need to be added from tmp_queue to queue
+				vector<T> &queue,
+				idi &end_queue);
+	template <typename T, typename Int>
+	inline void TS_enqueue(
+				vector<T> &queue,
+				Int &end_queue,
+				const T &e);
 
 
 	// Statistics
@@ -235,10 +257,10 @@ private:
 
 
 public:
-	WeightedVertexCentricPLL() = default;
-	WeightedVertexCentricPLL(const WeightedGraph &G);
+	WeightedParaVertexCentricPLLVec() = default;
+	WeightedParaVertexCentricPLLVec(const WeightedGraph &G);
 
-	weightiLarge query(
+	weighti query(
 			idi u,
 			idi v);
 
@@ -254,13 +276,14 @@ public:
 	void order_labels(
 			const vector<idi> &rank2id,
 			const vector<idi> &rank);
-	weightiLarge query_distance(
+	weighti query_distance(
 			idi a,
 			idi b);
 
-}; // class WeightedVertexCentricPLL
+}; // class WeightedParaVertexCentricPLLVec
+
 template <inti BATCH_SIZE>
-WeightedVertexCentricPLL<BATCH_SIZE>::WeightedVertexCentricPLL(const WeightedGraph &G)
+WeightedParaVertexCentricPLLVec<BATCH_SIZE>::WeightedParaVertexCentricPLLVec(const WeightedGraph &G)
 {
 	construct(G);
 }
@@ -270,9 +293,9 @@ WeightedVertexCentricPLL<BATCH_SIZE>::WeightedVertexCentricPLL(const WeightedGra
 // traverse roots' labels to initialize distance buffer;
 // unset flag arrays is_active and got_labels
 template <inti BATCH_SIZE>
-inline void WeightedVertexCentricPLL<BATCH_SIZE>::initialize_tables(
+inline void WeightedParaVertexCentricPLLVec<BATCH_SIZE>::initialize_tables(
 			vector<ShortIndex> &short_index,
-			vector< vector<weightiLarge> > &roots_labels_buffer,
+			vector< vector<weighti> > &roots_labels_buffer,
 			vector<idi> &active_queue,
 			idi &end_active_queue,
 			idi roots_start,
@@ -280,13 +303,14 @@ inline void WeightedVertexCentricPLL<BATCH_SIZE>::initialize_tables(
 			vector<IndexType> &L,
 			vector<idi> &has_new_labels_queue,
 			idi &end_has_new_labels_queue,
-			vector<bool> &has_new_labels)
+			vector<uint8_t> &has_new_labels)
 {
 	idi roots_bound = roots_start + roots_size;
 //	init_dist_matrix_time -= WallTimer::get_time_mark();
 	// Distance Tables
 	{
 		// Traverse all roots
+#pragma omp parallel for
 		for (idi r_root_id = 0; r_root_id < roots_size; ++r_root_id) {
 			idi r_real_id = r_root_id + roots_start;
 			const IndexType &Lr = L[r_real_id];
@@ -318,6 +342,7 @@ inline void WeightedVertexCentricPLL<BATCH_SIZE>::initialize_tables(
 //	init_index_time -= WallTimer::get_time_mark();
 	// Short_index
 	{
+#pragma omp parallel for
 		for (idi r_real_id = roots_start; r_real_id < roots_bound; ++r_real_id) {
 			ShortIndex &SI_r = short_index[r_real_id];
 			idi r_root_id = r_real_id - roots_start;
@@ -343,21 +368,21 @@ inline void WeightedVertexCentricPLL<BATCH_SIZE>::initialize_tables(
 	{
 		for (idi r_real_id = roots_start; r_real_id < roots_bound; ++r_real_id) {
 			has_new_labels_queue[end_has_new_labels_queue++] = r_real_id;
-			has_new_labels[r_real_id] = true;
+			has_new_labels[r_real_id] = 1;
 		}
 	}
 }
 
 //// Function that pushes v_head's labels to v_head's every neighbor
-//inline void WeightedVertexCentricPLL::send_messages(
+//inline void WeightedParaVertexCentricPLLVec::send_messages(
 //				idi v_head,
 //				idi roots_start,
 //				const WeightedGraph &G,
-//				vector< vector<weightiLarge> > &dists_table,
+//				vector< vector<weighti> > &dists_table,
 //				vector<ShortIndex> &short_index,
 //				vector<idi> &has_cand_queue,
 //				idi &end_has_cand_queue,
-//				vector<bool> &has_candidates)
+//				vector<uint8_t> &has_candidates)
 //{
 //	ShortIndex &SI_v_head = short_index[v_head];
 //	// Traverse v_head's last inserted labels
@@ -375,18 +400,18 @@ inline void WeightedVertexCentricPLL<BATCH_SIZE>::initialize_tables(
 //				// v_tail has higher rank, and so do those following neighbors
 //				break;
 //			}
-//			weightiLarge weight_h_t = G.out_weights[e_i];
+//			weighti weight_h_t = G.out_weights[e_i];
 //			ShortIndex &SI_v_tail = short_index[v_tail];
-//			weightiLarge tmp_dist_r_t = dist_r_h + weighti_h_t;
+//			weighti tmp_dist_r_t = dist_r_h + weighti_h_t;
 //			if (tmp_dist_r_t < dists_table[r_root_id][v_tail] &&
 //					tmp_dist_r_t < SI_v_tail.candidates_dists[r_root_id]) {
 //				// Mark r_root_id as a candidate of v_tail
-//				if (WEIGHTILARGE_MAX == SI_v_tail.candidates_dists[r_root_id]) {
+//				if (WEIGHTI_MAX == SI_v_tail.candidates_dists[r_root_id]) {
 //					// Add r_root_id into v_tail's candidates_que
 //					SI_v_tail.candidates_que[SI_v_tail.end_candidates_que++] = r_root_id;
 //				}
 //				SI_v_tail.candidates_dists[r_root_id] = tmp_dist_r_t;
-//				if (WEIGHTILARGE_MAX == dists_table[r_root_id][v_tail]) {
+//				if (WEIGHTI_MAX == dists_table[r_root_id][v_tail]) {
 //					// Add r_root_id into v_tail's reached_roots_que so to reset dists_table[r_root_id][v_tail] at the end of this batch
 //					SI_v_tail.reached_roots_que[SI_v_tail.end_reached_roots_que++] = r_root_id;
 //				}
@@ -398,15 +423,18 @@ inline void WeightedVertexCentricPLL<BATCH_SIZE>::initialize_tables(
 
 // Function that pushes v_head's labels to v_head's every neighbor
 template <inti BATCH_SIZE>
-inline void WeightedVertexCentricPLL<BATCH_SIZE>::send_messages(
+inline void WeightedParaVertexCentricPLLVec<BATCH_SIZE>::send_messages(
 				idi v_head,
 				idi roots_start,
 				const WeightedGraph &G,
-				vector< vector<weightiLarge> > &dists_table,
+				vector< vector<weighti> > &dists_table,
 				vector<ShortIndex> &short_index,
-				vector<idi> &has_cand_queue,
-				idi &end_has_cand_queue,
-				vector<bool> &has_candidates)
+//				vector<idi> &has_cand_queue,
+//				idi &end_has_cand_queue,
+				vector<idi> &tmp_has_cand_queue,
+				idi &size_tmp_has_cand_queue,
+				idi offset_tmp_queue,
+				vector<uint8_t> &has_candidates)
 {
 	ShortIndex &SI_v_head = short_index[v_head];
 	// Traverse v_head's every neighbor v_tail
@@ -417,7 +445,7 @@ inline void WeightedVertexCentricPLL<BATCH_SIZE>::send_messages(
 		if (v_tail <= roots_start) { // v_tail has higher rank than any roots, then no roots can push new labels to it.
 			break;
 		}
-		weightiLarge weight_h_t = G.out_weights[e_i];
+		weighti weight_h_t = G.out_weights[e_i];
 		ShortIndex &SI_v_tail = short_index[v_tail];
 		bool got_candidates = false; // A flag indicates if v_tail got new candidates.
 		// Traverse v_head's last inserted labels
@@ -435,19 +463,19 @@ inline void WeightedVertexCentricPLL<BATCH_SIZE>::send_messages(
 //			if (!is_r_higher_ranked_m) {
 //				continue;
 //			}
-//			__m512i dists_r_h_v = _mm512_mask_i32gather_epi32(INF_v, is_r_higher_ranked_m, r_root_id_v, &SI_v_head.vertices_dists[0], sizeof(weightiLarge));
+//			__m512i dists_r_h_v = _mm512_mask_i32gather_epi32(INF_v, is_r_higher_ranked_m, r_root_id_v, &SI_v_head.vertices_dists[0], sizeof(weighti));
 //			dists_r_h_v = _mm512_mask_and_epi32(INF_v, is_r_higher_ranked_m, dists_r_h_v, LOWEST_BYTE_MASK);
 //			// Dist from r to tail (label dist)
 //			__m512i tmp_dist_r_t_v = _mm512_mask_add_epi32(INF_v, is_r_higher_ranked_m, dists_r_h_v, weight_h_t_v);
 //			// Dist from r to tail (table dist)
-//			__m512i table_dists_r_t_v = _mm512_mask_i32gather_epi32(INF_v, is_r_higher_ranked_m, r_root_id_v, &dists_table[v_tail][0], sizeof(weightiLarge));
+//			__m512i table_dists_r_t_v = _mm512_mask_i32gather_epi32(INF_v, is_r_higher_ranked_m, r_root_id_v, &dists_table[v_tail][0], sizeof(weighti));
 //			table_dists_r_t_v = _mm512_mask_and_epi32(INF_v, is_r_higher_ranked_m, table_dists_r_t_v, LOWEST_BYTE_MASK);
 //			__mmask16 is_tmp_dist_shorter_m = _mm512_mask_cmplt_epi32_mask(is_r_higher_ranked_m, tmp_dist_r_t_v, table_dists_r_t_v);
 //			if (!is_tmp_dist_shorter_m) {
 //				continue;
 //			}
 //			// Dist from r to tail (candidate dist)
-//			__m512i cand_dists_r_t_v = _mm512_mask_i32gather_epi32(INF_v, is_tmp_dist_shorter_m, r_root_id_v, &SI_v_tail.candidates_dists[0], sizeof(weightiLarge));
+//			__m512i cand_dists_r_t_v = _mm512_mask_i32gather_epi32(INF_v, is_tmp_dist_shorter_m, r_root_id_v, &SI_v_tail.candidates_dists[0], sizeof(weighti));
 //			cand_dists_r_t_v = _mm512_mask_and_epi32(INF_v, is_tmp_dist_shorter_m, cand_dists_r_t_v, LOWEST_BYTE_MASK);
 //			is_tmp_dist_shorter_m = _mm512_mask_cmplt_epi32_mask(is_tmp_dist_shorter_m, tmp_dist_r_t_v, cand_dists_r_t_v);
 //			if (!is_tmp_dist_shorter_m) {
@@ -478,7 +506,7 @@ inline void WeightedVertexCentricPLL<BATCH_SIZE>::send_messages(
 //					is_tmp_dist_shorter_m,
 //					r_root_id_v,
 //					tmp_dist_r_t_v); // tmp_dist_r_t_v to dists_table[v_tail]
-//			got_candidates = true;
+//			got_candidates = 1;
 //		}
 //		if (remainder_simd) {
 //			__mmask16 in_m = (__mmask16) ((uint16_t) 0xFFFF >> (NUM_P_INT - remainder_simd));
@@ -490,19 +518,19 @@ inline void WeightedVertexCentricPLL<BATCH_SIZE>::send_messages(
 //			if (!is_r_higher_ranked_m) {
 //				continue;
 //			}
-//			__m512i dists_r_h_v = _mm512_mask_i32gather_epi32(INF_v, is_r_higher_ranked_m, r_root_id_v, &SI_v_head.vertices_dists[0], sizeof(weightiLarge));
+//			__m512i dists_r_h_v = _mm512_mask_i32gather_epi32(INF_v, is_r_higher_ranked_m, r_root_id_v, &SI_v_head.vertices_dists[0], sizeof(weighti));
 //			dists_r_h_v = _mm512_mask_and_epi32(INF_v, is_r_higher_ranked_m, dists_r_h_v, LOWEST_BYTE_MASK);
 //			// Dist from r to tail (label dist)
 //			__m512i tmp_dist_r_t_v = _mm512_mask_add_epi32(INF_v, is_r_higher_ranked_m, dists_r_h_v, weight_h_t_v);
 //			// Dist from r to tail (table dist)
-//			__m512i table_dists_r_t_v = _mm512_mask_i32gather_epi32(INF_v, is_r_higher_ranked_m, r_root_id_v, &dists_table[v_tail][0], sizeof(weightiLarge));
+//			__m512i table_dists_r_t_v = _mm512_mask_i32gather_epi32(INF_v, is_r_higher_ranked_m, r_root_id_v, &dists_table[v_tail][0], sizeof(weighti));
 //			table_dists_r_t_v = _mm512_mask_and_epi32(INF_v, is_r_higher_ranked_m, table_dists_r_t_v, LOWEST_BYTE_MASK);
 //			__mmask16 is_tmp_dist_shorter_m = _mm512_mask_cmplt_epi32_mask(is_r_higher_ranked_m, tmp_dist_r_t_v, table_dists_r_t_v);
 //			if (!is_tmp_dist_shorter_m) {
 //				continue;
 //			}
 //			// Dist from r to tail (candidate dist)
-//			__m512i cand_dists_r_t_v = _mm512_mask_i32gather_epi32(INF_v, is_tmp_dist_shorter_m, r_root_id_v, &SI_v_tail.candidates_dists[0], sizeof(weightiLarge));
+//			__m512i cand_dists_r_t_v = _mm512_mask_i32gather_epi32(INF_v, is_tmp_dist_shorter_m, r_root_id_v, &SI_v_tail.candidates_dists[0], sizeof(weighti));
 //			cand_dists_r_t_v = _mm512_mask_and_epi32(INF_v, is_tmp_dist_shorter_m, cand_dists_r_t_v, LOWEST_BYTE_MASK);
 //			is_tmp_dist_shorter_m = _mm512_mask_cmplt_epi32_mask(is_tmp_dist_shorter_m, tmp_dist_r_t_v, cand_dists_r_t_v);
 //			if (!is_tmp_dist_shorter_m) {
@@ -533,7 +561,7 @@ inline void WeightedVertexCentricPLL<BATCH_SIZE>::send_messages(
 //					is_tmp_dist_shorter_m,
 //					r_root_id_v,
 //					tmp_dist_r_t_v); // tmp_dist_r_t_v to dists_table[v_tail]
-//			got_candidates = true;
+//			got_candidates = 1;
 //		}
 
 		// Sequential Version
@@ -543,29 +571,47 @@ inline void WeightedVertexCentricPLL<BATCH_SIZE>::send_messages(
 			if (v_tail <= r_root_id + roots_start) {
 				continue;
 			}
-			weightiLarge tmp_dist_r_t = SI_v_head.vertices_dists[r_root_id] + weight_h_t;
+			weighti tmp_dist_r_t = SI_v_head.vertices_dists[r_root_id] + weight_h_t;
 			if (tmp_dist_r_t < dists_table[v_tail][r_root_id] && tmp_dist_r_t < SI_v_tail.candidates_dists[r_root_id]) {
 				// Mark r_root_id as a candidate of v_tail
-				if (WEIGHTILARGE_MAX == SI_v_tail.candidates_dists[r_root_id]) {
-					// Add r_root_id into v_tail's candidates_que
-					SI_v_tail.candidates_que[SI_v_tail.end_candidates_que++] = r_root_id;
+				if (CAS(&SI_v_tail.candidates_dists[r_root_id], (uint8_t) WEIGHTI_MAX, tmp_dist_r_t)) {
+					TS_enqueue(SI_v_tail.candidates_que, SI_v_tail.end_candidates_que, r_root_id);
 				}
-				SI_v_tail.candidates_dists[r_root_id] = tmp_dist_r_t;
-				if (WEIGHTILARGE_MAX == dists_table[v_tail][r_root_id]) {
-					// Add r_root_id into v_tail's reached_roots_que so to reset dists_table[r_root_id][v_tail] at the end of this batch
-					SI_v_tail.reached_roots_que[SI_v_tail.end_reached_roots_que++] = r_root_id;
+				volatile weighti old_v = SI_v_tail.candidates_dists[r_root_id];
+				while (tmp_dist_r_t < old_v	&& !CAS(&SI_v_tail.candidates_dists[r_root_id], old_v, tmp_dist_r_t)) {
+					old_v = SI_v_tail.candidates_dists[r_root_id];
 				}
-				dists_table[v_tail][r_root_id] = tmp_dist_r_t; // For filtering out longer distances coming later
+				if (CAS(&dists_table[v_tail][r_root_id], (uint8_t) WEIGHTI_MAX, tmp_dist_r_t)) {
+					TS_enqueue(SI_v_tail.reached_roots_que, SI_v_tail.end_reached_roots_que, r_root_id);
+				}
+				old_v = dists_table[v_tail][r_root_id];
+				while (tmp_dist_r_t < old_v && !CAS(&dists_table[v_tail][r_root_id], old_v, tmp_dist_r_t)) {
+					old_v = dists_table[v_tail][r_root_id];
+				}
+//				if (WEIGHTI_MAX == SI_v_tail.candidates_dists[r_root_id]) {
+//					// Add r_root_id into v_tail's candidates_que
+//					SI_v_tail.candidates_que[SI_v_tail.end_candidates_que++] = r_root_id;
+//				}
+//				SI_v_tail.candidates_dists[r_root_id] = tmp_dist_r_t;
+//				if (WEIGHTI_MAX == dists_table[v_tail][r_root_id]) {
+//					// Add r_root_id into v_tail's reached_roots_que so to reset dists_table[r_root_id][v_tail] at the end of this batch
+//					SI_v_tail.reached_roots_que[SI_v_tail.end_reached_roots_que++] = r_root_id;
+//				}
+//				dists_table[v_tail][r_root_id] = tmp_dist_r_t; // For filtering out longer distances coming later
 				got_candidates = true;
 			}
 		}
 
-
-		if (got_candidates && !has_candidates[v_tail]) {
-			// Put v_tail into has_cand_queue
-			has_candidates[v_tail] = true;
-			has_cand_queue[end_has_cand_queue++] = v_tail;
+		if (got_candidates) {
+			if (CAS(&has_candidates[v_tail], (uint8_t) 0, (uint8_t) 1)) {
+				tmp_has_cand_queue[offset_tmp_queue + size_tmp_has_cand_queue++] = v_tail;
+			}
 		}
+//		if (got_candidates && !has_candidates[v_tail]) {
+//			// Put v_tail into has_cand_queue
+//			has_candidates[v_tail] = 1;
+//			has_cand_queue[end_has_cand_queue++] = v_tail;
+//		}
 	}
 	SI_v_head.end_last_new_roots = 0; // clear v_head's last_new_roots
 }
@@ -573,138 +619,153 @@ inline void WeightedVertexCentricPLL<BATCH_SIZE>::send_messages(
 //Function: to see if v_id and cand_root_id can have other path already cover the candidate distance
 // If there was other path, return the shortest distance. If there was not, return INF
 template <inti BATCH_SIZE>
-inline weightiLarge WeightedVertexCentricPLL<BATCH_SIZE>::distance_query(
+inline weighti WeightedParaVertexCentricPLLVec<BATCH_SIZE>::distance_query(
 					idi v_id,
 					idi cand_root_id,
-					//const vector< vector<weightiLarge> > &dists_table,
-					const vector< vector<weightiLarge> > &roots_labels_buffer,
+					//const vector< vector<weighti> > &dists_table,
+					const vector< vector<weighti> > &roots_labels_buffer,
 					const vector<ShortIndex> &short_index,
 					const vector<IndexType> &L,
 					idi roots_start,
-					weightiLarge tmp_dist_v_c)
+					weighti tmp_dist_v_c)
 {
 	//++check_count;
 //	distance_query_time -= WallTimer::get_time_mark();
-	//static const __m512i INF_v = _mm512_set1_epi32(WEIGHTI_MAX);
-	//static const __m512i UNDEF_i32_v = _mm512_undefined_epi32();
-	//static const __m512i LOWEST_BYTE_MASK = _mm512_set1_epi32(0xFF);
-	//static const __m128i INF_v_128i = _mm_set1_epi8(-1);
-	//static const inti NUM_P_INT = 16;
 	// Traverse all available hops of v, to see if they reach c
 	// 1. Labels in L[v]
 	idi cand_real_id = cand_root_id + roots_start;
 	const IndexType &Lv = L[v_id];
 
-	// 1. Labels in L[v_id]
-//	// Vectorization Version
-//	__m512i cand_real_id_v = _mm512_set1_epi32(cand_real_id);
-//	__m512i tmp_dist_v_c_v = _mm512_set1_epi32(tmp_dist_v_c);
-//	inti remainder_simd = Lv.vertices.size() % NUM_P_INT;
-//	idi bound_i_l = Lv.vertices.size() - remainder_simd;
-//	for (idi i_l = 0; i_l < bound_i_l; i_l += NUM_P_INT) {
-////		simd_util.first += NUM_P_INT;
-////		simd_util.second += NUM_P_INT;
-////		++simd_full_count.first;
-////		++simd_full_count.second;
-//		// Labels IDs
-//		__m512i r_v = _mm512_loadu_epi32(&Lv.vertices[i_l]);
-//		__mmask16 is_r_higher_ranked_m = _mm512_cmplt_epi32_mask(r_v, cand_real_id_v);
-//		if (!is_r_higher_ranked_m) {
-//			continue;
-//		}
-//		// Labels dists
-//		__m512i dists_c_r_v = _mm512_mask_i32gather_epi32(INF_v, is_r_higher_ranked_m, r_v, &roots_labels_buffer[cand_root_id][0], sizeof(weightiLarge));
-//		dists_c_r_v = _mm512_mask_and_epi32(INF_v, is_r_higher_ranked_m, dists_c_r_v, LOWEST_BYTE_MASK); // The least significant byte is the weight.
-//		__mmask16 is_not_INF_m = _mm512_cmpneq_epi32_mask(dists_c_r_v, INF_v);
-//		if (!is_not_INF_m) {
-//			continue;
-//		}
-//
-//		// Dist from v to c through label r
-//		__mmask16 valid_lanes_m = is_not_INF_m;
-//		__m128i tmp_dists_v_r_128i = _mm_mask_loadu_epi8(INF_v_128i, valid_lanes_m, &Lv.distances[i_l]); // Weighti is 8-bit
-//		__m512i dists_v_r_v = _mm512_mask_cvtepi8_epi32(INF_v, valid_lanes_m, tmp_dists_v_r_128i); // Convert to 32-bit
-//		__m512i label_dist_v_c_v = _mm512_mask_add_epi32(INF_v, valid_lanes_m, dists_c_r_v, dists_v_r_v);
-//		__mmask16 is_label_dist_shorter_m = _mm512_mask_cmple_epi32_mask(valid_lanes_m, label_dist_v_c_v, tmp_dist_v_c_v);
-//		if (is_label_dist_shorter_m) {
-//			// Need to return the shorter distance (might be equal)
-//			inti index = (inti) (log2( (double) ((uint16_t) is_label_dist_shorter_m) ) ); // Get the index as the most significant bit which is set as 1. Every "1" is okay actually.
-//			distance_query_time += WallTimer::get_time_mark();
-//			//++l_l_hit_count;
-//			return ((int *) &label_dist_v_c_v)[index]; // Return the distance
-//		}
-//	}
-//	if (remainder_simd) {
-////		simd_util.first += remainder_simd;
-////		simd_util.second += NUM_P_INT;
-////		++simd_full_count.second;
-//		__mmask16 in_m = (__mmask16) ((uint16_t) 0xFFFF >> (NUM_P_INT - remainder_simd));
-//		// Labels IDs
-//		__m512i r_v = _mm512_mask_loadu_epi32(UNDEF_i32_v, in_m, &Lv.vertices[bound_i_l]);
-//		__mmask16 is_r_higher_ranked_m = _mm512_mask_cmplt_epi32_mask(in_m, r_v, cand_real_id_v);
-//		if (is_r_higher_ranked_m) {
-//			// Labels dists
-//			__m512i dists_c_r_v = _mm512_mask_i32gather_epi32(INF_v, is_r_higher_ranked_m, r_v, &roots_labels_buffer[cand_root_id][0], sizeof(weightiLarge));
-//			dists_c_r_v = _mm512_mask_and_epi32(INF_v, is_r_higher_ranked_m, dists_c_r_v, LOWEST_BYTE_MASK); // The least significant byte is the weight.
-//			__mmask16 is_not_INF_m = _mm512_cmpneq_epi32_mask(dists_c_r_v, INF_v);
-//			if (is_not_INF_m) {
-//				// Dist from v to c through label r
-//				__mmask16 valid_lanes_m = is_not_INF_m;
-//				__m128i tmp_dists_v_r_128i = _mm_mask_loadu_epi8(INF_v_128i, valid_lanes_m, &Lv.distances[bound_i_l]); // Weighti is 8-bit
-//				__m512i dists_v_r_v = _mm512_mask_cvtepi8_epi32(INF_v, valid_lanes_m, tmp_dists_v_r_128i); // Convert to 32-bit
-//				__m512i label_dist_v_c_v = _mm512_mask_add_epi32(INF_v, valid_lanes_m, dists_c_r_v, dists_v_r_v);
-//				__mmask16 is_label_dist_shorter_m = _mm512_mask_cmple_epi32_mask(valid_lanes_m, label_dist_v_c_v, tmp_dist_v_c_v);
-//				if (is_label_dist_shorter_m) {
-//					// Need to return the shorter distance (might be equal)
-//					inti index = (inti) (log2( (double) ((uint16_t) is_label_dist_shorter_m) ) ); // Get the index as the most significant bit which is set as 1. Every "1" is okay actually.
-//					distance_query_time += WallTimer::get_time_mark();
-//					//++l_l_hit_count;
-//					return ((int *) &label_dist_v_c_v)[index]; // Return the distance
-//				}
-//			}
-//
-//		}
-//	}
+	// Vectorization Version
 
-	// Sequential Version
-	idi bound_i_l = Lv.vertices.size();
-	for (idi i_l = 0; i_l < bound_i_l; ++i_l) {
-		idi r = Lv.vertices[i_l];
-		if (cand_real_id <= r || WEIGHTILARGE_MAX == roots_labels_buffer[cand_root_id][r]) {
+	__m512i cand_real_id_v = _mm512_set1_epi32(cand_real_id);
+	__m512i tmp_dist_v_c_v = _mm512_set1_epi32(tmp_dist_v_c);
+	inti remainder_simd = Lv.vertices.size() % NUM_P_INT;
+	idi bound_i_l = Lv.vertices.size() - remainder_simd;
+	for (idi i_l = 0; i_l < bound_i_l; i_l += NUM_P_INT) {
+//		simd_util.first += NUM_P_INT;
+//		simd_util.second += NUM_P_INT;
+//		++simd_full_count.first;
+//		++simd_full_count.second;
+		// Labels IDs
+		__m512i r_v = _mm512_loadu_epi32(&Lv.vertices[i_l]); // @suppress("Function cannot be resolved")
+		__mmask16 is_r_higher_ranked_m = _mm512_cmplt_epi32_mask(r_v, cand_real_id_v);
+		if (!is_r_higher_ranked_m) {
 			continue;
 		}
-		weightiLarge label_dist_v_c = Lv.distances[i_l] + roots_labels_buffer[cand_root_id][r];
-		if (label_dist_v_c <= tmp_dist_v_c) {
+		// Labels dists
+		__m512i dists_c_r_v = _mm512_mask_i32gather_epi32(INF_v, is_r_higher_ranked_m, r_v, &roots_labels_buffer[cand_root_id][0], sizeof(weighti));
+		dists_c_r_v = _mm512_mask_and_epi32(INF_v, is_r_higher_ranked_m, dists_c_r_v, LOWEST_BYTE_MASK); // The least significant byte is the weight.
+		__mmask16 is_not_INF_m = _mm512_cmpneq_epi32_mask(dists_c_r_v, INF_v);
+		if (!is_not_INF_m) {
+			continue;
+		}
+
+		// Dist from v to c through label r
+		__mmask16 valid_lanes_m = is_not_INF_m;
+		__m128i tmp_dists_v_r_128i = _mm_mask_loadu_epi8(INF_v_128i, valid_lanes_m, &Lv.distances[i_l]); // Weighti is 8-bit
+		__m512i dists_v_r_v = _mm512_mask_cvtepi8_epi32(INF_v, valid_lanes_m, tmp_dists_v_r_128i); // Convert to 32-bit
+		__m512i label_dist_v_c_v = _mm512_mask_add_epi32(INF_v, valid_lanes_m, dists_c_r_v, dists_v_r_v);
+		__mmask16 is_label_dist_shorter_m = _mm512_mask_cmple_epi32_mask(valid_lanes_m, label_dist_v_c_v, tmp_dist_v_c_v);
+		if (is_label_dist_shorter_m) {
+			// Need to return the shorter distance (might be equal)
+			inti index = (inti) (log2( (double) ((uint16_t) is_label_dist_shorter_m) ) ); // Get the index as the most significant bit which is set as 1. Every "1" is okay actually.
 //			distance_query_time += WallTimer::get_time_mark();
 			//++l_l_hit_count;
-			return label_dist_v_c;
+			return ((int *) &label_dist_v_c_v)[index]; // Return the distance
 		}
 	}
+	if (remainder_simd) {
+//		simd_util.first += remainder_simd;
+//		simd_util.second += NUM_P_INT;
+//		++simd_full_count.second;
+		__mmask16 in_m = (__mmask16) ((uint16_t) 0xFFFF >> (NUM_P_INT - remainder_simd));
+		// Labels IDs
+		__m512i r_v = _mm512_mask_loadu_epi32(UNDEF_i32_v, in_m, &Lv.vertices[bound_i_l]);
+		__mmask16 is_r_higher_ranked_m = _mm512_mask_cmplt_epi32_mask(in_m, r_v, cand_real_id_v);
+		if (is_r_higher_ranked_m) {
+			// Labels dists
+			__m512i dists_c_r_v = _mm512_mask_i32gather_epi32(INF_v, is_r_higher_ranked_m, r_v, &roots_labels_buffer[cand_root_id][0], sizeof(weighti));
+			dists_c_r_v = _mm512_mask_and_epi32(INF_v, is_r_higher_ranked_m, dists_c_r_v, LOWEST_BYTE_MASK); // The least significant byte is the weight.
+			__mmask16 is_not_INF_m = _mm512_cmpneq_epi32_mask(dists_c_r_v, INF_v);
+			if (is_not_INF_m) {
+				// Dist from v to c through label r
+				__mmask16 valid_lanes_m = is_not_INF_m;
+				__m128i tmp_dists_v_r_128i = _mm_mask_loadu_epi8(INF_v_128i, valid_lanes_m, &Lv.distances[bound_i_l]); // Weighti is 8-bit
+				__m512i dists_v_r_v = _mm512_mask_cvtepi8_epi32(INF_v, valid_lanes_m, tmp_dists_v_r_128i); // Convert to 32-bit
+				__m512i label_dist_v_c_v = _mm512_mask_add_epi32(INF_v, valid_lanes_m, dists_c_r_v, dists_v_r_v);
+				__mmask16 is_label_dist_shorter_m = _mm512_mask_cmple_epi32_mask(valid_lanes_m, label_dist_v_c_v, tmp_dist_v_c_v);
+				if (is_label_dist_shorter_m) {
+					// Need to return the shorter distance (might be equal)
+					inti index = (inti) (log2( (double) ((uint16_t) is_label_dist_shorter_m) ) ); // Get the index as the most significant bit which is set as 1. Every "1" is okay actually.
+//					distance_query_time += WallTimer::get_time_mark();
+					//++l_l_hit_count;
+					return ((int *) &label_dist_v_c_v)[index]; // Return the distance
+				}
+			}
+
+		}
+	}
+
+	// Sequential Version
+//	idi bound_i_l = Lv.vertices.size();
+//	for (idi i_l = 0; i_l < bound_i_l; ++i_l) {
+//		idi r = Lv.vertices[i_l];
+//		if (cand_real_id <= r || WEIGHTI_MAX == roots_labels_buffer[cand_root_id][r]) {
+//			continue;
+//		}
+//		weighti label_dist_v_c = Lv.distances[i_l] + roots_labels_buffer[cand_root_id][r];
+//		if (label_dist_v_c <= tmp_dist_v_c) {
+//			distance_query_time += WallTimer::get_time_mark();
+//			//++l_l_hit_count;
+//			return label_dist_v_c;
+//		}
+//	}
 	// 2. Labels in short_index[v_id].vertices_que
 	const ShortIndex &SI_v = short_index[v_id];
 	const ShortIndex &SI_c = short_index[cand_root_id];
 
-//	const __m512i roots_start_v = _mm512_set1_epi32(roots_start);
-//	remainder_simd = SI_v.end_vertices_que % NUM_P_INT;
-//	idi bound_i_que = SI_v.end_vertices_que - remainder_simd;
-//	for (inti i_que = 0; i_que < bound_i_que; i_que += NUM_P_INT) {
-////		simd_util.first += NUM_P_INT;
-////		simd_util.second += NUM_P_INT;
-////		++simd_full_count.first;
-////		++simd_full_count.second;
-//		__m512i r_root_id_v = _mm512_loadu_epi32(&SI_v.vertices_que[i_que]);
-//		__m512i r_real_id_v = _mm512_add_epi32(r_root_id_v, roots_start_v);
-//		__mmask16 is_r_higher_ranked_m = _mm512_cmplt_epi32_mask(r_real_id_v, cand_real_id_v);
-//		if (!is_r_higher_ranked_m) {
-//			continue;
-//		}
-//		// Dists from v to r
-//		__m512i dists_v_r_v = _mm512_mask_i32gather_epi32(INF_v, is_r_higher_ranked_m, r_root_id_v, &SI_v.vertices_dists[0], sizeof(weightiLarge));
-//		dists_v_r_v = _mm512_mask_and_epi32(INF_v, is_r_higher_ranked_m, dists_v_r_v, LOWEST_BYTE_MASK);
-//		// Check r_root_id in cand_root_id's labels inserted in this batch
+	const __m512i roots_start_v = _mm512_set1_epi32(roots_start);
+	remainder_simd = SI_v.end_vertices_que % NUM_P_INT;
+	idi bound_i_que = SI_v.end_vertices_que - remainder_simd;
+	for (inti i_que = 0; i_que < bound_i_que; i_que += NUM_P_INT) {
+//		simd_util.first += NUM_P_INT;
+//		simd_util.second += NUM_P_INT;
+//		++simd_full_count.first;
+//		++simd_full_count.second;
+		__m512i r_root_id_v = _mm512_loadu_epi32(&SI_v.vertices_que[i_que]); // @suppress("Function cannot be resolved")
+		__m512i r_real_id_v = _mm512_add_epi32(r_root_id_v, roots_start_v);
+		__mmask16 is_r_higher_ranked_m = _mm512_cmplt_epi32_mask(r_real_id_v, cand_real_id_v);
+		if (!is_r_higher_ranked_m) {
+			continue;
+		}
+		// Dists from v to r
+		__m512i dists_v_r_v = _mm512_mask_i32gather_epi32(INF_v, is_r_higher_ranked_m, r_root_id_v, &SI_v.vertices_dists[0], sizeof(weighti));
+		dists_v_r_v = _mm512_mask_and_epi32(INF_v, is_r_higher_ranked_m, dists_v_r_v, LOWEST_BYTE_MASK);
+		// Check r_root_id in cand_root_id's labels inserted in this batch
+		{
+			// Dists from c to r
+			__m512i dists_c_r_v = _mm512_mask_i32gather_epi32(INF_v, is_r_higher_ranked_m, r_root_id_v, &SI_c.vertices_dists[0], sizeof(weighti));
+			dists_c_r_v = _mm512_mask_and_epi32(INF_v, is_r_higher_ranked_m, dists_c_r_v, LOWEST_BYTE_MASK);
+			__mmask16 is_not_INF_m = _mm512_mask_cmpneq_epi32_mask(is_r_higher_ranked_m, dists_c_r_v, INF_v);
+			if (is_not_INF_m) {
+				// Label dist from v to c
+				__m512i label_dist_v_c_v = _mm512_mask_add_epi32(INF_v, is_not_INF_m, dists_v_r_v, dists_c_r_v);
+				// Compare label dist to tmp dist
+				__mmask16 is_label_dist_shorter_m = _mm512_mask_cmple_epi32_mask(is_not_INF_m, label_dist_v_c_v, tmp_dist_v_c_v);
+				if (is_label_dist_shorter_m) {
+					// Need to return the shorter distance (might be equal)
+					inti index = (inti) (log2( (double) ((uint16_t) is_label_dist_shorter_m) ) ); // Get the index as the most significant bit which is set as 1. Every "1" is okay actually.
+//					distance_query_time += WallTimer::get_time_mark();
+					//++vl_cl_hit_count;
+					return ((int *) &label_dist_v_c_v)[index]; // Return the distance
+				}
+			}
+		}
+//		// Check r_root_id in cand_root_id's candidates in this iteration
 //		{
 //			// Dists from c to r
-//			__m512i dists_c_r_v = _mm512_mask_i32gather_epi32(INF_v, is_r_higher_ranked_m, r_root_id_v, &SI_c.vertices_dists[0], sizeof(weightiLarge));
+//			__m512i dists_c_r_v = _mm512_mask_i32gather_epi32(INF_v, is_r_higher_ranked_m, r_root_id_v, &SI_c.candidates_dists[0], sizeof(weighti));
 //			dists_c_r_v = _mm512_mask_and_epi32(INF_v, is_r_higher_ranked_m, dists_c_r_v, LOWEST_BYTE_MASK);
 //			__mmask16 is_not_INF_m = _mm512_mask_cmpneq_epi32_mask(is_r_higher_ranked_m, dists_c_r_v, INF_v);
 //			if (is_not_INF_m) {
@@ -716,48 +777,48 @@ inline weightiLarge WeightedVertexCentricPLL<BATCH_SIZE>::distance_query(
 //					// Need to return the shorter distance (might be equal)
 //					inti index = (inti) (log2( (double) ((uint16_t) is_label_dist_shorter_m) ) ); // Get the index as the most significant bit which is set as 1. Every "1" is okay actually.
 //					distance_query_time += WallTimer::get_time_mark();
-//					//++vl_cl_hit_count;
+//					//++vl_cc_hit_count;
 //					return ((int *) &label_dist_v_c_v)[index]; // Return the distance
 //				}
 //			}
 //		}
-////		// Check r_root_id in cand_root_id's candidates in this iteration
-////		{
-////			// Dists from c to r
-////			__m512i dists_c_r_v = _mm512_mask_i32gather_epi32(INF_v, is_r_higher_ranked_m, r_root_id_v, &SI_c.candidates_dists[0], sizeof(weightiLarge));
-////			dists_c_r_v = _mm512_mask_and_epi32(INF_v, is_r_higher_ranked_m, dists_c_r_v, LOWEST_BYTE_MASK);
-////			__mmask16 is_not_INF_m = _mm512_mask_cmpneq_epi32_mask(is_r_higher_ranked_m, dists_c_r_v, INF_v);
-////			if (is_not_INF_m) {
-////				// Label dist from v to c
-////				__m512i label_dist_v_c_v = _mm512_mask_add_epi32(INF_v, is_not_INF_m, dists_v_r_v, dists_c_r_v);
-////				// Compare label dist to tmp dist
-////				__mmask16 is_label_dist_shorter_m = _mm512_mask_cmple_epi32_mask(is_not_INF_m, label_dist_v_c_v, tmp_dist_v_c_v);
-////				if (is_label_dist_shorter_m) {
-////					// Need to return the shorter distance (might be equal)
-////					inti index = (inti) (log2( (double) ((uint16_t) is_label_dist_shorter_m) ) ); // Get the index as the most significant bit which is set as 1. Every "1" is okay actually.
-////					distance_query_time += WallTimer::get_time_mark();
-////					//++vl_cc_hit_count;
-////					return ((int *) &label_dist_v_c_v)[index]; // Return the distance
-////				}
-////			}
-////		}
-//	}
-//	if (remainder_simd) {
-////		simd_util.first += remainder_simd;
-////		simd_util.second += NUM_P_INT;
-////		++simd_full_count.second;
-//		__mmask16 in_m = (__mmask16) ((uint16_t) 0xFFFF >> (NUM_P_INT - remainder_simd));
-//		__m512i r_root_id_v = _mm512_mask_loadu_epi32(UNDEF_i32_v, in_m, &SI_v.vertices_que[bound_i_que]);
-//		__m512i r_real_id_v = _mm512_mask_add_epi32(UNDEF_i32_v, in_m, r_root_id_v, roots_start_v);
-//		__mmask16 is_r_higher_ranked_m = _mm512_mask_cmplt_epi32_mask(in_m, r_real_id_v, cand_real_id_v);
-//		if (is_r_higher_ranked_m) {
-//			// Dists from v to r
-//			__m512i dists_v_r_v = _mm512_mask_i32gather_epi32(INF_v, is_r_higher_ranked_m, r_root_id_v, &SI_v.vertices_dists[0], sizeof(weightiLarge));
-//			dists_v_r_v = _mm512_mask_and_epi32(INF_v, is_r_higher_ranked_m, dists_v_r_v, LOWEST_BYTE_MASK);
-//			// Check r_root_id in cand_root_id's labels inserted in this batch
+	}
+	if (remainder_simd) {
+//		simd_util.first += remainder_simd;
+//		simd_util.second += NUM_P_INT;
+//		++simd_full_count.second;
+		__mmask16 in_m = (__mmask16) ((uint16_t) 0xFFFF >> (NUM_P_INT - remainder_simd));
+		__m512i r_root_id_v = _mm512_mask_loadu_epi32(UNDEF_i32_v, in_m, &SI_v.vertices_que[bound_i_que]);
+		__m512i r_real_id_v = _mm512_mask_add_epi32(UNDEF_i32_v, in_m, r_root_id_v, roots_start_v);
+		__mmask16 is_r_higher_ranked_m = _mm512_mask_cmplt_epi32_mask(in_m, r_real_id_v, cand_real_id_v);
+		if (is_r_higher_ranked_m) {
+			// Dists from v to r
+			__m512i dists_v_r_v = _mm512_mask_i32gather_epi32(INF_v, is_r_higher_ranked_m, r_root_id_v, &SI_v.vertices_dists[0], sizeof(weighti));
+			dists_v_r_v = _mm512_mask_and_epi32(INF_v, is_r_higher_ranked_m, dists_v_r_v, LOWEST_BYTE_MASK);
+			// Check r_root_id in cand_root_id's labels inserted in this batch
+			{
+				// Dists from c to r
+				__m512i dists_c_r_v = _mm512_mask_i32gather_epi32(INF_v, is_r_higher_ranked_m, r_root_id_v, &SI_c.vertices_dists[0], sizeof(weighti));
+				dists_c_r_v = _mm512_mask_and_epi32(INF_v, is_r_higher_ranked_m, dists_c_r_v, LOWEST_BYTE_MASK);
+				__mmask16 is_not_INF_m = _mm512_mask_cmpneq_epi32_mask(is_r_higher_ranked_m, dists_c_r_v, INF_v);
+				if (is_not_INF_m) {
+					// Label dist from v to c
+					__m512i label_dist_v_c_v = _mm512_mask_add_epi32(INF_v, is_not_INF_m, dists_v_r_v, dists_c_r_v);
+					// Compare label dist to tmp dist
+					__mmask16 is_label_dist_shorter_m = _mm512_mask_cmple_epi32_mask(is_not_INF_m, label_dist_v_c_v, tmp_dist_v_c_v);
+					if (is_label_dist_shorter_m) {
+						// Need to return the shorter distance (might be equal)
+						inti index = (inti) (log2( (double) ((uint16_t) is_label_dist_shorter_m) ) ); // Get the index as the most significant bit which is set as 1. Every "1" is okay actually.
+//						distance_query_time += WallTimer::get_time_mark();
+						//++vl_cl_hit_count;
+						return ((int *) &label_dist_v_c_v)[index]; // Return the distance
+					}
+				}
+			}
+//			// Check r_root_id in cand_root_id's candidates in this iteration
 //			{
 //				// Dists from c to r
-//				__m512i dists_c_r_v = _mm512_mask_i32gather_epi32(INF_v, is_r_higher_ranked_m, r_root_id_v, &SI_c.vertices_dists[0], sizeof(weightiLarge));
+//				__m512i dists_c_r_v = _mm512_mask_i32gather_epi32(INF_v, is_r_higher_ranked_m, r_root_id_v, &SI_c.candidates_dists[0], sizeof(weighti));
 //				dists_c_r_v = _mm512_mask_and_epi32(INF_v, is_r_higher_ranked_m, dists_c_r_v, LOWEST_BYTE_MASK);
 //				__mmask16 is_not_INF_m = _mm512_mask_cmpneq_epi32_mask(is_r_higher_ranked_m, dists_c_r_v, INF_v);
 //				if (is_not_INF_m) {
@@ -769,63 +830,43 @@ inline weightiLarge WeightedVertexCentricPLL<BATCH_SIZE>::distance_query(
 //						// Need to return the shorter distance (might be equal)
 //						inti index = (inti) (log2( (double) ((uint16_t) is_label_dist_shorter_m) ) ); // Get the index as the most significant bit which is set as 1. Every "1" is okay actually.
 //						distance_query_time += WallTimer::get_time_mark();
-//						//++vl_cl_hit_count;
+//						//++vl_cc_hit_count;
 //						return ((int *) &label_dist_v_c_v)[index]; // Return the distance
 //					}
 //				}
 //			}
-////			// Check r_root_id in cand_root_id's candidates in this iteration
-////			{
-////				// Dists from c to r
-////				__m512i dists_c_r_v = _mm512_mask_i32gather_epi32(INF_v, is_r_higher_ranked_m, r_root_id_v, &SI_c.candidates_dists[0], sizeof(weightiLarge));
-////				dists_c_r_v = _mm512_mask_and_epi32(INF_v, is_r_higher_ranked_m, dists_c_r_v, LOWEST_BYTE_MASK);
-////				__mmask16 is_not_INF_m = _mm512_mask_cmpneq_epi32_mask(is_r_higher_ranked_m, dists_c_r_v, INF_v);
-////				if (is_not_INF_m) {
-////					// Label dist from v to c
-////					__m512i label_dist_v_c_v = _mm512_mask_add_epi32(INF_v, is_not_INF_m, dists_v_r_v, dists_c_r_v);
-////					// Compare label dist to tmp dist
-////					__mmask16 is_label_dist_shorter_m = _mm512_mask_cmple_epi32_mask(is_not_INF_m, label_dist_v_c_v, tmp_dist_v_c_v);
-////					if (is_label_dist_shorter_m) {
-////						// Need to return the shorter distance (might be equal)
-////						inti index = (inti) (log2( (double) ((uint16_t) is_label_dist_shorter_m) ) ); // Get the index as the most significant bit which is set as 1. Every "1" is okay actually.
-////						distance_query_time += WallTimer::get_time_mark();
-////						//++vl_cc_hit_count;
-////						return ((int *) &label_dist_v_c_v)[index]; // Return the distance
-////					}
-////				}
-////			}
-//		}
-//	}
-
+		}
+	}
+	
 	// Sequential Version
-	inti bound_i_que = SI_v.end_vertices_que;
-//	_mm_prefetch(&SI_v.vertices_dists[0], _MM_HINT_T0);
-//	_mm_prefetch(&SI_c.vertices_dists[0], _MM_HINT_T0);
-//	_mm_prefetch(&SI_c.candidates_dists[0], _MM_HINT_T0);
-	for (inti i_que = 0; i_que < bound_i_que; ++i_que) {
-		idi r_root_id = SI_v.vertices_que[i_que];
-		if (cand_real_id <= r_root_id + roots_start) {
-			continue;
-		}
-		// Check r_root_id in cand_root_id's labels inserted in this batch
-		if (WEIGHTILARGE_MAX != SI_c.vertices_dists[r_root_id]) {
-			weightiLarge label_dist_v_c = SI_v.vertices_dists[r_root_id] + SI_c.vertices_dists[r_root_id];
-			if (label_dist_v_c <= tmp_dist_v_c) {
+//	inti bound_i_que = SI_v.end_vertices_que;
+////	_mm_prefetch(&SI_v.vertices_dists[0], _MM_HINT_T0);
+////	_mm_prefetch(&SI_c.vertices_dists[0], _MM_HINT_T0);
+////	_mm_prefetch(&SI_c.candidates_dists[0], _MM_HINT_T0);
+//	for (inti i_que = 0; i_que < bound_i_que; ++i_que) {
+//		idi r_root_id = SI_v.vertices_que[i_que];
+//		if (cand_real_id <= r_root_id + roots_start) {
+//			continue;
+//		}
+//		// Check r_root_id in cand_root_id's labels inserted in this batch
+//		if (WEIGHTI_MAX != SI_c.vertices_dists[r_root_id]) {
+//			weighti label_dist_v_c = SI_v.vertices_dists[r_root_id] + SI_c.vertices_dists[r_root_id];
+//			if (label_dist_v_c <= tmp_dist_v_c) {
 //				distance_query_time += WallTimer::get_time_mark();
-				//++vl_cl_hit_count;
-				return label_dist_v_c;
-			}
-		}
+//				//++vl_cl_hit_count;
+//				return label_dist_v_c;
+//			}
+//		}
 //		// Check r_root_id in cand_root_id's candidates in this iteration
-//		if (WEIGHTILARGE_MAX != SI_c.candidates_dists[r_root_id]) {
-//			weightiLarge label_dist_v_c = SI_v.vertices_dists[r_root_id] + SI_c.candidates_dists[r_root_id];
+//		if (WEIGHTI_MAX != SI_c.candidates_dists[r_root_id]) {
+//			weighti label_dist_v_c = SI_v.vertices_dists[r_root_id] + SI_c.candidates_dists[r_root_id];
 //			if (label_dist_v_c <= tmp_dist_v_c) {
 //				distance_query_time += WallTimer::get_time_mark();
 //				//++vl_cc_hit_count;
 //				return label_dist_v_c;
 //			}
 //		}
-	}
+//	}
 
 //	// 3. Labels in short_index[v_id].candidates_que
 //	remainder_simd = SI_v.end_candidates_que % NUM_P_INT;
@@ -838,12 +879,12 @@ inline weightiLarge WeightedVertexCentricPLL<BATCH_SIZE>::distance_query(
 //			continue;
 //		}
 //		// Dists from v to r
-//		__m512i dists_v_r_v = _mm512_mask_i32gather_epi32(INF_v, is_r_higher_ranked_m, r_root_id_v, &SI_v.candidates_dists[0], sizeof(weightiLarge));
+//		__m512i dists_v_r_v = _mm512_mask_i32gather_epi32(INF_v, is_r_higher_ranked_m, r_root_id_v, &SI_v.candidates_dists[0], sizeof(weighti));
 //		dists_v_r_v = _mm512_mask_and_epi32(INF_v, is_r_higher_ranked_m, dists_v_r_v, LOWEST_BYTE_MASK);
 //		// Check r_root_id in cand_root_id's labels inserted in this batch
 //		{
 //			// Dists from c to r
-//			__m512i dists_c_r_v = _mm512_mask_i32gather_epi32(INF_v, is_r_higher_ranked_m, r_root_id_v, &SI_c.vertices_dists[0], sizeof(weightiLarge));
+//			__m512i dists_c_r_v = _mm512_mask_i32gather_epi32(INF_v, is_r_higher_ranked_m, r_root_id_v, &SI_c.vertices_dists[0], sizeof(weighti));
 //			dists_c_r_v = _mm512_mask_and_epi32(INF_v, is_r_higher_ranked_m, dists_c_r_v, LOWEST_BYTE_MASK);
 //			__mmask16 is_not_INF_m = _mm512_mask_cmpneq_epi32_mask(is_r_higher_ranked_m, dists_c_r_v, INF_v);
 //			if (is_not_INF_m) {
@@ -863,7 +904,7 @@ inline weightiLarge WeightedVertexCentricPLL<BATCH_SIZE>::distance_query(
 //		// Check r_root_id in cand_root_id's candidates in this iteration
 //		{
 //			// Dists from c to r
-//			__m512i dists_c_r_v = _mm512_mask_i32gather_epi32(INF_v, is_r_higher_ranked_m, r_root_id_v, &SI_c.candidates_dists[0], sizeof(weightiLarge));
+//			__m512i dists_c_r_v = _mm512_mask_i32gather_epi32(INF_v, is_r_higher_ranked_m, r_root_id_v, &SI_c.candidates_dists[0], sizeof(weighti));
 //			dists_c_r_v = _mm512_mask_and_epi32(INF_v, is_r_higher_ranked_m, dists_c_r_v, LOWEST_BYTE_MASK);
 //			__mmask16 is_not_INF_m = _mm512_mask_cmpneq_epi32_mask(is_r_higher_ranked_m, dists_c_r_v, INF_v);
 //			if (is_not_INF_m) {
@@ -888,12 +929,12 @@ inline weightiLarge WeightedVertexCentricPLL<BATCH_SIZE>::distance_query(
 //		__mmask16 is_r_higher_ranked_m = _mm512_mask_cmplt_epi32_mask(in_m, r_real_id_v, cand_real_id_v);
 //		if (is_r_higher_ranked_m) {
 //			// Dists from v to r
-//			__m512i dists_v_r_v = _mm512_mask_i32gather_epi32(INF_v, is_r_higher_ranked_m, r_root_id_v, &SI_v.candidates_dists[0], sizeof(weightiLarge));
+//			__m512i dists_v_r_v = _mm512_mask_i32gather_epi32(INF_v, is_r_higher_ranked_m, r_root_id_v, &SI_v.candidates_dists[0], sizeof(weighti));
 //			dists_v_r_v = _mm512_mask_and_epi32(INF_v, is_r_higher_ranked_m, dists_v_r_v, LOWEST_BYTE_MASK);
 //			// Check r_root_id in cand_root_id's labels inserted in this batch
 //			{
 //				// Dists from c to r
-//				__m512i dists_c_r_v = _mm512_mask_i32gather_epi32(INF_v, is_r_higher_ranked_m, r_root_id_v, &SI_c.vertices_dists[0], sizeof(weightiLarge));
+//				__m512i dists_c_r_v = _mm512_mask_i32gather_epi32(INF_v, is_r_higher_ranked_m, r_root_id_v, &SI_c.vertices_dists[0], sizeof(weighti));
 //				dists_c_r_v = _mm512_mask_and_epi32(INF_v, is_r_higher_ranked_m, dists_c_r_v, LOWEST_BYTE_MASK);
 //				__mmask16 is_not_INF_m = _mm512_mask_cmpneq_epi32_mask(is_r_higher_ranked_m, dists_c_r_v, INF_v);
 //				if (is_not_INF_m) {
@@ -913,7 +954,7 @@ inline weightiLarge WeightedVertexCentricPLL<BATCH_SIZE>::distance_query(
 //			// Check r_root_id in cand_root_id's candidates in this iteration
 //			{
 //				// Dists from c to r
-//				__m512i dists_c_r_v = _mm512_mask_i32gather_epi32(INF_v, is_r_higher_ranked_m, r_root_id_v, &SI_c.candidates_dists[0], sizeof(weightiLarge));
+//				__m512i dists_c_r_v = _mm512_mask_i32gather_epi32(INF_v, is_r_higher_ranked_m, r_root_id_v, &SI_c.candidates_dists[0], sizeof(weighti));
 //				dists_c_r_v = _mm512_mask_and_epi32(INF_v, is_r_higher_ranked_m, dists_c_r_v, LOWEST_BYTE_MASK);
 //				__mmask16 is_not_INF_m = _mm512_mask_cmpneq_epi32_mask(is_r_higher_ranked_m, dists_c_r_v, INF_v);
 //				if (is_not_INF_m) {
@@ -944,8 +985,8 @@ inline weightiLarge WeightedVertexCentricPLL<BATCH_SIZE>::distance_query(
 //			continue;
 //		}
 //		// Check r_root_id in cand_root_id's labels inserted in this batch
-//		if (WEIGHTILARGE_MAX != SI_c.vertices_dists[r_root_id]) {
-//			weightiLarge label_dist_v_c = SI_v.candidates_dists[r_root_id] + SI_c.vertices_dists[r_root_id];
+//		if (WEIGHTI_MAX != SI_c.vertices_dists[r_root_id]) {
+//			weighti label_dist_v_c = SI_v.candidates_dists[r_root_id] + SI_c.vertices_dists[r_root_id];
 //			if (label_dist_v_c <= tmp_dist_v_c) {
 //				distance_query_time += WallTimer::get_time_mark();
 //				++vc_cl_hit_count;
@@ -953,8 +994,8 @@ inline weightiLarge WeightedVertexCentricPLL<BATCH_SIZE>::distance_query(
 //			}
 //		}
 //		// Check r_root_id in cand_root_id's candidates in this iteration
-//		if (WEIGHTILARGE_MAX != SI_c.candidates_dists[r_root_id]) {
-//			weightiLarge label_dist_v_c = SI_v.candidates_dists[r_root_id] + SI_c.candidates_dists[r_root_id];
+//		if (WEIGHTI_MAX != SI_c.candidates_dists[r_root_id]) {
+//			weighti label_dist_v_c = SI_v.candidates_dists[r_root_id] + SI_c.candidates_dists[r_root_id];
 //			if (label_dist_v_c <= tmp_dist_v_c) {
 //				distance_query_time += WallTimer::get_time_mark();
 //				++vc_cc_hit_count;
@@ -964,41 +1005,43 @@ inline weightiLarge WeightedVertexCentricPLL<BATCH_SIZE>::distance_query(
 //	}
 
 //	distance_query_time += WallTimer::get_time_mark();
-	return WEIGHTILARGE_MAX;
+	return WEIGHTI_MAX;
 }
 
 // Function: reset distance table dists_table
 template <inti BATCH_SIZE>
-inline void WeightedVertexCentricPLL<BATCH_SIZE>::reset_tables(
+inline void WeightedParaVertexCentricPLLVec<BATCH_SIZE>::reset_tables(
 		vector<ShortIndex> &short_index,
 		idi roots_start,
 		inti roots_size,
 		const vector<IndexType> &L,
-		vector< vector<weightiLarge> > &dists_table,
-		vector< vector<weightiLarge> > &roots_labels_buffer,
+		vector< vector<weighti> > &dists_table,
+		vector< vector<weighti> > &roots_labels_buffer,
 		const vector<idi> &has_new_labels_queue,
 		idi end_has_new_labels_queue)
 {
 	// Reset roots_labels_buffer according to L (old labels)
+#pragma omp parallel for
 	for (idi r_roots_id = 0; r_roots_id < roots_size; ++r_roots_id) {
 		idi r_real_id = r_roots_id + roots_start;
 		// Traverse labels of r
 		const IndexType &Lr = L[r_real_id];
 		idi bound_i_l = Lr.vertices.size();
 		for (idi i_l = 0; i_l < bound_i_l; ++i_l) {
-			roots_labels_buffer[r_roots_id][Lr.vertices[i_l]] = WEIGHTILARGE_MAX;
+			roots_labels_buffer[r_roots_id][Lr.vertices[i_l]] = WEIGHTI_MAX;
 		}
-		roots_labels_buffer[r_roots_id][r_real_id] = WEIGHTILARGE_MAX;
+		roots_labels_buffer[r_roots_id][r_real_id] = WEIGHTI_MAX;
 	}
 
 	// Reset dists_table according to short_index[v].reached_roots_que
+#pragma omp parallel for
 	for (idi i_q = 0; i_q < end_has_new_labels_queue; ++i_q) {
 		idi v_id = has_new_labels_queue[i_q];
 		ShortIndex &SI_v = short_index[v_id];
 		// Traverse roots which have reached v_id
 		inti bound_i_r = SI_v.end_reached_roots_que;
 		for (inti i_r = 0; i_r < bound_i_r; ++i_r) {
-			dists_table[v_id][SI_v.reached_roots_que[i_r]] = WEIGHTILARGE_MAX;
+			dists_table[v_id][SI_v.reached_roots_que[i_r]] = WEIGHTI_MAX;
 		}
 		SI_v.end_reached_roots_que = 0; // Clear v_id's reached_roots_que
 	}
@@ -1007,28 +1050,29 @@ inline void WeightedVertexCentricPLL<BATCH_SIZE>::reset_tables(
 // Function: after finishing the label tables in the short_index, build the index according to it.
 // And also reset the has_new_labels_queue
 template <inti BATCH_SIZE>
-inline void WeightedVertexCentricPLL<BATCH_SIZE>::update_index(
+inline void WeightedParaVertexCentricPLLVec<BATCH_SIZE>::update_index(
 		vector<IndexType> &L,
 		vector<ShortIndex> &short_index,
 		idi roots_start,
 		vector<idi> &has_new_labels_queue,
 		idi &end_has_new_labels_queue,
-		vector<bool> &has_new_labels)
+		vector<uint8_t> &has_new_labels)
 {
 	// Traverse has_new_labels_queue for every vertex who got new labels in this batch
+#pragma omp parallel for
 	for (idi i_q = 0; i_q < end_has_new_labels_queue; ++i_q) {
 		idi v_id = has_new_labels_queue[i_q];
-		has_new_labels[v_id] = false; // Reset has_new_labels
+		has_new_labels[v_id] = 0; // Reset has_new_labels
 		IndexType &Lv = L[v_id];
 		ShortIndex &SI_v = short_index[v_id];
 		inti bound_i_r = SI_v.end_vertices_que;
 		for (inti i_r = 0; i_r < bound_i_r; ++i_r) {
 			idi r_root_id = SI_v.vertices_que[i_r];
-			weightiLarge dist = SI_v.vertices_dists[r_root_id];
-			if (WEIGHTILARGE_MAX == dist) {
+			weighti dist = SI_v.vertices_dists[r_root_id];
+			if (WEIGHTI_MAX == dist) {
 				continue;
 			}
-			SI_v.vertices_dists[r_root_id] = WEIGHTILARGE_MAX; // Reset v_id's vertices_dists
+			SI_v.vertices_dists[r_root_id] = WEIGHTI_MAX; // Reset v_id's vertices_dists
 			Lv.vertices.push_back(r_root_id + roots_start);
 			Lv.distances.push_back(dist);
 		}
@@ -1037,66 +1081,66 @@ inline void WeightedVertexCentricPLL<BATCH_SIZE>::update_index(
 	end_has_new_labels_queue = 0; // Clear has_new_labels_queue
 }
 
-// Function:vertex s noticed that it received a distance between t but the distance is longer than what s can get,
-// so s starts to send its shorter distance between s and t to all its neighbors. According to the distance sent,
-// all active neighbors will update their distance table elements and reset their label table elements. The 
-// process continue untill no active vertices.
-template <inti BATCH_SIZE>
-inline void WeightedVertexCentricPLL<BATCH_SIZE>::send_back(
-		idi s,
-		idi r_root_id,
-		const WeightedGraph &G,
-		vector< vector<weightiLarge> > &dists_table,
-		vector<ShortIndex> &short_index,
-		idi roots_start)
-{
-	idi r_real_id = r_root_id + roots_start;
-	static idi num_v = G.get_num_v();
-	// Active queue
-	static vector<idi> active_queue(num_v);
-	static idi end_active_queue = 0;
-	static vector<bool> is_active(num_v, false);
-	// Temporary Active queue
-	static vector<idi> tmp_active_queue(num_v);
-	static idi end_tmp_active_queue = 0;
-	static vector<bool> tmp_is_active(num_v, false);
-
-	active_queue[end_active_queue++] = s;
-	while (0 != end_active_queue) {
-		// Traverse active queue, get every vertex and its distance to the target
-		for (idi i_q = 0; i_q < end_active_queue; ++i_q) {
-			idi v = active_queue[i_q];
-			is_active[v] = false; // reset flag
-			weightiLarge dist_r_v = dists_table[r_root_id][v];
-			// Traverse all neighbors of vertex v
-			idi e_i_start = G.vertices[v];
-			idi e_i_bound = e_i_start + G.out_degrees[v];
-			for (idi e_i = e_i_start; e_i < e_i_bound; ++e_i) {
-				idi w = G.out_edges[e_i];
-				if (w <= r_real_id) {
-					// Neighbors are ordered by ranks from low to high
-					break;
-				}
-				weightiLarge tmp_dist_r_w = dist_r_v + G.out_weights[e_i];
-				if (tmp_dist_r_w <= dists_table[r_root_id][w]) {
-					dists_table[r_root_id][w] = tmp_dist_r_w;
-					short_index[w].vertices_dists[r_root_id] = WEIGHTILARGE_MAX;
-					if (!tmp_is_active[w]) {
-						tmp_is_active[w] = true;
-						tmp_active_queue[end_tmp_active_queue++] = w;
-					}
-				}
-			}
-		}
-		end_active_queue = end_tmp_active_queue;
-		end_tmp_active_queue = 0;
-		active_queue.swap(tmp_active_queue);
-		is_active.swap(tmp_is_active);
-	}
-}
+//// Function:vertex s noticed that it received a distance between t but the distance is longer than what s can get,
+//// so s starts to send its shorter distance between s and t to all its neighbors. According to the distance sent,
+//// all active neighbors will update their distance table elements and reset their label table elements. The
+//// process continue until no active vertices.
+//// DEPRECATED! The overhead is too large.
+//inline void WeightedParaVertexCentricPLLVec::send_back(
+//		idi s,
+//		idi r_root_id,
+//		const WeightedGraph &G,
+//		vector< vector<weighti> > &dists_table,
+//		vector<ShortIndex> &short_index,
+//		idi roots_start)
+//{
+//	idi r_real_id = r_root_id + roots_start;
+//	static idi num_v = G.get_num_v();
+//	// Active queue
+//	static vector<idi> active_queue(num_v);
+//	static idi end_active_queue = 0;
+//	static vector<uint8_t> is_active(num_v, false);
+//	// Temporary Active queue
+//	static vector<idi> tmp_active_queue(num_v);
+//	static idi end_tmp_active_queue = 0;
+//	static vector<uint8_t> tmp_is_active(num_v, false);
+//
+//	active_queue[end_active_queue++] = s;
+//	while (0 != end_active_queue) {
+//		// Traverse active queue, get every vertex and its distance to the target
+//		for (idi i_q = 0; i_q < end_active_queue; ++i_q) {
+//			idi v = active_queue[i_q];
+//			is_active[v] = 0; // reset flag
+//			weighti dist_r_v = dists_table[r_root_id][v];
+//			// Traverse all neighbors of vertex v
+//			idi e_i_start = G.vertices[v];
+//			idi e_i_bound = e_i_start + G.out_degrees[v];
+//			for (idi e_i = e_i_start; e_i < e_i_bound; ++e_i) {
+//				idi w = G.out_edges[e_i];
+//				if (w <= r_real_id) {
+//					// Neighbors are ordered by ranks from low to high
+//					break;
+//				}
+//				weighti tmp_dist_r_w = dist_r_v + G.out_weights[e_i];
+//				if (tmp_dist_r_w <= dists_table[r_root_id][w]) {
+//					dists_table[r_root_id][w] = tmp_dist_r_w;
+//					short_index[w].vertices_dists[r_root_id] = WEIGHTI_MAX;
+//					if (!tmp_is_active[w]) {
+//						tmp_is_active[w] = 1;
+//						tmp_active_queue[end_tmp_active_queue++] = w;
+//					}
+//				}
+//			}
+//		}
+//		end_active_queue = end_tmp_active_queue;
+//		end_tmp_active_queue = 0;
+//		active_queue.swap(tmp_active_queue);
+//		is_active.swap(tmp_is_active);
+//	}
+//}
 
 //// Function: at the end of every batch, filter out wrong and redundant labels
-//inline void WeightedVertexCentricPLL::filter_out_labels(
+//inline void WeightedParaVertexCentricPLLVec::filter_out_labels(
 //		const vector<idi> &has_new_labels_queue,
 //		idi end_has_new_labels_queue,
 //		vector<ShortIndex> &short_index,
@@ -1111,8 +1155,8 @@ inline void WeightedVertexCentricPLL<BATCH_SIZE>::send_back(
 //		// Traverse v_id's every new label
 //		for (inti i_c = 0; i_c < bound_label_i; ++i_c) {
 //			idi c_root_id = SI_v.vertices_que[i_c];
-//			weightiLarge dist_v_c = SI_v.vertices_dists[c_root_id];
-//			if (WEIGHTILARGE_MAX == dist_v_c) {
+//			weighti dist_v_c = SI_v.vertices_dists[c_root_id];
+//			if (WEIGHTI_MAX == dist_v_c) {
 //				continue;
 //			}
 //			ShortIndex &SI_c = short_index[c_root_id + roots_start];
@@ -1126,17 +1170,17 @@ inline void WeightedVertexCentricPLL<BATCH_SIZE>::send_back(
 //				if (c_root_id <= r_root_id) {
 //					continue;
 //				}
-//				weightiLarge dist_v_r = SI_v.vertices_dists[r_root_id];
-//				if (WEIGHTILARGE_MAX == dist_v_r) {
+//				weighti dist_v_r = SI_v.vertices_dists[r_root_id];
+//				if (WEIGHTI_MAX == dist_v_r) {
 //					continue;
 //				}
-//				weightiLarge dist_c_r = SI_c.vertices_dists[r_root_id];
-//				if (WEIGHTILARGE_MAX == dist_c_r) {
+//				weighti dist_c_r = SI_c.vertices_dists[r_root_id];
+//				if (WEIGHTI_MAX == dist_c_r) {
 //					continue;
 //				}
 //				if (dist_v_r + dist_c_r <= dist_v_c) {
 //					// Shorter distance exists, then label c is not necessary
-//					SI_v.vertices_dists[c_root_id] = WEIGHTILARGE_MAX; // Filter out c_root_id from v_id's labels
+//					SI_v.vertices_dists[c_root_id] = WEIGHTI_MAX; // Filter out c_root_id from v_id's labels
 //				}
 //			}
 //		}
@@ -1145,13 +1189,14 @@ inline void WeightedVertexCentricPLL<BATCH_SIZE>::send_back(
 
 // Function: at the end of every batch, filter out wrong and redundant labels
 template <inti BATCH_SIZE>
-inline void WeightedVertexCentricPLL<BATCH_SIZE>::filter_out_labels(
+inline void WeightedParaVertexCentricPLLVec<BATCH_SIZE>::filter_out_labels(
 		const vector<idi> &has_new_labels_queue,
 		idi end_has_new_labels_queue,
 		vector<ShortIndex> &short_index,
 		idi roots_start)
 {
 	// Traverse has_new_labels_queue for every vertex who got new labels in this batch
+#pragma omp parallel for
 	for (idi i_q = 0; i_q < end_has_new_labels_queue; ++i_q) {
 		idi v_id = has_new_labels_queue[i_q];
 		IndexType &Lv = L[v_id];
@@ -1164,7 +1209,7 @@ inline void WeightedVertexCentricPLL<BATCH_SIZE>::filter_out_labels(
 			SI_v.max_dist_batch = 0;
 			continue;
 		} else {
-			SI_v.are_dists_monotone = true;
+			SI_v.are_dists_monotone = 1;
 			SI_v.max_dist_batch = 0;
 		}
 
@@ -1172,114 +1217,110 @@ inline void WeightedVertexCentricPLL<BATCH_SIZE>::filter_out_labels(
 		// Traverse v_id's every new label
 		for (inti i_c = 0; i_c < bound_label_i; ++i_c) {
 			idi c_root_id = SI_v.vertices_que[i_c];
-			weightiLarge dist_v_c = SI_v.vertices_dists[c_root_id];
-//			if (WEIGHTILARGE_MAX == dist_v_c) {
+			weighti dist_v_c = SI_v.vertices_dists[c_root_id];
+//			if (WEIGHTI_MAX == dist_v_c) {
 //				continue;
 //			}
 			ShortIndex &SI_c = short_index[c_root_id + roots_start];
 
-//			// Vectorized Version
-//			//static inti NUM_P_INT = 16;
-//			//static const __m512i INF_v = _mm512_set1_epi32(WEIGHTI_MAX);
-//			//static const __m512i UNDEF_i32_v = _mm512_undefined_epi32();
-//			//static const __m512i LOWEST_BYTE_MASK = _mm512_set1_epi32(0xFF);
-//			//static const __m128i INF_v_128i = _mm_set1_epi8(-1);
-//			const __m512i c_root_id_v = _mm512_set1_epi32(c_root_id);
-//			const __m512i dist_v_c_v = _mm512_set1_epi32(dist_v_c);
-//			inti remainder_simd = bound_label_i % NUM_P_INT;
-//			idi bound_i_r = bound_label_i - remainder_simd;
-//			for (idi i_r = 0; i_r < bound_i_r; i_r += NUM_P_INT) {
-//				// Other label r
-//				__m512i r_root_id_v = _mm512_loadu_epi32(&SI_v.vertices_que[i_r]);
-//				__mmask16 is_r_higher_ranked_m = _mm512_cmplt_epi32_mask(r_root_id_v, c_root_id_v);
-//				if (!is_r_higher_ranked_m) {
-//					continue;
-//				}
-//				// Distance v to r
-//				__m512i dists_v_r_v = _mm512_mask_i32gather_epi32(INF_v, is_r_higher_ranked_m, r_root_id_v, &SI_v.vertices_dists[0], sizeof(weightiLarge));
-//				dists_v_r_v = _mm512_mask_and_epi32(INF_v, is_r_higher_ranked_m, dists_v_r_v, LOWEST_BYTE_MASK);
-//				__mmask16 is_shorter_m = _mm512_cmple_epi32_mask(dists_v_r_v, dist_v_c_v);
-//				if (!is_shorter_m) {
-//					continue;
-//				}
-//				// Distance c to r
-//				__m512i dists_c_r_v = _mm512_mask_i32gather_epi32(INF_v, is_shorter_m, r_root_id_v, &SI_c.vertices_dists[0], sizeof(weightiLarge));
-//				dists_c_r_v = _mm512_mask_and_epi32(INF_v, is_shorter_m, dists_c_r_v, LOWEST_BYTE_MASK);
-//				is_shorter_m = _mm512_cmple_epi32_mask(dists_c_r_v, dist_v_c_v);
-//				if (!is_shorter_m) {
-//					continue;
-//				}
-//				// Distance compare
-//				is_shorter_m = _mm512_mask_cmple_epi32_mask(is_shorter_m, _mm512_mask_add_epi32(INF_v, is_shorter_m, dists_v_r_v, dists_c_r_v), dist_v_c_v);
-//				if (is_shorter_m) {
-//					int_mask_i32scatter_epi8(
-//							&SI_v.vertices_dists[0],
-//							is_shorter_m,
-//							c_root_id_v,
-//							WEIGHTI_MAX);
-//				}
-//			}
-//			if (remainder_simd) {
-//				__mmask16 in_m = (__mmask16) ((uint16_t) 0xFFFF >> (NUM_P_INT - remainder_simd));
-//				// Other label r
-//				__m512i r_root_id_v = _mm512_mask_loadu_epi32(UNDEF_i32_v, in_m, &SI_v.vertices_que[bound_i_r]);
-//
-//				__mmask16 is_r_higher_ranked_m = _mm512_mask_cmplt_epi32_mask(in_m, r_root_id_v, c_root_id_v);
-//				if (!is_r_higher_ranked_m) {
-//					continue;
-//				}
-//				// Distance v to r
-//				__m512i dists_v_r_v = _mm512_mask_i32gather_epi32(INF_v, is_r_higher_ranked_m, r_root_id_v, &SI_v.vertices_dists[0], sizeof(weightiLarge));
-//				dists_v_r_v = _mm512_mask_and_epi32(INF_v, is_r_higher_ranked_m, dists_v_r_v, LOWEST_BYTE_MASK);
-//				__mmask16 is_shorter_m = _mm512_cmple_epi32_mask(dists_v_r_v, dist_v_c_v);
-//				if (!is_shorter_m) {
-//					continue;
-//				}
-//				// Distance c to r
-//				__m512i dists_c_r_v = _mm512_mask_i32gather_epi32(INF_v, is_shorter_m, r_root_id_v, &SI_c.vertices_dists[0], sizeof(weightiLarge));
-//				dists_c_r_v = _mm512_mask_and_epi32(INF_v, is_shorter_m, dists_c_r_v, LOWEST_BYTE_MASK);
-//				is_shorter_m = _mm512_cmple_epi32_mask(dists_c_r_v, dist_v_c_v);
-//				if (!is_shorter_m) {
-//					continue;
-//				}
-//				// Distance compare
-//				is_shorter_m = _mm512_mask_cmple_epi32_mask(is_shorter_m, _mm512_mask_add_epi32(INF_v, is_shorter_m, dists_v_r_v, dists_c_r_v), dist_v_c_v);
-//				if (is_shorter_m) {
-//					int_mask_i32scatter_epi8(
-//							&SI_v.vertices_dists[0],
-//							is_shorter_m,
-//							c_root_id_v,
-//							WEIGHTI_MAX);
-//				}
-//			}
-
-			// Sequential Version
-			// Traverse v_id's other new label to see if has shorter distance
-			for (inti i_r = 0; i_r < bound_label_i; ++i_r) {
-			//for (inti i_r = i_c + 1; i_r < bound_label_i; ++i_r) {}
-				// r_root_id is the middle hop.
-				idi r_root_id = SI_v.vertices_que[i_r];
-				if (c_root_id <= r_root_id) {
+			// Vectorized Version
+			const __m512i c_root_id_v = _mm512_set1_epi32(c_root_id);
+			const __m512i dist_v_c_v = _mm512_set1_epi32(dist_v_c);
+			inti remainder_simd = bound_label_i % NUM_P_INT;
+			idi bound_i_r = bound_label_i - remainder_simd;
+			for (idi i_r = 0; i_r < bound_i_r; i_r += NUM_P_INT) {
+				// Other label r
+				__m512i r_root_id_v = _mm512_loadu_epi32(&SI_v.vertices_que[i_r]); // @suppress("Function cannot be resolved")
+				__mmask16 is_r_higher_ranked_m = _mm512_cmplt_epi32_mask(r_root_id_v, c_root_id_v);
+				if (!is_r_higher_ranked_m) {
 					continue;
 				}
-				weightiLarge dist_v_r = SI_v.vertices_dists[r_root_id];
-				if (dist_v_r > dist_v_c) {
+				// Distance v to r
+				__m512i dists_v_r_v = _mm512_mask_i32gather_epi32(INF_v, is_r_higher_ranked_m, r_root_id_v, &SI_v.vertices_dists[0], sizeof(weighti));
+				dists_v_r_v = _mm512_mask_and_epi32(INF_v, is_r_higher_ranked_m, dists_v_r_v, LOWEST_BYTE_MASK);
+				__mmask16 is_shorter_m = _mm512_cmple_epi32_mask(dists_v_r_v, dist_v_c_v);
+				if (!is_shorter_m) {
 					continue;
 				}
-				weightiLarge dist_c_r = SI_c.vertices_dists[r_root_id];
-				if (dist_c_r > dist_v_c) {
+				// Distance c to r
+				__m512i dists_c_r_v = _mm512_mask_i32gather_epi32(INF_v, is_shorter_m, r_root_id_v, &SI_c.vertices_dists[0], sizeof(weighti));
+				dists_c_r_v = _mm512_mask_and_epi32(INF_v, is_shorter_m, dists_c_r_v, LOWEST_BYTE_MASK);
+				is_shorter_m = _mm512_cmple_epi32_mask(dists_c_r_v, dist_v_c_v);
+				if (!is_shorter_m) {
 					continue;
 				}
-				if (dist_v_r + dist_c_r <= dist_v_c) {
-					// Shorter distance exists, then label c is not necessary
-					SI_v.vertices_dists[c_root_id] = WEIGHTILARGE_MAX; // Filter out c_root_id from v_id's labels
+				// Distance compare
+				is_shorter_m = _mm512_mask_cmple_epi32_mask(is_shorter_m, _mm512_mask_add_epi32(INF_v, is_shorter_m, dists_v_r_v, dists_c_r_v), dist_v_c_v);
+				if (is_shorter_m) {
+					int_mask_i32scatter_epi8(
+							&SI_v.vertices_dists[0], 
+							is_shorter_m, 
+							c_root_id_v, 
+							WEIGHTI_MAX);
 				}
 			}
+			if (remainder_simd) {
+				__mmask16 in_m = (__mmask16) ((uint16_t) 0xFFFF >> (NUM_P_INT - remainder_simd));
+				// Other label r
+				__m512i r_root_id_v = _mm512_mask_loadu_epi32(UNDEF_i32_v, in_m, &SI_v.vertices_que[bound_i_r]);
+
+				__mmask16 is_r_higher_ranked_m = _mm512_mask_cmplt_epi32_mask(in_m, r_root_id_v, c_root_id_v);
+				if (!is_r_higher_ranked_m) {
+					continue;
+				}
+				// Distance v to r
+				__m512i dists_v_r_v = _mm512_mask_i32gather_epi32(INF_v, is_r_higher_ranked_m, r_root_id_v, &SI_v.vertices_dists[0], sizeof(weighti));
+				dists_v_r_v = _mm512_mask_and_epi32(INF_v, is_r_higher_ranked_m, dists_v_r_v, LOWEST_BYTE_MASK);
+				__mmask16 is_shorter_m = _mm512_cmple_epi32_mask(dists_v_r_v, dist_v_c_v);
+				if (!is_shorter_m) {
+					continue;
+				}
+				// Distance c to r
+				__m512i dists_c_r_v = _mm512_mask_i32gather_epi32(INF_v, is_shorter_m, r_root_id_v, &SI_c.vertices_dists[0], sizeof(weighti));
+				dists_c_r_v = _mm512_mask_and_epi32(INF_v, is_shorter_m, dists_c_r_v, LOWEST_BYTE_MASK);
+				is_shorter_m = _mm512_cmple_epi32_mask(dists_c_r_v, dist_v_c_v);
+				if (!is_shorter_m) {
+					continue;
+				}
+				// Distance compare
+				is_shorter_m = _mm512_mask_cmple_epi32_mask(is_shorter_m, _mm512_mask_add_epi32(INF_v, is_shorter_m, dists_v_r_v, dists_c_r_v), dist_v_c_v);
+				if (is_shorter_m) {
+					int_mask_i32scatter_epi8(
+							&SI_v.vertices_dists[0], 
+							is_shorter_m, 
+							c_root_id_v, 
+							WEIGHTI_MAX);
+				}
+			}
+
+//			// Sequential Version
+//			// Traverse v_id's other new label to see if has shorter distance
+//			for (inti i_r = 0; i_r < bound_label_i; ++i_r) {
+//			//for (inti i_r = i_c + 1; i_r < bound_label_i; ++i_r) {}
+//				// r_root_id is the middle hop.
+//				idi r_root_id = SI_v.vertices_que[i_r];
+//				if (c_root_id <= r_root_id) {
+//					continue;
+//				}
+//				weighti dist_v_r = SI_v.vertices_dists[r_root_id];
+//				if (dist_v_r > dist_v_c) {
+//					continue;
+//				}
+//				weighti dist_c_r = SI_c.vertices_dists[r_root_id];
+//				if (dist_c_r > dist_v_c) {
+//					continue;
+//				}
+//				if (dist_v_r + dist_c_r <= dist_v_c) {
+//					// Shorter distance exists, then label c is not necessary
+//					SI_v.vertices_dists[c_root_id] = WEIGHTI_MAX; // Filter out c_root_id from v_id's labels
+//				}
+//			}
 		}
 	}
 }
+
 template <inti BATCH_SIZE>
-inline void WeightedVertexCentricPLL<BATCH_SIZE>::vertex_centric_labeling_in_batches(
+inline void WeightedParaVertexCentricPLLVec<BATCH_SIZE>::vertex_centric_labeling_in_batches(
 						const WeightedGraph &G,
 						idi b_id,
 						idi roots_start, // start id of roots
@@ -1287,17 +1328,42 @@ inline void WeightedVertexCentricPLL<BATCH_SIZE>::vertex_centric_labeling_in_bat
 						vector<IndexType> &L,
 						vector<idi> &active_queue,
 						idi end_active_queue,
-						vector<bool> &is_active,
+						vector<uint8_t> &is_active,
 						vector<idi> &has_cand_queue,
 						idi end_has_cand_queue,
-						vector<bool> &has_candidates,
-						vector< vector<weightiLarge> > &dists_table,
-						vector< vector<weightiLarge> > &roots_labels_buffer,
+						vector<uint8_t> &has_candidates,
+						vector< vector<weighti> > &dists_table,
+						vector< vector<weighti> > &roots_labels_buffer,
 						vector<ShortIndex> &short_index,
 						vector<idi> &has_new_labels_queue,
 						idi end_has_new_labels_queue,
-						vector<bool> &has_new_labels)
+						vector<uint8_t> &has_new_labels)
 {
+//	// Active queue
+//	static vector<idi> active_queue(num_v);
+//	static idi end_active_queue = 0;
+//	static vector<uint8_t> is_active(num_v, false);// is_active[v] is true means vertex v is in the active queue.
+//	// Queue of vertices having candidates
+//	static vector<idi> has_cand_queue(num_v);
+//	static idi end_has_cand_queue = 0;
+//	static vector<uint8_t> has_candidates(num_v, false); // has_candidates[v] is true means vertex v is in the queue has_cand_queue.
+//	// Distance table of shortest distance from roots to other vertices.
+//	static vector< vector<weighti> > dists_table(num_v, vector<weighti>(BATCH_SIZE, WEIGHTI_MAX));
+//		// The distance table is roots_sizes by N.
+//		// 1. record the shortest distance so far from every root to every vertex; (from v to root r)
+//		// 2. (DEPRECATED! Replaced by roots_labels_buffer) The distance buffer, recording old label distances of every root. It needs to be initialized every batch by labels of roots. (dists_table[r][l], r > l)
+//	// A tabel for roots' old label distances (which are stored in the dists_table in the last version)
+//	static vector< vector<weighti> > roots_labels_buffer(BATCH_SIZE, vector<weighti>(num_v, WEIGHTI_MAX)); // r's old label distance from r to v
+//	// Every vertex has a ShortIndex object; the previous labels_table is now in ShortIndex structure
+//	static vector<ShortIndex> short_index(num_v, ShortIndex(BATCH_SIZE)); // Here the size of short_index actually is fixed because it is static.
+//		// Temporary distance table, recording in the current iteration the traversing distance from a vertex to a root.
+//		// The candidate table is replaced by the ShortIndex structure: every vertex has a queue and a distance array;
+//   		// 1. the queue records last inserted labels.
+//		// 2. the distance array acts like a bitmap but restores distances.
+//	// A queue to store vertices which have got new labels in this batch. This queue is used for reset dists_table.
+//	static vector<idi> has_new_labels_queue(num_v);
+//	static idi end_has_new_labels_queue = 0;
+//	static vector<uint8_t> has_new_labels(num_v, false);
 //	initializing_time -= WallTimer::get_time_mark();
 
 	// At the beginning of a batch, initialize the labels L and distance buffer dist_matrix;
@@ -1313,135 +1379,217 @@ inline void WeightedVertexCentricPLL<BATCH_SIZE>::vertex_centric_labeling_in_bat
 			end_has_new_labels_queue,
 			has_new_labels);
 
-//	weightiLarge iter = 0; // The iterator, also the distance for current iteration
+//	weighti iter = 0; // The iterator, also the distance for current iteration
 //	initializing_time += WallTimer::get_time_mark();
 
 
 	while (0 != end_active_queue) {
 		// First stage, sending distances.
 //		candidating_time -= WallTimer::get_time_mark();
-//		candidating_ins_count.measure_start();
-		// Traverse the active queue, every active vertex sends distances to its neighbors
-		for (idi i_queue = 0; i_queue < end_active_queue; ++i_queue) {
-			idi v_head = active_queue[i_queue];
-			is_active[v_head] = false; // reset is_active
+		{
+//			candidating_ins_count.measure_start();
 
-			send_messages(
-					v_head,
-					roots_start,
-					G,
-					dists_table,
-					short_index,
-					has_cand_queue,
-					end_has_cand_queue,
-					has_candidates);
+			// Prepare for parallel processing the active_queue and adding to candidate_queue.
+			// Every vertex's offset location in tmp_candidate_queue
+			// It's used for every thread to write into tmp_candidate_queue and tmp_once_candidated_queue
+			vector<idi> offsets_tmp_queue(end_active_queue);
+#pragma omp parallel for
+			for (idi i_queue = 0; i_queue < end_active_queue; ++i_queue) {
+				// Traverse all active vertices, get their out degrees.
+				offsets_tmp_queue[i_queue] = G.out_degrees[active_queue[i_queue]];
+			}
+			idi num_neighbors = prefix_sum_for_offsets(offsets_tmp_queue);
+			// every thread writes to tmp_candidate_queue at its offset location
+			vector<idi> tmp_has_cand_queue(num_neighbors);
+			// A vector to store the true number of pushed neighbors of every active vertex.
+			vector<idi> sizes_tmp_has_cand_queue(end_active_queue, 0);
+
+
+			// Traverse the active queue, every active vertex sends distances to its neighbors
+#pragma omp parallel for
+			for (idi i_queue = 0; i_queue < end_active_queue; ++i_queue) {
+				idi v_head = active_queue[i_queue];
+				is_active[v_head] = 0; // reset is_active
+
+				send_messages(
+						v_head,
+						roots_start,
+						G,
+						dists_table,
+						short_index,
+//						has_cand_queue,
+//						end_has_cand_queue,
+						tmp_has_cand_queue,
+						sizes_tmp_has_cand_queue[i_queue],
+						offsets_tmp_queue[i_queue],
+						has_candidates);
+			}
+
+			// According to sizes_tmp_candidate_queue, get the offset for inserting to the real queue
+			idi total_new = prefix_sum_for_offsets(sizes_tmp_has_cand_queue);
+			// Collect all candidate vertices from tmp_candidate_queue into candidate_queue.
+			collect_into_queue(
+						tmp_has_cand_queue,
+						offsets_tmp_queue, // the locations in tmp_queue for writing from tmp_queue
+						sizes_tmp_has_cand_queue, // the locations in queue for writing into queue.
+						total_new, // total number of elements which need to be added from tmp_queue to queue
+						has_cand_queue,
+						end_has_cand_queue);
+
+			end_active_queue = 0; // Set the active_queue empty
+//			candidating_ins_count.measure_stop();
 		}
-		end_active_queue = 0; // Set the active_queue empty
-//		candidating_ins_count.measure_stop();
 //		candidating_time += WallTimer::get_time_mark();
+
+		// Second stage, adding
 //		adding_time -= WallTimer::get_time_mark();
-//		adding_ins_count.measure_start();
+		{
+//			adding_ins_count.measure_start();
+			// Prepare for parallel processing the candidate_queue and adding to active_queue.
+			// Every vertex's offset location in tmp_active_queue is i_queue * roots_size
+			// It's used for every thread to write into tmp_candidate_queue and tmp_once_candidated_queue
+			vector<idi> offsets_tmp_queue(end_has_cand_queue);
+#pragma omp parallel for
+			for (idi i_queue = 0; i_queue < end_has_cand_queue; ++i_queue) {
+				// Traverse all active vertices, get their out degrees.
+				// A ridiculous bug here. The v_id will, if any, only add itself to the active queue.
+				//offsets_tmp_queue[i_queue] = i_queue * roots_size;
+				offsets_tmp_queue[i_queue] = i_queue;
+			}
+			// every thread writes to tmp_active_queue at its offset location
+			vector<idi> tmp_active_queue(end_has_cand_queue);
+			// A vector to store the true number of pushed neighbors of every active vertex.
+			vector<idi> sizes_tmp_active_queue(end_has_cand_queue, 0);
+			// every thread writes to its offset location.
+			vector<idi> tmp_has_new_labels_queue(end_has_cand_queue);
+			// Store the size of every group recorded by every thread.
+			vector<idi> sizes_tmp_has_new_labels_queue(end_has_cand_queue, 0);
 
-		// Traverse vertices in the has_cand_queue to insert labels
-		for (idi i_queue = 0; i_queue < end_has_cand_queue; ++i_queue) {
-			idi v_id = has_cand_queue[i_queue];
-			bool need_activate = false;
-			ShortIndex &SI_v = short_index[v_id];
-			// Traverse v_id's all candidates
-			inti bound_cand_i = SI_v.end_candidates_que;
-			for (inti cand_i = 0; cand_i < bound_cand_i; ++cand_i) {
-				inti cand_root_id = SI_v.candidates_que[cand_i];
-				weightiLarge tmp_dist_v_c = SI_v.candidates_dists[cand_root_id];
-				// Distance check for pruning
-				weightiLarge query_dist_v_c;
-				if (WEIGHTILARGE_MAX ==
-						(query_dist_v_c = distance_query(
-										 v_id,
-										 cand_root_id,
-										 //dists_table,
-										 roots_labels_buffer,
-										 short_index,
-										 L,
-										 roots_start,
-										 tmp_dist_v_c))) {
-					if (WEIGHTILARGE_MAX == SI_v.vertices_dists[cand_root_id]) {
-						// Record cand_root_id as v_id's label
-						SI_v.vertices_que[SI_v.end_vertices_que++] = cand_root_id;
-						
-					}
-					// Monotone check
-					if (SI_v.are_dists_monotone) {
-						if (tmp_dist_v_c > SI_v.max_dist_batch) {
-							SI_v.max_dist_batch = tmp_dist_v_c;
-						} else {
-							SI_v.are_dists_monotone = false;
+			// Traverse vertices in the has_cand_queue to insert labels
+#pragma omp parallel for
+			for (idi i_queue = 0; i_queue < end_has_cand_queue; ++i_queue) {
+				idi v_id = has_cand_queue[i_queue];
+				bool need_activate = 0;
+				ShortIndex &SI_v = short_index[v_id];
+				// Traverse v_id's all candidates
+				inti bound_cand_i = SI_v.end_candidates_que;
+				for (inti cand_i = 0; cand_i < bound_cand_i; ++cand_i) {
+					inti cand_root_id = SI_v.candidates_que[cand_i];
+					weighti tmp_dist_v_c = SI_v.candidates_dists[cand_root_id];
+					// Distance check for pruning
+					weighti query_dist_v_c;
+					if (WEIGHTI_MAX ==
+							(query_dist_v_c = distance_query(
+									v_id,
+									cand_root_id,
+									//dists_table,
+									roots_labels_buffer,
+									short_index,
+									L,
+									roots_start,
+									tmp_dist_v_c))) {
+						if (WEIGHTI_MAX == SI_v.vertices_dists[cand_root_id]) {
+							// Record cand_root_id as v_id's label
+							SI_v.vertices_que[SI_v.end_vertices_que++] = cand_root_id;
+
 						}
+						// Monotone check
+						if (SI_v.are_dists_monotone) {
+							if (tmp_dist_v_c > SI_v.max_dist_batch) {
+								SI_v.max_dist_batch = tmp_dist_v_c;
+							} else {
+								SI_v.are_dists_monotone = 0;
+							}
+						}
+						// Record the new distance in the label table
+						SI_v.vertices_dists[cand_root_id] = tmp_dist_v_c;
+						SI_v.last_new_roots[SI_v.end_last_new_roots++] = cand_root_id;
+						need_activate = 1;
+					} else if (query_dist_v_c < tmp_dist_v_c){
+						// Update the dists_table
+						dists_table[v_id][cand_root_id] = query_dist_v_c;
+						// Need to send back the distance
+						// DEPRECATED! The correction should not be done here, because some shorter distance does not mean wrong label distances.
+						//					send_back(
+						//							v_id,
+						//							cand_root_id,
+						//							G,
+						//							dists_table,
+						//							short_index,
+						//							roots_start);
 					}
-					// Record the new distance in the label table
-					SI_v.vertices_dists[cand_root_id] = tmp_dist_v_c;
-					SI_v.last_new_roots[SI_v.end_last_new_roots++] = cand_root_id;
-					need_activate = true;
-				} else if (query_dist_v_c < tmp_dist_v_c){
-					// Update the dists_table
-					dists_table[v_id][cand_root_id] = query_dist_v_c;
-					// Need to send back the distance
-					// DEPRECATED! The correction should not be done here, because some shorter distance does not mean wrong label distances.
-//					send_back(
-//							v_id,
-//							cand_root_id,
-//							G,
-//							dists_table,
-//							short_index,
-//							roots_start);
+				}
+				if (need_activate) {
+					if (!is_active[v_id]) {
+						is_active[v_id] = 1;
+						tmp_active_queue[offsets_tmp_queue[i_queue] + sizes_tmp_active_queue[i_queue]++] = v_id;
+//						active_queue[end_active_queue++] = v_id;
+					}
+					if (!has_new_labels[v_id]) {
+						has_new_labels[v_id] = 1;
+						tmp_has_new_labels_queue[offsets_tmp_queue[i_queue] + sizes_tmp_has_new_labels_queue[i_queue]++] = v_id;
+//						has_new_labels_queue[end_has_new_labels_queue++] = v_id;
+					}
 				}
 			}
-			if (need_activate) {
-				if (!is_active[v_id]) {
-					is_active[v_id] = true;
-					active_queue[end_active_queue++] = v_id;
-				}
-				if (!has_new_labels[v_id]) {
-					has_new_labels[v_id] = true;
-					has_new_labels_queue[end_has_new_labels_queue++] = v_id;
-				}
-			}
-		}
-		// Reset vertices' candidates_que and candidates_dists
-		for (idi i_queue = 0; i_queue < end_has_cand_queue; ++i_queue) {
-			idi v_id = has_cand_queue[i_queue];
-			has_candidates[v_id] = false; // reset has_candidates
-			ShortIndex &SI_v = short_index[v_id];
+			// According to sizes_tmp_active_queue, get the offset for inserting to the real queue
+			idi total_new = prefix_sum_for_offsets(sizes_tmp_active_queue);
+			// Collect all candidate vertices from tmp_active_queue into active_queue.
+			collect_into_queue(
+						tmp_active_queue,
+						offsets_tmp_queue, // the locations in tmp_queue for writing from tmp_queue
+						sizes_tmp_active_queue, // the locations in queue for writing into queue.
+						total_new, // total number of elements which need to be added from tmp_queue to queue
+						active_queue,
+						end_active_queue);
+			// According to sizes_tmp_active_queue, get the offset for inserting to the real queue
+			total_new = prefix_sum_for_offsets(sizes_tmp_has_new_labels_queue);
+			// Collect all candidate vertices from tmp_candidate_queue into candidate_queue.
+			collect_into_queue(
+						tmp_has_new_labels_queue,
+						offsets_tmp_queue, // the locations in tmp_queue for writing from tmp_queue
+						sizes_tmp_has_new_labels_queue, // the locations in queue for writing into queue.
+						total_new, // total number of elements which need to be added from tmp_queue to queue
+						has_new_labels_queue,
+						end_has_new_labels_queue);
+			// Reset vertices' candidates_que and candidates_dists
+#pragma omp parallel for
+			for (idi i_queue = 0; i_queue < end_has_cand_queue; ++i_queue) {
+				idi v_id = has_cand_queue[i_queue];
+				has_candidates[v_id] = 0; // reset has_candidates
+				ShortIndex &SI_v = short_index[v_id];
 
-//			// Semi-Vectorized Version
-//			inti remainder_simd = SI_v.end_candidates_que % NUM_P_INT;
-//			inti bound_cand_i = SI_v.end_candidates_que - remainder_simd;
-//			for (inti cand_i = 0; cand_i < bound_cand_i; cand_i += NUM_P_INT) {
-//				__m512i cand_root_id_v = _mm512_loadu_epi32(&SI_v.candidates_que[cand_i]);
-//				int_i32scatter_epi8(
-//						&SI_v.candidates_dists[0],
-//						cand_root_id_v,
-//						WEIGHTI_MAX);
-//			}
-//			if (remainder_simd) {
-//				__mmask16 in_m = (__mmask16) ((uint16_t) 0xFFFF >> (NUM_P_INT - remainder_simd));
-//				__m512i cand_root_id_v = _mm512_mask_loadu_epi32(UNDEF_i32_v, in_m, &SI_v.candidates_que[bound_cand_i]);
-//				int_mask_i32scatter_epi8(
-//						&SI_v.candidates_dists[0],
-//						in_m,
-//						cand_root_id_v,
-//						WEIGHTI_MAX);
-//			}
+				// Semi-Vectorized Version
+				inti remainder_simd = SI_v.end_candidates_que % NUM_P_INT;
+				inti bound_cand_i = SI_v.end_candidates_que - remainder_simd;
+				for (inti cand_i = 0; cand_i < bound_cand_i; cand_i += NUM_P_INT) {
+					__m512i cand_root_id_v = _mm512_loadu_epi32(&SI_v.candidates_que[cand_i]); // @suppress("Function cannot be resolved")
+					int_i32scatter_epi8(
+							&SI_v.candidates_dists[0],
+							cand_root_id_v,
+							WEIGHTI_MAX);
+				}
+				if (remainder_simd) {
+					__mmask16 in_m = (__mmask16) ((uint16_t) 0xFFFF >> (NUM_P_INT - remainder_simd));
+					__m512i cand_root_id_v = _mm512_mask_loadu_epi32(UNDEF_i32_v, in_m, &SI_v.candidates_que[bound_cand_i]);
+					int_mask_i32scatter_epi8(
+							&SI_v.candidates_dists[0],
+							in_m,
+							cand_root_id_v,
+							WEIGHTI_MAX);
+				}
 
-			// Sequential Version
-			inti bound_cand_i = SI_v.end_candidates_que;
-			for (inti cand_i = 0; cand_i < bound_cand_i; ++cand_i) {
-				inti cand_root_id = SI_v.candidates_que[cand_i];
-				SI_v.candidates_dists[cand_root_id] = WEIGHTILARGE_MAX; // Reset candidates_dists after using in distance_query.
+				// Sequential Version
+				//			inti bound_cand_i = SI_v.end_candidates_que;
+				//			for (inti cand_i = 0; cand_i < bound_cand_i; ++cand_i) {
+				//				inti cand_root_id = SI_v.candidates_que[cand_i];
+				//				SI_v.candidates_dists[cand_root_id] = WEIGHTI_MAX; // Reset candidates_dists after using in distance_query.
+				//			}
+				SI_v.end_candidates_que = 0; // Clear v_id's candidates_que
 			}
-			SI_v.end_candidates_que = 0; // Clear v_id's candidates_que
+			end_has_cand_queue = 0; // Set the has_cand_queue empty
+//			adding_ins_count.measure_stop();
 		}
-		end_has_cand_queue = 0; // Set the has_cand_queue empty
-//		adding_ins_count.measure_stop();
 //		adding_time += WallTimer::get_time_mark();
 	}
 
@@ -1492,8 +1640,9 @@ inline void WeightedVertexCentricPLL<BATCH_SIZE>::vertex_centric_labeling_in_bat
 }
 
 
+
 template <inti BATCH_SIZE>
-void WeightedVertexCentricPLL<BATCH_SIZE>::construct(const WeightedGraph &G)
+void WeightedParaVertexCentricPLLVec<BATCH_SIZE>::construct(const WeightedGraph &G)
 {
 	idi num_v = G.get_num_v();
 	num_v_ = num_v;
@@ -1502,31 +1651,31 @@ void WeightedVertexCentricPLL<BATCH_SIZE>::construct(const WeightedGraph &G)
 	idi b_i_bound = num_v / BATCH_SIZE;
 //	cache_miss.measure_start();
 	// Active queue
-	static vector<idi> active_queue(num_v);
-	static idi end_active_queue = 0;
-	static vector<bool> is_active(num_v, false);// is_active[v] is true means vertex v is in the active queue.
+	vector<idi> active_queue(num_v);
+	idi end_active_queue = 0;
+	vector<uint8_t> is_active(num_v, false);// is_active[v] is true means vertex v is in the active queue.
 	// Queue of vertices having candidates
-	static vector<idi> has_cand_queue(num_v);
-	static idi end_has_cand_queue = 0;
-	static vector<bool> has_candidates(num_v, false); // has_candidates[v] is true means vertex v is in the queue has_cand_queue.
+	vector<idi> has_cand_queue(num_v);
+	idi end_has_cand_queue = 0;
+	vector<uint8_t> has_candidates(num_v, false); // has_candidates[v] is true means vertex v is in the queue has_cand_queue.
 	// Distance table of shortest distance from roots to other vertices.
-	static vector< vector<weightiLarge> > dists_table(num_v, vector<weightiLarge>(BATCH_SIZE, WEIGHTILARGE_MAX));
+	vector< vector<weighti> > dists_table(num_v, vector<weighti>(BATCH_SIZE, WEIGHTI_MAX));
 		// The distance table is roots_sizes by N. 
 		// 1. record the shortest distance so far from every root to every vertex; (from v to root r)
 		// 2. (DEPRECATED! Replaced by roots_labels_buffer) The distance buffer, recording old label distances of every root. It needs to be initialized every batch by labels of roots. (dists_table[r][l], r > l)
 	// A tabel for roots' old label distances (which are stored in the dists_table in the last version)
-	static vector< vector<weightiLarge> > roots_labels_buffer(BATCH_SIZE, vector<weightiLarge>(num_v, WEIGHTILARGE_MAX)); // r's old label distance from r to v
+	vector< vector<weighti> > roots_labels_buffer(BATCH_SIZE, vector<weighti>(num_v, WEIGHTI_MAX)); // r's old label distance from r to v
 	// Every vertex has a ShortIndex object; the previous labels_table is now in ShortIndex structure
-	static vector<ShortIndex> short_index(num_v, ShortIndex(BATCH_SIZE)); // Here the size of short_index actually is fixed because it is static.
+	vector<ShortIndex> short_index(num_v, ShortIndex(BATCH_SIZE)); // Here the size of short_index actually is fixed because it is static.
 		// Temporary distance table, recording in the current iteration the traversing distance from a vertex to a root.
 		// The candidate table is replaced by the ShortIndex structure: every vertex has a queue and a distance array;
    		// 1. the queue records last inserted labels.
 		// 2. the distance array acts like a bitmap but restores distances.
 
 	// A queue to store vertices which have got new labels in this batch. This queue is used for reset dists_table.
-	static vector<idi> has_new_labels_queue(num_v);
-	static idi end_has_new_labels_queue = 0;
-	static vector<bool> has_new_labels(num_v, false);
+	vector<idi> has_new_labels_queue(num_v);
+	idi end_has_new_labels_queue = 0;
+	vector<uint8_t> has_new_labels(num_v, false);
 
 	double time_labeling = -WallTimer::get_time_mark();
 
@@ -1575,7 +1724,7 @@ void WeightedVertexCentricPLL<BATCH_SIZE>::construct(const WeightedGraph &G)
 
 	// Statistics Print Out
 	setlocale(LC_NUMERIC, ""); // For print large number with comma
-	printf("BATCH_SIZE: %u\n", BATCH_SIZE);
+	printf("Threads: %u BATCH_SIZE: %u\n", NUM_THREADS, BATCH_SIZE);
 //	printf("BP_Size: %u\n", BITPARALLEL_SIZE);
 //	printf("Initializing: %f %.2f%%\n", initializing_time, initializing_time / time_labeling * 100);
 //		printf("\tinit_start_reset_time: %f (%f%%)\n", init_start_reset_time, init_start_reset_time / initializing_time * 100);
@@ -1616,15 +1765,15 @@ void WeightedVertexCentricPLL<BATCH_SIZE>::construct(const WeightedGraph &G)
 //	printf("distance_query: "); dist_query_ins_count.print();
 //	printf("Correction: %f %.2f%%\n", correction_time, 100.0 * correction_time / time_labeling);
 //	printf("Monotone_count: %'lu %.2f%%\n", monotone_count, 100.0 * monotone_count / checked_count);
-	printf("Total_labeling_time: %.2f seconds\n", time_labeling);
+	printf("Total_labeling_time: %.2f seconds\n", time_labeling); fflush(stdout);
 }
 
 // Function: assign lanes of vindex in base_addr as int a.
 template <inti BATCH_SIZE>
-inline void WeightedVertexCentricPLL<BATCH_SIZE>::int_i32scatter_epi8(
-		uint8_t *base_addr,
+inline void WeightedParaVertexCentricPLLVec<BATCH_SIZE>::int_i32scatter_epi8(
+		weighti *base_addr, 
 		__m512i vindex, 
-		uint8_t a)
+		weighti a)
 {
 	int *tmp_vindex = (int *) &vindex;
 	for (inti i = 0; i < 16; ++i) {
@@ -1633,11 +1782,11 @@ inline void WeightedVertexCentricPLL<BATCH_SIZE>::int_i32scatter_epi8(
 }
 // Function: according to mask k, assign lanes of vindex in base_addr as a
 template <inti BATCH_SIZE>
-inline void WeightedVertexCentricPLL<BATCH_SIZE>::int_mask_i32scatter_epi8(
-		uint8_t *base_addr,
+inline void WeightedParaVertexCentricPLLVec<BATCH_SIZE>::int_mask_i32scatter_epi8(
+		weighti *base_addr, 
 		__mmask16 k, 
 		__m512i vindex, 
-		uint8_t a)
+		weighti a)
 {
 	int *tmp_vindex = (int *) &vindex;
 	for (inti i = 0; i < 16; ++i) {
@@ -1653,8 +1802,8 @@ inline void WeightedVertexCentricPLL<BATCH_SIZE>::int_mask_i32scatter_epi8(
 
 // Function: according to mask, assign corresponding lanes in 'a' into base_addr and plus index offsets in vindex
 template <inti BATCH_SIZE>
-inline void WeightedVertexCentricPLL<BATCH_SIZE>::epi32_mask_i32scatter_epi8(
-		uint8_t *base_addr,
+inline void WeightedParaVertexCentricPLLVec<BATCH_SIZE>::epi32_mask_i32scatter_epi8(
+		weighti *base_addr,
 		__mmask16 mask,
 		__m512i vindex,
 		__m512i a)
@@ -1671,7 +1820,7 @@ inline void WeightedVertexCentricPLL<BATCH_SIZE>::epi32_mask_i32scatter_epi8(
 
 // Function: according to mask, put corresponding lanes in 'a' into the queue.
 template <inti BATCH_SIZE>
-inline void WeightedVertexCentricPLL<BATCH_SIZE>::epi32_mask_unpack_into_queue(
+inline void WeightedParaVertexCentricPLLVec<BATCH_SIZE>::epi32_mask_unpack_into_queue(
 		vector<inti> &queue,
 		inti &end_queue,
 		__mmask16 mask,
@@ -1687,7 +1836,7 @@ inline void WeightedVertexCentricPLL<BATCH_SIZE>::epi32_mask_unpack_into_queue(
 }
 
 //// Have not been tested yet.
-//inline void WeightedVertexCentricPLL::epi8_i32scatter_epi8(
+//inline void WeightedParaVertexCentricPLLVec::epi8_i32scatter_epi8(
 //		uint8_t *base_addr,
 //		__m512i vindex,
 //		__m128i a)
@@ -1698,7 +1847,7 @@ inline void WeightedVertexCentricPLL<BATCH_SIZE>::epi32_mask_unpack_into_queue(
 //	}
 //}
 //
-//inline void WeightedVertexCentricPLL::epi8_mask_i32scatter_epi8(
+//inline void WeightedParaVertexCentricPLLVec::epi8_mask_i32scatter_epi8(
 //		uint8_t *base_addr,
 //		__mmask16 mask,
 //		__m512i vindex,
@@ -1710,9 +1859,191 @@ inline void WeightedVertexCentricPLL<BATCH_SIZE>::epi32_mask_unpack_into_queue(
 //	}
 //}
 
+// Function to get the prefix sum of elements in offsets
+template <inti BATCH_SIZE>
+inline idi WeightedParaVertexCentricPLLVec<BATCH_SIZE>::prefix_sum_for_offsets(
+									vector<idi> &offsets)
+{
+	idi size_offsets = offsets.size();
+	if (1 == size_offsets) {
+		idi tmp = offsets[0];
+		offsets[0] = 0;
+		return tmp;
+	} else if (size_offsets < 2048) {
+		idi offset_sum = 0;
+		idi size = size_offsets;
+		for (idi i = 0; i < size; ++i) {
+			idi tmp = offsets[i];
+			offsets[i] = offset_sum;
+			offset_sum += tmp;
+		}
+		return offset_sum;
+	} else {
+		// Parallel Prefix Sum, based on Guy E. Blelloch's Prefix Sums and Their Applications
+		idi last_element = offsets[size_offsets - 1];
+		//	idi size = 1 << ((idi) log2(size_offsets - 1) + 1);
+		idi size = 1 << ((idi) log2(size_offsets));
+		//	vector<idi> nodes(size, 0);
+		idi tmp_element = offsets[size - 1];
+		//#pragma omp parallel for
+		//	for (idi i = 0; i < size_offsets; ++i) {
+		//		nodes[i] = offsets[i];
+		//	}
+
+		// Up-Sweep (Reduce) Phase
+		idi log2size = log2(size);
+		for (idi d = 0; d < log2size; ++d) {
+			idi by = 1 << (d + 1);
+#pragma omp parallel for
+			for (idi k = 0; k < size; k += by) {
+				offsets[k + (1 << (d + 1)) - 1] += offsets[k + (1 << d) - 1];
+			}
+		}
+
+		// Down-Sweep Phase
+		offsets[size - 1] = 0;
+		for (idi d = log2(size) - 1; d != (idi) -1 ; --d) {
+			idi by = 1 << (d + 1);
+#pragma omp parallel for
+			for (idi k = 0; k < size; k += by) {
+				idi t = offsets[k + (1 << d) - 1];
+				offsets[k + (1 << d) - 1] = offsets[k + (1 << (d + 1)) - 1];
+				offsets[k + (1 << (d + 1)) - 1] += t;
+			}
+		}
+
+		//#pragma omp parallel for
+		//	for (idi i = 0; i < size_offsets; ++i) {
+		//		offsets[i] = nodes[i];
+		//	}
+		if (size != size_offsets) {
+			idi tmp_sum = offsets[size - 1] + tmp_element;
+			for (idi i = size; i < size_offsets; ++i) {
+				idi t = offsets[i];
+				offsets[i] = tmp_sum;
+				tmp_sum += t;
+			}
+		}
+
+		return offsets[size_offsets - 1] + last_element;
+	}
+//	// Get the offset as the prefix sum of out degrees
+//	idi offset_sum = 0;
+//	idi size = offsets.size();
+//	for (idi i = 0; i < size; ++i) {
+//		idi tmp = offsets[i];
+//		offsets[i] = offset_sum;
+//		offset_sum += tmp;
+//	}
+//	return offset_sum;
+
+//// Parallel Prefix Sum, based on Guy E. Blelloch's Prefix Sums and Their Applications
+//	idi size_offsets = offsets.size();
+//	idi last_element = offsets[size_offsets - 1];
+////	idi size = 1 << ((idi) log2(size_offsets - 1) + 1);
+//	idi size = 1 << ((idi) log2(size_offsets));
+////	vector<idi> nodes(size, 0);
+//	idi tmp_element = offsets[size - 1];
+////#pragma omp parallel for
+////	for (idi i = 0; i < size_offsets; ++i) {
+////		nodes[i] = offsets[i];
+////	}
+//
+//	// Up-Sweep (Reduce) Phase
+//	idi log2size = log2(size);
+//	for (idi d = 0; d < log2size; ++d) {
+//		idi by = 1 << (d + 1);
+//#pragma omp parallel for
+//		for (idi k = 0; k < size; k += by) {
+//			offsets[k + (1 << (d + 1)) - 1] += offsets[k + (1 << d) - 1];
+//		}
+//	}
+//
+//	// Down-Sweep Phase
+//	offsets[size - 1] = 0;
+//	for (idi d = log2(size) - 1; d != (idi) -1 ; --d) {
+//		idi by = 1 << (d + 1);
+//#pragma omp parallel for
+//		for (idi k = 0; k < size; k += by) {
+//			idi t = offsets[k + (1 << d) - 1];
+//			offsets[k + (1 << d) - 1] = offsets[k + (1 << (d + 1)) - 1];
+//			offsets[k + (1 << (d + 1)) - 1] += t;
+//		}
+//	}
+//
+////#pragma omp parallel for
+////	for (idi i = 0; i < size_offsets; ++i) {
+////		offsets[i] = nodes[i];
+////	}
+//	if (size != offsets.size()) {
+//		idi tmp_sum = offsets[size - 1] + tmp_element;
+//		idi i_bound = offsets.size();
+//		for (idi i = size; i < i_bound; ++i) {
+//			idi t = offsets[i];
+//			offsets[i] = tmp_sum;
+//			tmp_sum += t;
+//		}
+//	}
+//
+//	return offsets[size_offsets - 1] + last_element;
+}
+
+// Collect elements in the tmp_queue into the queue
+template <inti BATCH_SIZE> template <typename T>
+inline void WeightedParaVertexCentricPLLVec<BATCH_SIZE>::collect_into_queue(
+//					vector<idi> &tmp_queue,
+					vector<T> &tmp_queue,
+					vector<idi> &offsets_tmp_queue, // the locations in tmp_queue for writing from tmp_queue
+					vector<idi> &offsets_queue, // the locations in queue for writing into queue.
+					idi num_elements, // total number of elements which need to be added from tmp_queue to queue
+//					vector<idi> &queue,
+					vector<T> &queue,
+					idi &end_queue)
+{
+	if (0 == num_elements) {
+		return;
+	}
+	idi i_bound = offsets_tmp_queue.size();
+#pragma omp parallel for
+	for (idi i = 0; i < i_bound; ++i) {
+		idi i_q_start = end_queue + offsets_queue[i];
+		idi i_q_bound;
+		if (i_bound - 1 != i) {
+			i_q_bound = end_queue + offsets_queue[i + 1];
+		} else {
+			i_q_bound = end_queue + num_elements;
+		}
+		if (i_q_start == i_q_bound) {
+			// If the group has no elements to be added, then continue to the next group
+			continue;
+		}
+		idi end_tmp = offsets_tmp_queue[i];
+		for (idi i_q = i_q_start; i_q < i_q_bound; ++i_q) {
+			queue[i_q] = tmp_queue[end_tmp++];
+		}
+	}
+	end_queue += num_elements;
+}
+
+// Function: thread-save enqueue. The queue has enough size already. An index points the end of the queue.
+template <inti BATCH_SIZE> template <typename T, typename Int>
+inline void WeightedParaVertexCentricPLLVec<BATCH_SIZE>::TS_enqueue(
+		vector<T> &queue,
+		Int &end_queue,
+		const T &e)
+{
+	volatile Int old_i = end_queue;
+	volatile Int new_i = old_i + 1;
+	while (!CAS(&end_queue, old_i, new_i)) {
+		old_i = end_queue;
+		new_i = old_i + 1;
+	}
+	queue[old_i] = e;
+}
+
 
 template <inti BATCH_SIZE>
-void WeightedVertexCentricPLL<BATCH_SIZE>::store_index_to_file(
+void WeightedParaVertexCentricPLLVec<BATCH_SIZE>::store_index_to_file(
 								const char *filename,
 								const vector<idi> &rank2id)
 {
@@ -1722,7 +2053,7 @@ void WeightedVertexCentricPLL<BATCH_SIZE>::store_index_to_file(
 		exit(EXIT_FAILURE);
 	}
 	idi num_v = rank2id.size();
-	vector< vector< pair<idi, weightiLarge> > > ordered_L(num_v);
+	vector< vector< pair<idi, weighti> > > ordered_L(num_v);
 	Index.resize(num_v);
 	// Store into file the number of vertices and the number of bit-parallel roots.
 	fout.write((char *) &num_v, sizeof(num_v));
@@ -1768,7 +2099,7 @@ void WeightedVertexCentricPLL<BATCH_SIZE>::store_index_to_file(
 			Iv.label_dists[l_i] = OLv[l_i].second;
 		}
 		Iv.label_id[size_labels] = num_v; // Sentinel
-		Iv.label_dists[size_labels] = WEIGHTILARGE_MAX; // Sentinel
+		Iv.label_dists[size_labels] = WEIGHTI_MAX; // Sentinel
 	}
 
 	uint64_t labels_count = 0;
@@ -1783,7 +2114,7 @@ void WeightedVertexCentricPLL<BATCH_SIZE>::store_index_to_file(
 		fout.write((char *) &size_labels, sizeof(size_labels));
 		for (idi l_i = 0; l_i < size_labels; ++l_i) {
 			idi l = Iv.label_id[l_i];
-			weightiLarge d = Iv.label_dists[l_i];
+			weighti d = Iv.label_dists[l_i];
 			fout.write((char *) &l, sizeof(l));
 			fout.write((char *) &d, sizeof(d));
 		}
@@ -1793,7 +2124,7 @@ void WeightedVertexCentricPLL<BATCH_SIZE>::store_index_to_file(
 }
 
 template <inti BATCH_SIZE>
-void WeightedVertexCentricPLL<BATCH_SIZE>::load_index_from_file(
+void WeightedParaVertexCentricPLLVec<BATCH_SIZE>::load_index_from_file(
 								const char *filename)
 {
 	ifstream fin(filename);
@@ -1822,7 +2153,7 @@ void WeightedVertexCentricPLL<BATCH_SIZE>::load_index_from_file(
 			fin.read((char *) &Iv.label_dists[l_i], sizeof(Iv.label_dists[l_i]));
 		}
 		Iv.label_id[size_labels] = num_v; // Sentinel
-		Iv.label_dists[size_labels] = (weightiLarge) -1; // Sentinel
+		Iv.label_dists[size_labels] = (weighti) -1; // Sentinel
 	}
 	printf("Label_size_loaded: %'lu mean: %f\n", labels_count, static_cast<double>(labels_count) / num_v);
 	fin.close();
@@ -1830,12 +2161,12 @@ void WeightedVertexCentricPLL<BATCH_SIZE>::load_index_from_file(
 
 
 template <inti BATCH_SIZE>
-void WeightedVertexCentricPLL<BATCH_SIZE>::order_labels(
+void WeightedParaVertexCentricPLLVec<BATCH_SIZE>::order_labels(
 								const vector<idi> &rank2id,
 								const vector<idi> &rank)
 {
 	idi num_v = rank.size();
-	vector< vector< pair<idi, weightiLarge> > > ordered_L(num_v);
+	vector< vector< pair<idi, weighti> > > ordered_L(num_v);
 	idi labels_count = 0;
 	Index.resize(num_v);
 
@@ -1864,7 +2195,7 @@ void WeightedVertexCentricPLL<BATCH_SIZE>::order_labels(
 			Iv.label_dists[l_i] = OLv[l_i].second;
 		}
 		Iv.label_id[size_labels] = num_v; // Sentinel
-		Iv.label_dists[size_labels] = WEIGHTILARGE_MAX; // Sentinel
+		Iv.label_dists[size_labels] = WEIGHTI_MAX; // Sentinel
 	}
 	printf("Label_size: %u mean: %f\n", labels_count, static_cast<double>(labels_count) / num_v);
 //	// Test
@@ -1897,13 +2228,13 @@ void WeightedVertexCentricPLL<BATCH_SIZE>::order_labels(
 }
 
 template <inti BATCH_SIZE>
-weightiLarge WeightedVertexCentricPLL<BATCH_SIZE>::query_distance(
+weighti WeightedParaVertexCentricPLLVec<BATCH_SIZE>::query_distance(
 								idi a,
 								idi b)
 {
 	idi num_v = num_v_;
 	if (a >= num_v || b >= num_v) {
-		return a == b ? 0 : WEIGHTILARGE_MAX;
+		return a == b ? 0 : WEIGHTI_MAX;
 	}
 
 //	// A is shorter than B
@@ -1919,7 +2250,7 @@ weightiLarge WeightedVertexCentricPLL<BATCH_SIZE>::query_distance(
 
 //	const IndexOrdered &Ia = Index[a];
 //	const IndexOrdered &Ib = Index[b];
-	inti d = WEIGHTILARGE_MAX;
+	inti d = WEIGHTI_MAX;
 
 	_mm_prefetch(&Ia.label_id[0], _MM_HINT_T0);
 	_mm_prefetch(&Ib.label_id[0], _MM_HINT_T0);
@@ -2011,14 +2342,14 @@ weightiLarge WeightedVertexCentricPLL<BATCH_SIZE>::query_distance(
 		}
 	}
 
-	if (d >= WEIGHTILARGE_MAX - 2) {
-		d = WEIGHTILARGE_MAX;
+	if (d >= WEIGHTI_MAX - 2) {
+		d = WEIGHTI_MAX;
 	}
 	return d;
 }
 
 template <inti BATCH_SIZE>
-void WeightedVertexCentricPLL<BATCH_SIZE>::switch_labels_to_old_id(
+void WeightedParaVertexCentricPLLVec<BATCH_SIZE>::switch_labels_to_old_id(
 								const vector<idi> &rank2id,
 								const vector<idi> &rank)
 {
@@ -2027,7 +2358,7 @@ void WeightedVertexCentricPLL<BATCH_SIZE>::switch_labels_to_old_id(
 
 //	idi num_v = rank2id.size();
 	idi num_v = rank.size();
-	vector< vector< pair<idi, weightiLarge> > > new_L(num_v);
+	vector< vector< pair<idi, weighti> > > new_L(num_v);
 
 	for (idi v_id = 0; v_id < num_v; ++v_id) {
 		idi new_v = rank2id[v_id];
@@ -2036,7 +2367,7 @@ void WeightedVertexCentricPLL<BATCH_SIZE>::switch_labels_to_old_id(
 		label_sum += l_i_bound;
 		for (idi l_i = 0; l_i < l_i_bound; ++l_i) {
 			idi tail = Lv.vertices[l_i];
-			weightiLarge dist = Lv.distances[l_i];
+			weighti dist = Lv.distances[l_i];
 			new_L[new_v].push_back(make_pair(rank2id[tail], dist));
 			++test_label_sum;
 		}
@@ -2083,13 +2414,13 @@ void WeightedVertexCentricPLL<BATCH_SIZE>::switch_labels_to_old_id(
 //	idi u;
 //	idi v;
 //	while (std::cin >> u >> v) {
-//		weightiLarge dist = WEIGHTILARGE_MAX;
+//		weighti dist = WEIGHTI_MAX;
 //
 //		// Normal Index Check
 //		const auto &Lu = new_L[u];
 //		const auto &Lv = new_L[v];
-////		unsorted_map<idi, weightiLarge> markers;
-//		map<idi, weightiLarge> markers;
+////		unsorted_map<idi, weighti> markers;
+//		map<idi, weighti> markers;
 //		for (idi i = 0; i < Lu.size(); ++i) {
 //			markers[Lu[i].first] = Lu[i].second;
 //		}

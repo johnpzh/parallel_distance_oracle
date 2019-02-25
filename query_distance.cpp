@@ -18,9 +18,8 @@ using namespace PADO;
 void usage_print()
 {
 	fprintf(stderr,
-			"Usage: ./query_distance <input_index> [-w 0|1] [-v 0|1]\n"
-			"\t-w: 0 for unweighted-graph-generated index (default), 1 for weighted graph\n"
-			"\t-v: 0 for sequential-version-generated index (default), 1 for AVX512 version (needs CPU support)\n");
+			"Usage: ./query_distance <input_index> [-w 0|1]\n"
+			"\t-w: 0 for unweighted-graph-generated index (default), 1 for weighted graph\n");
 }
 
 int main(int argc, char *argv[])
@@ -65,7 +64,7 @@ int main(int argc, char *argv[])
 		// Weighted
  		printf("W VEC\n");//test
  		// Single Thread
- 		WeightedVertexCentricPLLVec<512> *VCPLL = new WeightedVertexCentricPLLVec<512>();
+ 		WeightedVertexCentricPLL<512> *VCPLL = new WeightedVertexCentricPLL<512>();
 		VCPLL->load_index_from_file(input_index.c_str());
 		idi a;
 		idi b;

@@ -27,13 +27,13 @@ for dataset in $DATASETS; do
 	echo $dataset | tee -a $fout
 	echo "------" | tee -a $fout
 	# unweighted, non-vectorization, non-multithread
-	./pado ${path}/${dataset}/${dataset}.txt index.index -w 0 -v 0 -p 0 2>&1 | tee -a $fout
+	#./pado ${path}/${dataset}/${dataset}.txt index.index -w 0 -v 0 -p 0 2>&1 | tee -a $fout
 
 	# unweighted, non-vectorization, multithread
 	#./pado ${path}/${dataset}/${dataset}.txt index.index -w 0 -v 0 -p 1 2>&1 | tee -a $fout
 
 	# weighted, vectorized, non-multithread
-	#./pado ${path}/${dataset}/w_7_unif_${dataset}.txt index.index -w 1 -v 1 -p 0 2>&1 | tee -a $fout
+	./pado ${path}/${dataset}/w_7_unif_${dataset}.txt index.index -w 1 -v 1 -p 0 2>&1 | tee -a $fout
 	
 	# weighted, vectorized, multithread
 	#./pado ${path}/${dataset}/w_7_unif_${dataset}.txt index.index -w 1 -v 1 -p 1 2>&1 | tee -a $fout
@@ -41,23 +41,23 @@ for dataset in $DATASETS; do
 	echo "" | tee -a $fout
 done
 
-mv $fout output.unw_unv_unp.txt
-:> $fout
-for dataset in $DATASETS; do
-	echo $dataset | tee -a $fout
-	echo "------" | tee -a $fout
-	# unweighted, non-vectorization, non-multithread
-	#./pado ${path}/${dataset}/${dataset}.txt index.index -w 0 -v 0 -p 0 2>&1 | tee -a $fout
-
-	# unweighted, non-vectorization, multithread
-	./pado ${path}/${dataset}/${dataset}.txt index.index -w 0 -v 0 -p 1 2>&1 | tee -a $fout
-
-	# weighted, vectorized, non-multithread
-	#./pado ${path}/${dataset}/w_7_unif_${dataset}.txt index.index -w 1 -v 1 -p 0 2>&1 | tee -a $fout
-	
-	# weighted, vectorized, multithread
-	#./pado ${path}/${dataset}/w_7_unif_${dataset}.txt index.index -w 1 -v 1 -p 1 2>&1 | tee -a $fout
-
-	echo "" | tee -a $fout
-done
-mv $fout output.unw_unv_para.txt
+#mv $fout output.unw_unv_unp.txt
+#:> $fout
+#for dataset in $DATASETS; do
+#	echo $dataset | tee -a $fout
+#	echo "------" | tee -a $fout
+#	# unweighted, non-vectorization, non-multithread
+#	#./pado ${path}/${dataset}/${dataset}.txt index.index -w 0 -v 0 -p 0 2>&1 | tee -a $fout
+#
+#	# unweighted, non-vectorization, multithread
+#	./pado ${path}/${dataset}/${dataset}.txt index.index -w 0 -v 0 -p 1 2>&1 | tee -a $fout
+#
+#	# weighted, vectorized, non-multithread
+#	#./pado ${path}/${dataset}/w_7_unif_${dataset}.txt index.index -w 1 -v 1 -p 0 2>&1 | tee -a $fout
+#	
+#	# weighted, vectorized, multithread
+#	#./pado ${path}/${dataset}/w_7_unif_${dataset}.txt index.index -w 1 -v 1 -p 1 2>&1 | tee -a $fout
+#
+#	echo "" | tee -a $fout
+#done
+#mv $fout output.unw_unv_para.txt

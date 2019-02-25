@@ -291,29 +291,29 @@ int main(int argc, char *argv[])
 				WeightedGraph G(input_file.c_str());
 				vector<idi> rank = G.make_rank();
 				vector<idi> rank2id = G.id_transfer(rank);
-				for (NUM_THREADS = 1; NUM_THREADS <= 16; NUM_THREADS *= 2) {
-					omp_set_num_threads(NUM_THREADS);
-					WeightedParaVertexCentricPLLVec<512> *VCPLL = new WeightedParaVertexCentricPLLVec<512>(G);
-					VCPLL->store_index_to_file(output_index.c_str(), rank2id);
-					delete VCPLL;
-					puts("");
-				}
-				{
-					NUM_THREADS = 20;
-					omp_set_num_threads(NUM_THREADS);
-					WeightedParaVertexCentricPLLVec<512> *VCPLL = new WeightedParaVertexCentricPLLVec<512>(G);
-					VCPLL->store_index_to_file(output_index.c_str(), rank2id);
-					delete VCPLL;
-					puts("");
-				}
-				{
-					NUM_THREADS = 32;
-					omp_set_num_threads(NUM_THREADS);
-					WeightedParaVertexCentricPLLVec<512> *VCPLL = new WeightedParaVertexCentricPLLVec<512>(G);
-					VCPLL->store_index_to_file(output_index.c_str(), rank2id);
-					delete VCPLL;
-					puts("");
-				}
+//				for (NUM_THREADS = 1; NUM_THREADS <= 16; NUM_THREADS *= 2) {
+//					omp_set_num_threads(NUM_THREADS);
+//					WeightedParaVertexCentricPLLVec<512> *VCPLL = new WeightedParaVertexCentricPLLVec<512>(G);
+//					VCPLL->store_index_to_file(output_index.c_str(), rank2id);
+//					delete VCPLL;
+//					puts("");
+//				}
+//				{
+//					NUM_THREADS = 20;
+//					omp_set_num_threads(NUM_THREADS);
+//					WeightedParaVertexCentricPLLVec<512> *VCPLL = new WeightedParaVertexCentricPLLVec<512>(G);
+//					VCPLL->store_index_to_file(output_index.c_str(), rank2id);
+//					delete VCPLL;
+//					puts("");
+//				}
+//				{
+//					NUM_THREADS = 32;
+//					omp_set_num_threads(NUM_THREADS);
+//					WeightedParaVertexCentricPLLVec<512> *VCPLL = new WeightedParaVertexCentricPLLVec<512>(G);
+//					VCPLL->store_index_to_file(output_index.c_str(), rank2id);
+//					delete VCPLL;
+//					puts("");
+//				}
 				{
 					NUM_THREADS = 40;
 					omp_set_num_threads(NUM_THREADS);
