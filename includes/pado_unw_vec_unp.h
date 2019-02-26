@@ -278,7 +278,7 @@ public:
 					const vector<idi> &rank);
 	void store_index_to_file(
 			const char *filename,
-			const vector<idi> &rank2id);
+			const vector<idi> &rank);
 	void load_index_from_file(
 			const char *filename);
 	void order_labels(
@@ -1712,103 +1712,57 @@ void VertexCentricPLLVec<BATCH_SIZE>::construct(const Graph &G)
 //	printf("BP_Labeling: "); bp_labeling_ins_count.print();
 //	printf("BP_Checking: "); bp_checking_ins_count.print();
 //	printf("distance_query: "); dist_query_ins_count.print();
-	printf("Labeling_time: %.2f\n", time_labeling); fflush(stdout);
+	printf("Total_labeling_time: %.2f seconds\n", time_labeling);
 	// End test
 }
 
 template <inti BATCH_SIZE>
 void VertexCentricPLLVec<BATCH_SIZE>::store_index_to_file(
 								const char *filename,
-								const vector<idi> &rank2id)
+								const vector<idi> &rank)
 {
 	ofstream fout(filename);
 	if (!fout.is_open()) {
 		fprintf(stderr, "Error: cannot open file %s\n", filename);
 		exit(EXIT_FAILURE);
 	}
-	idi num_v = rank2id.size();
-	vector< vector< pair<idi, weighti> > > ordered_L(num_v);
-	Index.resize(num_v);
 	// Store into file the number of vertices and the number of bit-parallel roots.
-	fout.write((char *) &num_v, sizeof(num_v));
-	fout.write((char *) &BITPARALLEL_SIZE, sizeof(BITPARALLEL_SIZE));
-
-	// Traverse the L, put them into Index (ordered labels)
-	for (idi v_id = 0; v_id < num_v; ++v_id) {
-		idi new_v = rank2id[v_id];
-		IndexOrdered & Iv = Index[new_v];
-		const IndexType &Lv = L[v_id];
-		auto &OLv = ordered_L[new_v];
-		// Bit-parallel Labels
-		memcpy(&Iv.bp_dist, &Lv.bp_dist, BITPARALLEL_SIZE * sizeof(weighti));
-		for (inti b_i = 0; b_i < BITPARALLEL_SIZE; ++b_i) {
-			Iv.bp_sets[b_i][0] = Lv.bp_sets_0[b_i];
-			Iv.bp_sets[b_i][1] = Lv.bp_sets_1[b_i];
-		}
-
-		// Normal Labels
-//		// Traverse v_id's all existing labels
-//		for (inti b_i = 0; b_i < Lv.batches.size(); ++b_i) {
-//			idi id_offset = Lv.batches[b_i].batch_id * BATCH_SIZE;
-//			idi dist_start_index = Lv.batches[b_i].start_index;
-//			idi dist_bound_index = dist_start_index + Lv.batches[b_i].size;
-//			// Traverse dist_matrix
-//			for (idi dist_i = dist_start_index; dist_i < dist_bound_index; ++dist_i) {
-//				idi v_start_index = Lv.distances[dist_i].start_index;
-//				idi v_bound_index = v_start_index + Lv.distances[dist_i].size;
-//				inti dist = Lv.distances[dist_i].dist;
-//				for (idi v_i = v_start_index; v_i < v_bound_index; ++v_i) {
-//					idi tail = Lv.vertices[v_i] + id_offset;
-////					idi new_tail = rank2id[tail];
-////					new_L[new_v].push_back(make_pair(new_tail, dist));
-//					OLv.push_back(make_pair(tail, dist));
-//				}
-//			}
-//		}
-		for (idi l_i = 0; l_i < Lv.vertices.size(); ++l_i) {
-			OLv.push_back(make_pair(Lv.vertices[l_i], Lv.label_dists[l_i]));
-		}
-		// Sort
-		sort(OLv.begin(), OLv.end());
-		// Store into Index
-		inti size_labels = OLv.size();
-		Iv.label_id.resize(size_labels + 1); // Adding one for Sentinel
-		Iv.label_dists.resize(size_labels + 1); // Adding one for Sentinel
-		for (inti l_i = 0; l_i < size_labels; ++l_i) {
-			Iv.label_id[l_i] = OLv[l_i].first;
-			Iv.label_dists[l_i] = OLv[l_i].second;
-		}
-		Iv.label_id[size_labels] = num_v; // Sentinel
-		Iv.label_dists[size_labels] = WEIGHTI_MAX; // Sentinel
-	}
-
 	uint64_t labels_count = 0;
-	// Traverse the Index, store labels into file
-	for (idi v_id = 0; v_id < num_v; ++v_id) {
-		IndexOrdered & Iv = Index[v_id];
+	fout.write((char *) &num_v_, sizeof(num_v_));
+	fout.write((char *) &BITPARALLEL_SIZE, sizeof(BITPARALLEL_SIZE));
+	for (idi v_id = 0; v_id < num_v_; ++v_id) {
+		idi v_rank = rank[v_id];
+		const IndexType &Lv = L[v_rank];
+		idi size_labels = Lv.vertices.size();
+		labels_count += size_labels;
 		// Store Bit-parallel Labels into file.
 		for (inti b_i = 0; b_i < BITPARALLEL_SIZE; ++b_i) {
-			weighti d = Iv.bp_dist[b_i];
-			uint64_t s0 = Iv.bp_sets[b_i][0];
-			uint64_t s1 = Iv.bp_sets[b_i][1];
+			weighti d = Lv.bp_dist[b_i];
+			uint64_t s0 = Lv.bp_sets_0[b_i];
+			uint64_t s1 = Lv.bp_sets_1[b_i];
 			fout.write((char *) &d, sizeof(d));
 			fout.write((char *) &s0, sizeof(s0));
 			fout.write((char *) &s1, sizeof(s1));
 		}
 
-		// Normal Labels
-		// Store Labels into file.
-		idi size_labels = Iv.label_id.size() - 1; // Remove the Sentinel
-		labels_count += size_labels;
+		vector< pair<idi, weighti> > ordered_labels;
+		// Traverse v_id's all existing labels
+		for (idi l_i = 0; l_i < size_labels; ++l_i) {
+			ordered_labels.push_back(make_pair(Lv.vertices[l_i], Lv.label_dists[l_i]));
+		}
+		// Sort
+		sort(ordered_labels.begin(), ordered_labels.end());
+		// Store into file
 		fout.write((char *) &size_labels, sizeof(size_labels));
 		for (idi l_i = 0; l_i < size_labels; ++l_i) {
-			idi l = Iv.label_id[l_i];
-			weighti d = Iv.label_dists[l_i];
+			idi l = ordered_labels[l_i].first;
+			weighti d = ordered_labels[l_i].second;
 			fout.write((char *) &l, sizeof(l));
 			fout.write((char *) &d, sizeof(d));
 		}
 	}
-	printf("Label_size: %'lu mean: %f\n", labels_count, static_cast<double>(labels_count) / num_v);
+	
+	printf("Label_size: %'lu mean: %f\n", labels_count, static_cast<double>(labels_count) / num_v_);
 	fout.close();
 }
 

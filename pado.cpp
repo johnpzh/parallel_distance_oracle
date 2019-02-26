@@ -35,12 +35,12 @@
 
 #include "pado_unw_unv_unp.h"
 #include "pado_unw_vec_unp.h"
-#include "pado_unw_para_unv.h"
-#include "pado_unw_para_vec.h"
+#include "pado_unw_unv_para.h"
+#include "pado_unw_vec_para.h"
 #include "pado_weighted_unv_unp.h"
 #include "pado_weighted_vec_unp.h"
-#include "pado_weighted_para_unv.h"
-#include "pado_weighted_para_vec.h"
+#include "pado_weighted_unv_para.h"
+#include "pado_weighted_vec_para.h"
 
 using namespace PADO;
 
@@ -180,23 +180,20 @@ int main(int argc, char *argv[])
 				//double loading_time = -WallTimer::get_time_mark();
 				Graph G(input_file.c_str());
 				vector<idi> rank = G.make_rank();
-				vector<idi> rank2id = G.id_transfer(rank);
-				//loading_time += WallTimer::get_time_mark();
-				//printf("loading_time: %.2f\n", loading_time);
+				G.id_transfer(rank);
 				VertexCentricPLL<1024> *VCPLL = new VertexCentricPLL<1024>(G); // 1024 is the batch size
-//				VCPLL->switch_labels_to_old_id(rank2id, rank);
-				VCPLL->store_index_to_file(output_index.c_str(), rank2id);
+				VCPLL->store_index_to_file(output_index.c_str(), rank);
 				delete VCPLL;
 			} else {
 				printf("unw unv PARA\n");//test
 				// Multithread
 				Graph G(input_file.c_str());
 				vector<idi> rank = G.make_rank();
-				vector<idi> rank2id = G.id_transfer(rank);
+				G.id_transfer(rank);
 				for (NUM_THREADS = 1; NUM_THREADS <= 16; NUM_THREADS *= 2) {
 					omp_set_num_threads(NUM_THREADS);
 					ParaVertexCentricPLL<1024> *VCPLL = new ParaVertexCentricPLL<1024>(G);
-					VCPLL->store_index_to_file(output_index.c_str(), rank2id);
+					VCPLL->store_index_to_file(output_index.c_str(), rank);
 					delete VCPLL;
 					puts("");
 				}
@@ -204,7 +201,7 @@ int main(int argc, char *argv[])
 					NUM_THREADS = 20;
 					omp_set_num_threads(NUM_THREADS);
 					ParaVertexCentricPLL<1024> *VCPLL = new ParaVertexCentricPLL<1024>(G);
-					VCPLL->store_index_to_file(output_index.c_str(), rank2id);
+					VCPLL->store_index_to_file(output_index.c_str(), rank);
 					delete VCPLL;
 					puts("");
 				}
@@ -212,7 +209,7 @@ int main(int argc, char *argv[])
 					NUM_THREADS = 32;
 					omp_set_num_threads(NUM_THREADS);
 					ParaVertexCentricPLL<1024> *VCPLL = new ParaVertexCentricPLL<1024>(G);
-					VCPLL->store_index_to_file(output_index.c_str(), rank2id);
+					VCPLL->store_index_to_file(output_index.c_str(), rank);
 					delete VCPLL;
 					puts("");
 				}
@@ -220,7 +217,7 @@ int main(int argc, char *argv[])
 					NUM_THREADS = 40;
 					omp_set_num_threads(NUM_THREADS);
 					ParaVertexCentricPLL<1024> *VCPLL = new ParaVertexCentricPLL<1024>(G);
-					VCPLL->store_index_to_file(output_index.c_str(), rank2id);
+					VCPLL->store_index_to_file(output_index.c_str(), rank);
 					delete VCPLL;
 					puts("");
 				}
@@ -232,9 +229,9 @@ int main(int argc, char *argv[])
 				// Single Thread
 				Graph G(input_file.c_str());
 				vector<idi> rank = G.make_rank();
-				vector<idi> rank2id = G.id_transfer(rank);
+				G.id_transfer(rank);
 				VertexCentricPLLVec<1024> *VCPLL = new VertexCentricPLLVec<1024>(G);
-				VCPLL->store_index_to_file(output_index.c_str(), rank2id);
+				VCPLL->store_index_to_file(output_index.c_str(), rank);
 				delete VCPLL;
 			} else {
 				printf("unw VEC PARA\n");//test
@@ -243,9 +240,9 @@ int main(int argc, char *argv[])
 				omp_set_num_threads(NUM_THREADS);
 				Graph G(input_file.c_str());
 				vector<idi> rank = G.make_rank();
-				vector<idi> rank2id = G.id_transfer(rank);
+				G.id_transfer(rank);
 				ParaVertexCentricPLLVec<1024> *VCPLL = new ParaVertexCentricPLLVec<1024>(G);
-				VCPLL->store_index_to_file(output_index.c_str(), rank2id);
+				VCPLL->store_index_to_file(output_index.c_str(), rank);
 				delete VCPLL;
 			}
 		}
@@ -258,9 +255,10 @@ int main(int argc, char *argv[])
 				// Single Thread
 				WeightedGraph G(input_file.c_str());
 				vector<idi> rank = G.make_rank();
-				vector<idi> rank2id = G.id_transfer(rank);
-				WeightedVertexCentricPLL<512> *VCPLL = new WeightedVertexCentricPLL<512>(G); // 512 is the batch size
-				VCPLL->store_index_to_file(output_index.c_str(), rank2id);
+				G.id_transfer(rank);
+				//WeightedVertexCentricPLL<512> *VCPLL = new WeightedVertexCentricPLL<512>(G); // 512 is the batch size
+				WeightedVertexCentricPLL<1024> *VCPLL = new WeightedVertexCentricPLL<1024>(G); // 512 is the batch size
+				VCPLL->store_index_to_file(output_index.c_str(), rank);
 				delete VCPLL;
 			} else {
 				printf("W unv PARA\n");//test
@@ -269,9 +267,9 @@ int main(int argc, char *argv[])
 				omp_set_num_threads(NUM_THREADS);
 				WeightedGraph G(input_file.c_str());
 				vector<idi> rank = G.make_rank();
-				vector<idi> rank2id = G.id_transfer(rank);
+				G.id_transfer(rank);
 				WeightedParaVertexCentricPLL<512> *VCPLL = new WeightedParaVertexCentricPLL<512>(G);
-				VCPLL->store_index_to_file(output_index.c_str(), rank2id);
+				VCPLL->store_index_to_file(output_index.c_str(), rank);
 				delete VCPLL;
 			}
 		} else {
@@ -281,20 +279,21 @@ int main(int argc, char *argv[])
 				// Single Thread
 				WeightedGraph G(input_file.c_str());
 				vector<idi> rank = G.make_rank();
-				vector<idi> rank2id = G.id_transfer(rank);
+				G.id_transfer(rank);
 				WeightedVertexCentricPLLVec<512> *VCPLL = new WeightedVertexCentricPLLVec<512>(G);
-				VCPLL->store_index_to_file(output_index.c_str(), rank2id);
+				//WeightedVertexCentricPLLVec<1024> *VCPLL = new WeightedVertexCentricPLLVec<1024>(G);
+				VCPLL->store_index_to_file(output_index.c_str(), rank);
 				delete VCPLL;
 			} else {
 				printf("W VEC PARA\n");//test
 				// Multithread
 				WeightedGraph G(input_file.c_str());
 				vector<idi> rank = G.make_rank();
-				vector<idi> rank2id = G.id_transfer(rank);
+				G.id_transfer(rank);
 //				for (NUM_THREADS = 1; NUM_THREADS <= 16; NUM_THREADS *= 2) {
 //					omp_set_num_threads(NUM_THREADS);
 //					WeightedParaVertexCentricPLLVec<512> *VCPLL = new WeightedParaVertexCentricPLLVec<512>(G);
-//					VCPLL->store_index_to_file(output_index.c_str(), rank2id);
+//					VCPLL->store_index_to_file(output_index.c_str(), rank);
 //					delete VCPLL;
 //					puts("");
 //				}
@@ -302,7 +301,7 @@ int main(int argc, char *argv[])
 //					NUM_THREADS = 20;
 //					omp_set_num_threads(NUM_THREADS);
 //					WeightedParaVertexCentricPLLVec<512> *VCPLL = new WeightedParaVertexCentricPLLVec<512>(G);
-//					VCPLL->store_index_to_file(output_index.c_str(), rank2id);
+//					VCPLL->store_index_to_file(output_index.c_str(), rank);
 //					delete VCPLL;
 //					puts("");
 //				}
@@ -310,7 +309,7 @@ int main(int argc, char *argv[])
 //					NUM_THREADS = 32;
 //					omp_set_num_threads(NUM_THREADS);
 //					WeightedParaVertexCentricPLLVec<512> *VCPLL = new WeightedParaVertexCentricPLLVec<512>(G);
-//					VCPLL->store_index_to_file(output_index.c_str(), rank2id);
+//					VCPLL->store_index_to_file(output_index.c_str(), rank);
 //					delete VCPLL;
 //					puts("");
 //				}
@@ -318,7 +317,7 @@ int main(int argc, char *argv[])
 					NUM_THREADS = 40;
 					omp_set_num_threads(NUM_THREADS);
 					WeightedParaVertexCentricPLLVec<512> *VCPLL = new WeightedParaVertexCentricPLLVec<512>(G);
-					VCPLL->store_index_to_file(output_index.c_str(), rank2id);
+					VCPLL->store_index_to_file(output_index.c_str(), rank);
 					delete VCPLL;
 					puts("");
 				}

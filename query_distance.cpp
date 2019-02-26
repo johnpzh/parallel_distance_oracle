@@ -6,12 +6,12 @@
 
 #include "pado_unw_unv_unp.h"
 #include "pado_unw_vec_unp.h"
-#include "pado_unw_para_unv.h"
-#include "pado_unw_para_vec.h"
+#include "pado_unw_unv_para.h"
+#include "pado_unw_vec_para.h"
 #include "pado_weighted_unv_unp.h"
 #include "pado_weighted_vec_unp.h"
-#include "pado_weighted_para_unv.h"
-#include "pado_weighted_para_vec.h"
+#include "pado_weighted_unv_para.h"
+#include "pado_weighted_vec_para.h"
 
 using namespace PADO;
 
