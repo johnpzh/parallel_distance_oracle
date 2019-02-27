@@ -155,12 +155,14 @@ void Graph::construct(const vector< pair<idi, idi> > &edge_list)
 // Rank according to degrees
 vector<idi> Graph::make_rank() const
 {
-	vector< pair<double, idi> > degree2id;
+	vector< pair<float, idi> > degree2id;
+	//vector< pair<double, idi> > degree2id;
 	//vector< pair<idi, idi> > degree2id;
 	for (idi v = 0; v < num_v; ++v) {
 		// Add a random value here to diffuse nearby vertices, according to PLL's implementation.
 		// Somehow it decreases the label size a little bit.
-		degree2id.push_back(make_pair(out_degrees[v] + (double) rand() / RAND_MAX, v));
+		degree2id.push_back(make_pair(out_degrees[v] + float(rand()) / RAND_MAX, v));
+		//degree2id.push_back(make_pair(out_degrees[v] + (double) rand() / RAND_MAX, v));
 		//degree2id.push_back(make_pair(out_degrees[v], v));
 	}
 	sort(degree2id.rbegin(), degree2id.rend());
@@ -350,12 +352,14 @@ void WeightedGraph::construct(
 // Rank according to degrees
 vector<idi> WeightedGraph::make_rank()
 {
-	vector< pair<double, idi> > degree2id;
+	vector< pair<float, idi> > degree2id;
+	//vector< pair<double, idi> > degree2id;
 	//vector< pair<idi, idi> > degree2id;
 	for (idi v = 0; v < num_v; ++v) {
 		// Add a random value here to diffuse nearby vertices, according to PLL's implementation.
 		// Somehow it decreases the label size a little bit.
-		degree2id.push_back(make_pair(out_degrees[v] + (double) rand() / RAND_MAX, v));
+		degree2id.push_back(make_pair(out_degrees[v] + float(rand()) / RAND_MAX, v));
+		//degree2id.push_back(make_pair(out_degrees[v] + (double) rand() / RAND_MAX, v));
 		//degree2id.push_back(make_pair(out_degrees[v], v));
 	}
 	sort(degree2id.rbegin(), degree2id.rend());
