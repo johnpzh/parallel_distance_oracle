@@ -732,7 +732,7 @@ inline void ParaVertexCentricPLLVec<BATCH_SIZE>::initialize(
 //	init_start_reset_time -= WallTimer::get_time_mark();
 	// TODO: parallel enqueue
 	{
-		//active_queue
+		// active_queue
 		for (idi r_real_id = roots_start; r_real_id < roots_bound; ++r_real_id) {
 			if (!used_bp_roots[r_real_id]) {
 				active_queue[end_active_queue++] = r_real_id;
