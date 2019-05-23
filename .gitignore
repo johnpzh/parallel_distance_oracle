@@ -19,7 +19,7 @@ query_distance
 /Default/
 cmake-build-*/
 
-#Graph data
+# Graph data
 *.binary
 *.edgelist
 
