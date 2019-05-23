@@ -99,7 +99,7 @@ public:
 	{
 		construct();
 	}
-	WallTimer(const char *n) : item(n)
+	explicit WallTimer(const char *n) : item(n)
 	{
 		construct();
 	}

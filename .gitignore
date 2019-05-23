@@ -17,3 +17,11 @@ index
 pado
 query_distance
 /Default/
+cmake-build-*/
+
+# Graph data
+*.binary
+*.edgelist
+
+# CLion
+.idea/

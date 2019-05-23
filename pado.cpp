@@ -297,9 +297,9 @@ int main(int argc, char *argv[])
 				WeightedGraph G(input_file.c_str());
 				vector<idi> rank = G.make_rank();
 				G.id_transfer(rank);
-				for (num_threads = 1; num_threads <= 16; num_threads *= 2) {
-					omp_set_num_threads(num_threads);
-					weightedparavertexcentricpllvec<512> *vcpll = new weightedparavertexcentricpllvec<512>(g);
+				for (NUM_THREADS = 1; NUM_THREADS <= 16; NUM_THREADS *= 2) {
+					omp_set_num_threads(NUM_THREADS);
+                    WeightedParaVertexCentricPLLVec<512> *vcpll = new WeightedParaVertexCentricPLLVec<512>(G);
 					vcpll->store_index_to_file(output_index.c_str(), rank);
 					delete vcpll;
 					puts("");
