@@ -10,6 +10,13 @@
 
 using namespace PADO;
 
+void test(char *argv[])
+{
+    DistGraph G(argv[1]);
+    printf("File: %s\n", argv[1]);
+    std::cout << "num_v: " << G.num_v << "num_e: " << G.num_e << "host_id (/" << G.num_hosts << "): " << G.host_id << std::endl;
+}
+
 void usage_print()
 {
     fprintf(stderr,
@@ -29,6 +36,7 @@ int main(int argc, char *argv[])
 
     printf("input_file: %s\n", input_file.c_str());
     MPI_Instance mpi_instance(argc, argv);
+    test(argv);
 
     return EXIT_SUCCESS;
 }
