@@ -1,25 +1,39 @@
-.DS_Store
+# Project Files
 .cproject
 .project
-.settings/
 .pydevproject
+
+# Text Files
 *.txt
 !CMakeLists.txt
-*.o
 *.xlsx
 *.dSYM
-*.dSYM/
 *.swp
 *.swo
 *.index
 *.optrpt
 tags
+
+# Library Files
+*.o
+*.a
+*.so
+
+# Executable Files
 index
 pado
 query_distance
+dpado
+binary2edgelist
+edgelist2binary
+
+# Directories
+*.dSYM/
+.DS_Store/
 /Default/
 cmake-build*/
 build/
+.settings/
 
 # Graph data
 *.binary
