@@ -20,6 +20,7 @@
 #include <bitset>
 #include <cmath>
 #include "globals.h"
+#include "avx512_pado.h"
 #include "graph.h"
 
 using std::vector;
