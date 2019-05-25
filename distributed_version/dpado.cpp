@@ -10,7 +10,34 @@
 
 using namespace PADO;
 
-void test(char *argv[])
+void test_dynamic_receive()
+{
+    int host_id;
+    int num_hosts;
+    MPI_Comm_rank(MPI_COMM_WORLD, &host_id);
+    MPI_Comm_size(MPI_COMM_WORLD, &num_hosts);
+    // Send
+    std::vector< std::pair<int, int> > send_buffer;
+    send_buffer.emplace_back(1, 2);
+    send_buffer.emplace_back(2, 4);
+    send_buffer.emplace_back(3, 5);
+
+    MPI_Send(send_buffer.data(),
+             sizeof(send_buffer),
+             MPI_CHAR,
+             0,
+             GRAPH_SHUFFLE,
+             MPI_COMM_WORLD);
+    // Receive
+    std::vector< std::pair<int, int> > recv_buffer;
+    int count = MPI_Instance::receive_dynamic_buffer(recv_buffer, num_hosts);
+    printf("received_count: %d\n", count);
+    for (const auto &p : recv_buffer) {
+        printf("%d %d\n", p.first, p.second);
+    }
+}
+
+void dpado(char *argv[])
 {
     DistGraph G(argv[1]);
     printf("File: %s\n", argv[1]);
@@ -42,7 +69,7 @@ void test(char *argv[])
         MPI_Send(nullptr, 0, MPI_CHAR, (G.host_id + 1) % G.num_hosts, SENDING_MESSAGE, MPI_COMM_WORLD);
         MPI_Recv(nullptr, 0, MPI_CHAR, G.num_hosts - 1, SENDING_MESSAGE, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
     } else {
-        MPI_Recv(nullptr, 0, MPI_CHAR, G.host_id - 1, SENDING_MESSAGE, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+//        MPI_Recv(nullptr, 0, MPI_CHAR, G.host_id - 1, SENDING_MESSAGE, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
         // Traverse the local G
         for (VertexID v_i = 0; v_i < G.num_masters; ++v_i) {
 //            VertexID head = rank2id[v_i + G.offset_vertex_id];
@@ -58,7 +85,7 @@ void test(char *argv[])
                 std::cout << head << " " << tail << std::endl;
             }
         }
-        MPI_Send(nullptr, 0, MPI_CHAR, (G.host_id + 1) % G.num_hosts, SENDING_MESSAGE, MPI_COMM_WORLD);
+//        MPI_Send(nullptr, 0, MPI_CHAR, (G.host_id + 1) % G.num_hosts, SENDING_MESSAGE, MPI_COMM_WORLD);
     }
 
 }
@@ -82,8 +109,8 @@ int main(int argc, char *argv[])
 
     printf("input_file: %s\n", input_file.c_str());
     MPI_Instance mpi_instance(argc, argv);
-    test(argv);
-
+//    dpado(argv);
+    test_dynamic_receive();
     return EXIT_SUCCESS;
 }
 
