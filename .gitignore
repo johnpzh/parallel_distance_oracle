@@ -4,6 +4,7 @@
 .settings/
 .pydevproject
 *.txt
+!CMakeLists.txt
 *.o
 *.xlsx
 *.dSYM
@@ -17,7 +18,8 @@ index
 pado
 query_distance
 /Default/
-cmake-build-*/
+cmake-build*/
+build/
 
 # Graph data
 *.binary
