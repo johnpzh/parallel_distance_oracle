@@ -31,6 +31,7 @@ private:
         if (host_id == num_hosts - 1) {
             num_masters = num_v - offset_vertex_id;
         }
+        rank.resize(num_v);
         vertices_idx.resize(num_masters);
         out_degrees.resize(num_v, 0);
     }
@@ -85,8 +86,10 @@ public:
     EdgeID num_e = 0; // number of edges
     VertexID offset_vertex_id = 0; // The offset for global vertex id to local id.
     VertexID num_masters = 0; // Number of masters on this host.
+    EdgeID num_edges_local = 0; // Number of local edges on this host.
     MPI_Datatype vid_type = MPI_Instance::get_mpi_datatype<VertexID>(); // MPI type of the type VertexID
 
+    std::vector<VertexID> rank;
     std::vector<VertexID> vertices_idx; // vertices indices
     std::vector<VertexID> out_edges; // out edges
     std::vector<VertexID> out_degrees; // out degrees of vertices
@@ -120,7 +123,9 @@ DistGraph::DistGraph(char *input_filename)
     // Get the offset (in bytes) for reading.
     uint64_t edge_byte_size = 2 * sizeof(VertexID); // the size (in bytes) of one edge
     uint64_t edge_divide = num_e / num_hosts; // divide the number of edges to the number of hosts
-    uint64_t read_offset = edge_divide * host_id * edge_byte_size; // reading offset for this host
+    uint64_t read_offset = host_id * edge_divide * edge_byte_size + sizeof(VertexID) + sizeof(EdgeID); //
+        // reading offset for this host.
+        // Need to consider the first two numbers.
     uint64_t edges_to_read; // number of edges that a host needs to read
     if (host_id != num_hosts - 1) {
         edges_to_read = edge_divide;
@@ -136,7 +141,9 @@ DistGraph::DistGraph(char *input_filename)
         VertexID tail;
         fin.read(reinterpret_cast<char *>(&head), sizeof(VertexID));
         fin.read(reinterpret_cast<char *>(&tail), sizeof(VertexID));
-        edgelist_buffer.emplace_back(head, tail);
+//        edgelist_buffer.emplace_back(head, tail);
+        edgelist_buffer[e_i].first = head;
+        edgelist_buffer[e_i].second = tail;
         ++out_degrees[head];
         ++out_degrees[tail]; // undirected graph
     }
@@ -148,7 +155,6 @@ DistGraph::DistGraph(char *input_filename)
                   MPI_SUM,
                   MPI_COMM_WORLD);
     // Reorder the graph by host0.
-    std::vector<VertexID> rank(num_v);
     if (0 == host_id) {
         std::vector< std::pair<VertexID, VertexID> > degree2id;
         for (VertexID v_i = 0; v_i < num_v; ++v_i) {
@@ -217,6 +223,7 @@ DistGraph::DistGraph(char *input_filename)
         }
     }
     // Build up local graph structure
+    num_edges_local = num_edges_recv;
     out_edges.resize(num_edges_recv);
     EdgeID loc = 0;
     for (VertexID v_i = 0; v_i < num_masters; ++v_i) {

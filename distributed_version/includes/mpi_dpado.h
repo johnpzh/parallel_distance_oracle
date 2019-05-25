@@ -14,7 +14,8 @@
 namespace PADO {
 
 enum MessageTags {
-    GRAPH_SHUFFLE
+    GRAPH_SHUFFLE,
+    SENDING_MESSAGE
 };
 
 // MPI_Instance class: for MPI initialization
