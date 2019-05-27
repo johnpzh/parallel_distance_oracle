@@ -18,19 +18,23 @@ void test_dynamic_receive()
     MPI_Comm_size(MPI_COMM_WORLD, &num_hosts);
     // Send
     std::vector< std::pair<int, int> > send_buffer;
-    send_buffer.emplace_back(1, 2);
-    send_buffer.emplace_back(2, 4);
-    send_buffer.emplace_back(3, 5);
+//    send_buffer.emplace_back(1, 2);
+//    send_buffer.emplace_back(2, 4);
+//    send_buffer.emplace_back(3, 5);
+    send_buffer.emplace_back(4, 7);
+    send_buffer.emplace_back(5, 9);
 
+    printf("sizeof(send_buffer): %lu\n", sizeof(send_buffer));
     MPI_Send(send_buffer.data(),
-             sizeof(send_buffer),
+//             sizeof(send_buffer),
+             MPI_Instance::get_sending_size(send_buffer),
              MPI_CHAR,
              0,
              GRAPH_SHUFFLE,
              MPI_COMM_WORLD);
     // Receive
     std::vector< std::pair<int, int> > recv_buffer;
-    int count = MPI_Instance::receive_dynamic_buffer(recv_buffer, num_hosts);
+    int count = MPI_Instance::receive_dynamic_buffer(recv_buffer, num_hosts, GRAPH_SHUFFLE);
     printf("received_count: %d\n", count);
     for (const auto &p : recv_buffer) {
         printf("%d %d\n", p.first, p.second);
@@ -109,8 +113,8 @@ int main(int argc, char *argv[])
 
     printf("input_file: %s\n", input_file.c_str());
     MPI_Instance mpi_instance(argc, argv);
-//    dpado(argv);
-    test_dynamic_receive();
+    dpado(argv);
+//    test_dynamic_receive();
     return EXIT_SUCCESS;
 }
 

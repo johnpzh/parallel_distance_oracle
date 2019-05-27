@@ -111,8 +111,12 @@ public:
         }
     }
 
+    // Function: Receive MPI message with the dynamic buffer size.
+    // 1. Use MPI_Probe to get the message source and size.
+    // 2. Allocate the recv_buffer according to the Status.
+    // 3. Use MPI_Recv to receive the message from the source.
     template <typename EdgeT>
-    static int receive_dynamic_buffer(std::vector<EdgeT> &buffer_recv, int num_hosts)
+    static int receive_dynamic_buffer(std::vector<EdgeT> &buffer_recv, int num_hosts, int message_tag)
     {
         size_t EdgeTypeSize = sizeof(EdgeT);
         MPI_Status status_recv;
@@ -121,7 +125,7 @@ public:
                   MPI_COMM_WORLD,
                   &status_recv);
         int source_host_id = status_recv.MPI_SOURCE;
-        assert(status_recv.MPI_TAG == GRAPH_SHUFFLE && source_host_id >=0 && source_host_id < num_hosts);
+        assert(status_recv.MPI_TAG == message_tag && source_host_id >=0 && source_host_id < num_hosts);
         int bytes_recv;
         MPI_Get_count(&status_recv, MPI_CHAR, &bytes_recv);
         assert(bytes_recv % EdgeTypeSize == 0);
@@ -135,6 +139,14 @@ public:
                  MPI_COMM_WORLD,
                  MPI_STATUS_IGNORE);
         return num_edges_recv;
+    }
+
+    // Function: return the size (bytes) of the sending buffer.
+    // It's equal to the length of the buffer times the size of one element.
+    template <typename EdgeT>
+    static size_t get_sending_size(const std::vector<EdgeT> &buffer_send)
+    {
+        return buffer_send.size() * sizeof(EdgeT);
     }
 
 }; // End class MPI_Instance
