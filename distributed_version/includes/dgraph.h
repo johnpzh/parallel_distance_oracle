@@ -181,10 +181,10 @@ DistGraph::DistGraph(char *input_filename)
         // buffer_send_list[i] should be sending to (host_id + i + 1) % num_hosts.
         // A host x's message should be put to buffer_send_list[(x + num_hosts - host_id - 1) % num_hosts].
     for (const auto &edge : edgelist_buffer) {
-        VertexID head_new = edge.first; // rank[head]
-        VertexID tail_new = edge.second; // rank[tail]
-//        VertexID head_new = rank[edge.first]; // rank[head]
-//        VertexID tail_new = rank[edge.second]; // rank[tail]
+//        VertexID head_new = edge.first; // rank[head]
+//        VertexID tail_new = edge.second; // rank[tail]
+        VertexID head_new = rank[edge.first]; // rank[head]
+        VertexID tail_new = rank[edge.second]; // rank[tail]
         int master_host_id_head = get_master_host_id(head_new); // master host id
 //        printf("@%d master_host_id_head: %d head_new: %u\n", __LINE__, master_host_id_head, head_new); //test
         int master_host_id_tail = get_master_host_id(tail_new);
@@ -240,6 +240,7 @@ DistGraph::DistGraph(char *input_filename)
     for (VertexID v_i = 0; v_i < num_masters; ++v_i) {
         vertices_idx[v_i] = loc;
         size_t bound_e_i = edgelist_recv[v_i].size();
+        std::sort(edgelist_recv[v_i].rbegin(), edgelist_recv[v_i].rend()); // sort neighbors by ranks from low to high
         for (EdgeID e_i = 0; e_i < bound_e_i; ++e_i) {
             out_edges[loc + e_i] = edgelist_recv[v_i][e_i];
         }
