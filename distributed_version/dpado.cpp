@@ -7,6 +7,7 @@
 #include <string>
 #include "dglobals.h"
 #include "dgraph.h"
+#include "dpado.h"
 
 using namespace PADO;
 
@@ -45,29 +46,30 @@ void dpado(char *argv[])
 {
     DistGraph G(argv[1]);
 
-    // print the local graph
-    std::vector<VertexID> rank2id(G.num_v);
-    for (VertexID v = 0; v < G.num_v; ++v) {
-        rank2id[G.rank[v]] = v;
-    }
+//    DistBVCPLL<1024, 50> dist_bvcpll(G); // batch size 1024, bit-parallel size 50.
 
+    // print the local graph
 	{
+        std::vector<VertexID> rank2id(G.num_v);
+        for (VertexID v = 0; v < G.num_v; ++v) {
+            rank2id[G.rank[v]] = v;
+        }
 		std::string filename = "output_" + std::to_string(G.host_id) + ".txt";
 		FILE *fout = fopen(filename.c_str(), "w");
 		fprintf(fout, "num_master: %d (/%u) num_edges_local: %lu (/%lu) host_id: %d (/%d)\n",
 						G.num_masters, G.num_v, G.num_edges_local, G.num_e * 2, G.host_id, G.num_hosts);
         // Traverse the local G
         for (VertexID v_i = 0; v_i < G.num_masters; ++v_i) {
-            VertexID head = v_i + G.offset_vertex_id;
-//            VertexID head = rank2id[v_i + G.offset_vertex_id];
+//            VertexID head = v_i + G.offset_vertex_id;
+            VertexID head = rank2id[v_i + G.offset_vertex_id];
             EdgeID start_e_i = G.vertices_idx[v_i];
             EdgeID bound_e_i = G.num_edges_local;
             if (v_i != G.num_masters - 1) {
                 bound_e_i = G.vertices_idx[v_i + 1];
             }
             for (EdgeID e_i = start_e_i; e_i < bound_e_i; ++e_i) {
-                VertexID tail = G.out_edges[e_i];
-//                VertexID tail = rank2id[G.out_edges[e_i]];
+//                VertexID tail = G.out_edges[e_i];
+                VertexID tail = rank2id[G.out_edges[e_i]];
                 //std::cout << head << " " << tail << std::endl;
 				fprintf(fout, "%u %u\n", head, tail);
             }

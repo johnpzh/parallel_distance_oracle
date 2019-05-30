@@ -234,7 +234,7 @@ private:
 
 
 public:
-	pair<uint64_t, uint64_t> length_larger_than_16 = make_pair(0, 0);
+    std::pair<uint64_t, uint64_t> length_larger_than_16 = std::make_pair(0, 0);
 	VertexCentricPLL() = default;
 	VertexCentricPLL(const Graph &G);
 
@@ -1145,7 +1145,7 @@ void VertexCentricPLL<BATCH_SIZE>::store_index_to_file(
 			fout.write((char *) &s1, sizeof(s1));
 		}
 
-		vector< pair<idi, weighti> > ordered_labels;
+		vector< std::pair<idi, weighti> > ordered_labels;
 		// Traverse v_id's all existing labels
 		for (inti b_i = 0; b_i < Lv.batches.size(); ++b_i) {
 			idi id_offset = Lv.batches[b_i].batch_id * BATCH_SIZE;
@@ -1158,7 +1158,7 @@ void VertexCentricPLL<BATCH_SIZE>::store_index_to_file(
 				weighti dist = Lv.distances[dist_i].dist;
 				for (idi v_i = v_start_index; v_i < v_bound_index; ++v_i) {
 					idi tail = Lv.vertices[v_i] + id_offset;
-					ordered_labels.push_back(make_pair(tail, dist));
+					ordered_labels.push_back(std::make_pair(tail, dist));
 				}
 			}
 		}
@@ -1182,7 +1182,7 @@ template <inti BATCH_SIZE>
 void VertexCentricPLL<BATCH_SIZE>::load_index_from_file(
 								const char *filename)
 {
-	ifstream fin(filename);
+    std::ifstream fin(filename);
 	if (!fin.is_open()) {
 		fprintf(stderr, "Error: cannot open file %s\n", filename);
 		exit(EXIT_FAILURE);
@@ -1229,7 +1229,7 @@ void VertexCentricPLL<BATCH_SIZE>::order_labels(
 								const vector<idi> &rank)
 {
 	idi num_v = rank.size();
-	vector< vector< pair<idi, weighti> > > ordered_L(num_v);
+	vector< vector< std::pair<idi, weighti> > > ordered_L(num_v);
 	idi labels_count = 0;
 	Index.resize(num_v);
 
@@ -1260,7 +1260,7 @@ void VertexCentricPLL<BATCH_SIZE>::order_labels(
 					idi tail = Lv.vertices[v_i] + id_offset;
 //					idi new_tail = rank2id[tail];
 //					new_L[new_v].push_back(make_pair(new_tail, dist));
-					OLv.push_back(make_pair(tail, dist));
+					OLv.push_back(std::make_pair(tail, dist));
 				}
 			}
 		}

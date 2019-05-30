@@ -1902,7 +1902,7 @@ void ParaVertexCentricPLL<BATCH_SIZE>::store_index_to_file(
 			fout.write((char *) &s1, sizeof(s1));
 		}
 
-		vector< pair<idi, weighti> > ordered_labels;
+		vector< std::pair<idi, weighti> > ordered_labels;
 		// Traverse v_id's all existing labels
 		for (inti b_i = 0; b_i < Lv.batches.size(); ++b_i) {
 			idi id_offset = Lv.batches[b_i].batch_id * BATCH_SIZE;
@@ -1915,7 +1915,7 @@ void ParaVertexCentricPLL<BATCH_SIZE>::store_index_to_file(
 				weighti dist = Lv.distances[dist_i].dist;
 				for (idi v_i = v_start_index; v_i < v_bound_index; ++v_i) {
 					idi tail = Lv.vertices[v_i] + id_offset;
-					ordered_labels.push_back(make_pair(tail, dist));
+					ordered_labels.push_back(std::make_pair(tail, dist));
 				}
 			}
 		}

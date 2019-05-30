@@ -2237,7 +2237,7 @@ void WeightedParaVertexCentricPLLVec<BATCH_SIZE>::store_index_to_file(
 		const IndexType &Lv = L[v_rank];
 		idi size_labels = Lv.vertices.size();
 		labels_count += size_labels;
-		vector< pair<idi, weightiLarge> > ordered_labels(size_labels);
+		vector< std::pair<idi, weightiLarge> > ordered_labels(size_labels);
 		// Traverse v_id's all labels
 		for (idi l_i = 0; l_i < size_labels; ++l_i) {
 			ordered_labels[l_i].first = Lv.vertices[l_i];

@@ -1746,10 +1746,10 @@ void VertexCentricPLLVec<BATCH_SIZE>::store_index_to_file(
 			fout.write((char *) &s1, sizeof(s1));
 		}
 
-		vector< pair<idi, weighti> > ordered_labels;
+		vector< std::pair<idi, weighti> > ordered_labels;
 		// Traverse v_id's all existing labels
 		for (idi l_i = 0; l_i < size_labels; ++l_i) {
-			ordered_labels.push_back(make_pair(Lv.vertices[l_i], Lv.label_dists[l_i]));
+			ordered_labels.push_back(std::make_pair(Lv.vertices[l_i], Lv.label_dists[l_i]));
 		}
 		// Sort
 		sort(ordered_labels.begin(), ordered_labels.end());

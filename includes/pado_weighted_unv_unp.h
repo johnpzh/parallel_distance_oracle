@@ -1653,7 +1653,7 @@ void WeightedVertexCentricPLL<BATCH_SIZE>::store_index_to_file(
 		const IndexType &Lv = L[v_rank];
 		idi size_labels = Lv.vertices.size();
 		labels_count += size_labels;
-		vector< pair<idi, weightiLarge> > ordered_labels(size_labels);
+		vector< std::pair<idi, weightiLarge> > ordered_labels(size_labels);
 		// Traverse v_id's all labels
 		for (idi l_i = 0; l_i < size_labels; ++l_i) {
 			ordered_labels[l_i].first = Lv.vertices[l_i];
@@ -1678,7 +1678,7 @@ template <inti BATCH_SIZE>
 void WeightedVertexCentricPLL<BATCH_SIZE>::load_index_from_file(
 								const char *filename)
 {
-	ifstream fin(filename);
+    std::ifstream fin(filename);
 	if (!fin.is_open()) {
 		fprintf(stderr, "Error: cannot open file %s\n", filename);
 		exit(EXIT_FAILURE);

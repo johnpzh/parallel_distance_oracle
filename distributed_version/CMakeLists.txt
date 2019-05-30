@@ -5,7 +5,10 @@ add_executable(dpado dpado.cpp)
 message("COMPILE_OPTIONS for dpado: ${COMPILE_OPTIONS}")
 
 # includes
-target_include_directories(dpado PRIVATE "${PROJECT_SOURCE_DIR}/distributed_version/includes")
+target_include_directories(dpado
+        PRIVATE
+        "${PROJECT_SOURCE_DIR}/distributed_version/includes"
+        "${PROJECT_SOURCE_DIR}/includes")
 
 # Tools
 add_subdirectory(tools)

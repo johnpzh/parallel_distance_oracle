@@ -101,7 +101,7 @@ void pado(const char filename[])
 	// Benchmark
 	{
 		const inti num_queries = 1000000;
-		vector< pair<idi, idi> > queries(num_queries);
+		vector< std::pair<idi, idi> > queries(num_queries);
 		for (inti i = 0; i < num_queries; ++i) {
 			queries[i].first = rand() % num_v;
 			queries[i].second = rand() % num_v;

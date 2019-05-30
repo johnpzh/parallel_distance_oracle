@@ -83,6 +83,12 @@ private:
         return global_id - offset_vertex_id;
     }
 
+    // Function: get the global vertex ID from the local ID
+    VertexID get_global_vertex_id(VertexID local_id)
+    {
+        return local_id + offset_vertex_id;
+    }
+
 public:
     int num_hosts = 1; // number of hosts
     int host_id = 0; // host ID
@@ -173,6 +179,14 @@ DistGraph::DistGraph(char *input_filename)
             vid_type,
             0,
             MPI_COMM_WORLD);
+    // Update the out_degree array according to the rank.
+    {
+        std::vector<VertexID> tmp_degrees(num_v);
+        for (VertexID v = 0; v < num_v; ++v) {
+            tmp_degrees[rank[v]] = out_degrees[v];
+        }
+        out_degrees.swap(tmp_degrees);
+    }
     // Put reordered edges into corresponding buffer_sending
     std::vector< std::vector<VertexID> > edgelist_recv(num_masters); // local received edges
     EdgeID num_edges_recv = 0;
@@ -240,6 +254,10 @@ DistGraph::DistGraph(char *input_filename)
     for (VertexID v_i = 0; v_i < num_masters; ++v_i) {
         vertices_idx[v_i] = loc;
         size_t bound_e_i = edgelist_recv[v_i].size();
+        {
+            VertexID tmp_global_id = get_global_vertex_id(v_i);
+            assert(bound_e_i == out_degrees[tmp_global_id]);
+        }
         std::sort(edgelist_recv[v_i].rbegin(), edgelist_recv[v_i].rend()); // sort neighbors by ranks from low to high
         for (EdgeID e_i = 0; e_i < bound_e_i; ++e_i) {
             out_edges[loc + e_i] = edgelist_recv[v_i][e_i];
