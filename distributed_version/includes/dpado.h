@@ -74,6 +74,7 @@ private:
         // I use BATCH_SIZE + 1 bit for indicator bit array.
         // The v.indicator[BATCH_SIZE] is set if in current batch v has got any new labels already.
         // In this way, when do initialization, only initialize those short_index[v] whose indicator[BATCH_SIZE] is set.
+        // It is also used for inserting new labels because the label structure.
         std::bitset<BATCH_SIZE + 1> indicator; // Global indicator, indicator[r] (0 <= r < BATCH_SIZE) is set means root r once selected as candidate already
 //		bitset<BATCH_SIZE> candidates; // Candidates one iteration, candidates[r] is set means root r is candidate in this iteration
 
@@ -180,6 +181,8 @@ private:
             VertexID roots_size,
 //            vector<IndexType> &L,
             vector< vector<weighti> > &dist_matrix);
+
+    inline void test_queries_normal_index(std::vector< std::vector< std::pair<VertexID, weighti> > > new_L);
 
     // Test only
 //	uint64_t normal_hit_count = 0;
@@ -434,7 +437,7 @@ inline void DistBVCPLL<BATCH_SIZE, BITPARALLEL_SIZE>::initialize(
         end_once_candidated_queue = 0;
         for (VertexID v = roots_start; v < roots_bound; ++v) {
             if (!used_bp_roots[v]) {
-                short_index[v].indicator.set(v - roots_start);
+                short_index[v].indicator.set(v - roots_start); // v itself
                 short_index[v].indicator.set(BATCH_SIZE); // v got labels
             }
         }
@@ -449,14 +452,22 @@ inline void DistBVCPLL<BATCH_SIZE, BITPARALLEL_SIZE>::initialize(
                 continue;
             }
             IndexType &Lr = L[r_id + roots_start];
-            Lr.batches.push_back(IndexType::Batch(
+//            Lr.batches.push_back(IndexType::Batch(
+//                    b_id, // Batch ID
+//                    Lr.distances.size(), // start_index
+//                    1)); // size
+            Lr.batches.emplace_back(
                     b_id, // Batch ID
                     Lr.distances.size(), // start_index
-                    1)); // size
-            Lr.distances.push_back(IndexType::DistanceIndexType(
+                    1); // size
+//            Lr.distances.push_back(IndexType::DistanceIndexType(
+//                    Lr.vertices.size(), // start_index
+//                    1, // size
+//                    0)); // dist
+            Lr.distances.emplace_back(
                     Lr.vertices.size(), // start_index
                     1, // size
-                    0)); // dist
+                    0); // dist
             Lr.vertices.push_back(r_id);
         }
     }
@@ -541,8 +552,8 @@ inline void DistBVCPLL<BATCH_SIZE, BITPARALLEL_SIZE>::push_labels(
 //			return;
 //		} // This condition cannot be used anymore since v_head's last inserted labels are not ordered from higher rank to lower rank now, because v_head's candidate set is a queue now rather than a bitmap. For a queue, its order of candidates are not ordered by ranks.
         const IndexType &L_tail = L[v_tail];
-        _mm_prefetch(&L_tail.bp_dist[0], _MM_HINT_T0);
-        _mm_prefetch(&L_tail.bp_sets[0][0], _MM_HINT_T0);
+//        _mm_prefetch(&L_tail.bp_dist[0], _MM_HINT_T0);
+//        _mm_prefetch(&L_tail.bp_sets[0][0], _MM_HINT_T0);
         // Traverse v_head's last inserted labels
         for (VertexID l_i = l_i_start; l_i < l_i_bound; ++l_i) {
             VertexID label_root_id = Lv.vertices[l_i];
@@ -567,34 +578,34 @@ inline void DistBVCPLL<BATCH_SIZE, BITPARALLEL_SIZE>::push_labels(
                 once_candidated_queue[end_once_candidated_queue++] = v_tail;
             }
 
-            // Bit Parallel Checking: if label_real_id to v_tail has shorter distance already
-            //			++total_check_count;
-            const IndexType &L_label = L[label_real_id];
-
-            _mm_prefetch(&L_label.bp_dist[0], _MM_HINT_T0);
-            _mm_prefetch(&L_label.bp_sets[0][0], _MM_HINT_T0);
-//			bp_checking_ins_count.measure_start();
-            bool no_need_add = false;
-            for (VertexID i = 0; i < BITPARALLEL_SIZE; ++i) {
-                VertexID td = L_label.bp_dist[i] + L_tail.bp_dist[i];
-                if (td - 2 <= iter) {
-                    td +=
-                            (L_label.bp_sets[i][0] & L_tail.bp_sets[i][0]) ? -2 :
-                            ((L_label.bp_sets[i][0] & L_tail.bp_sets[i][1]) |
-                             (L_label.bp_sets[i][1] & L_tail.bp_sets[i][0]))
-                            ? -1 : 0;
-                    if (td <= iter) {
-                        no_need_add = true;
-//						++bp_hit_count;
-                        break;
-                    }
-                }
-            }
-            if (no_need_add) {
-//				bp_checking_ins_count.measure_stop();
-                continue;
-            }
-//			bp_checking_ins_count.measure_stop();
+//            // Bit Parallel Checking: if label_real_id to v_tail has shorter distance already
+//            //			++total_check_count;
+//            const IndexType &L_label = L[label_real_id];
+//
+//            _mm_prefetch(&L_label.bp_dist[0], _MM_HINT_T0);
+//            _mm_prefetch(&L_label.bp_sets[0][0], _MM_HINT_T0);
+////			bp_checking_ins_count.measure_start();
+//            bool no_need_add = false;
+//            for (VertexID i = 0; i < BITPARALLEL_SIZE; ++i) {
+//                VertexID td = L_label.bp_dist[i] + L_tail.bp_dist[i];
+//                if (td - 2 <= iter) {
+//                    td +=
+//                            (L_label.bp_sets[i][0] & L_tail.bp_sets[i][0]) ? -2 :
+//                            ((L_label.bp_sets[i][0] & L_tail.bp_sets[i][1]) |
+//                             (L_label.bp_sets[i][1] & L_tail.bp_sets[i][0]))
+//                            ? -1 : 0;
+//                    if (td <= iter) {
+//                        no_need_add = true;
+////						++bp_hit_count;
+//                        break;
+//                    }
+//                }
+//            }
+//            if (no_need_add) {
+////				bp_checking_ins_count.measure_stop();
+//                continue;
+//            }
+////			bp_checking_ins_count.measure_stop();
 
             // Record vertex label_root_id as v_tail's candidates label
 //			SI_v_tail.candidates.set(label_root_id);
@@ -633,27 +644,6 @@ inline bool DistBVCPLL<BATCH_SIZE, BITPARALLEL_SIZE>::distance_query(
 
     VertexID cand_real_id = cand_root_id + roots_start;
     const IndexType &Lv = L[v_id];
-
-//	// Bit Parallel Checking: if label_real_id to v_tail has shorter distance already
-//	++total_check_count;
-//	const IndexType &L_tail = L[cand_real_id];
-//
-//	_mm_prefetch(&Lv.bp_dist[0], _MM_HINT_T0);
-//	_mm_prefetch(&Lv.bp_sets[0][0], _MM_HINT_T0);
-//	for (VertexID i = 0; i < BITPARALLEL_SIZE; ++i) {
-//		VertexID td = Lv.bp_dist[i] + L_tail.bp_dist[i];
-//		if (td - 2 <= iter) {
-//			td +=
-//				(Lv.bp_sets[i][0] & L_tail.bp_sets[i][0]) ? -2 :
-//				((Lv.bp_sets[i][0] & L_tail.bp_sets[i][1]) |
-//				 (Lv.bp_sets[i][1] & L_tail.bp_sets[i][0]))
-//				? -1 : 0;
-//			if (td <= iter) {
-//				++bp_hit_count;
-//				return false;
-//			}
-//		}
-//	}
 
     // Traverse v_id's all existing labels
     VertexID b_i_bound = Lv.batches.size();
@@ -965,6 +955,7 @@ template <VertexID BATCH_SIZE, VertexID BITPARALLEL_SIZE>
 void DistBVCPLL<BATCH_SIZE, BITPARALLEL_SIZE>::construct(const DistGraph &G)
 {
     num_v = G.num_v;
+    assert(num_v >= BATCH_SIZE);
 //    num_v_ = num_v;
     L.resize(num_v);
     VertexID remainer = num_v % BATCH_SIZE;
@@ -984,12 +975,13 @@ void DistBVCPLL<BATCH_SIZE, BITPARALLEL_SIZE>::construct(const DistGraph &G)
 
     vector<VertexID> active_queue(num_v);
     VertexID end_active_queue = 0;
+    vector<bool> is_active(num_v, false);// is_active[v] is true means vertex v is in the active queue.
     vector<VertexID> candidate_queue(num_v);
     VertexID end_candidate_queue = 0;
+    vector<bool> got_candidates(num_v, false); // got_candidates[v] is true means vertex v is in the queue candidate_queue
     vector<ShortIndex> short_index(num_v);
     vector< vector<weighti> > dist_matrix(BATCH_SIZE, vector<weighti>(num_v, SMALLI_MAX));
-    vector<bool> got_candidates(num_v, false); // got_candidates[v] is true means vertex v is in the queue candidate_queue
-    vector<bool> is_active(num_v, false);// is_active[v] is true means vertex v is in the active queue.
+
 
     vector<VertexID> once_candidated_queue(num_v); // if short_index[v].indicator.any() is true, v is in the queue.
     VertexID end_once_candidated_queue = 0;
@@ -997,7 +989,7 @@ void DistBVCPLL<BATCH_SIZE, BITPARALLEL_SIZE>::construct(const DistGraph &G)
 
     //printf("b_i_bound: %u\n", b_i_bound);//test
     for (VertexID b_i = 0; b_i < b_i_bound; ++b_i) {
-        //printf("b_i: %u\n", b_i);//test
+        printf("b_i: %u\n", b_i);//test
         batch_process(
                 G,
                 b_i,
@@ -1024,7 +1016,7 @@ void DistBVCPLL<BATCH_SIZE, BITPARALLEL_SIZE>::construct(const DistGraph &G)
 //				L);
     }
     if (remainer != 0) {
-//		printf("b_i: %u\n", b_i_bound);//test
+		printf("b_i: %u\n", b_i_bound);//test
         batch_process(
                 G,
                 b_i_bound,
@@ -1156,8 +1148,7 @@ void DistBVCPLL<BATCH_SIZE, BITPARALLEL_SIZE>::store_index_to_file(
 }
 
 template <VertexID BATCH_SIZE, VertexID BITPARALLEL_SIZE>
-void DistBVCPLL<BATCH_SIZE, BITPARALLEL_SIZE>::load_index_from_file(
-        const char *filename)
+void DistBVCPLL<BATCH_SIZE, BITPARALLEL_SIZE>::load_index_from_file(const char *filename)
 {
     std::ifstream fin(filename);
     if (!fin.is_open()) {
@@ -1423,6 +1414,60 @@ weighti DistBVCPLL<BATCH_SIZE, BITPARALLEL_SIZE>::query_distance(
 }
 
 template <VertexID BATCH_SIZE, VertexID BITPARALLEL_SIZE>
+void DistBVCPLL<BATCH_SIZE, BITPARALLEL_SIZE>::test_queries_normal_index(
+        std::vector< std::vector< std::pair<VertexID, weighti> > > new_L)
+{
+    // Try query
+    VertexID u;
+    VertexID v;
+    while (std::cin >> u >> v) {
+        assert(u < num_v && v < num_v);
+        weighti dist = WEIGHTI_MAX;
+//		// Bit Parallel Check
+//		const IndexType &idx_u = L[rank[u]];
+//		const IndexType &idx_v = L[rank[v]];
+//
+//		for (VertexID i = 0; i < BITPARALLEL_SIZE; ++i) {
+//			int td = idx_v.bp_dist[i] + idx_u.bp_dist[i];
+//			if (td - 2 <= dist) {
+//				td +=
+//					(idx_v.bp_sets[i][0] & idx_u.bp_sets[i][0]) ? -2 :
+//					((idx_v.bp_sets[i][0] & idx_u.bp_sets[i][1])
+//							| (idx_v.bp_sets[i][1] & idx_u.bp_sets[i][0]))
+//							? -1 : 0;
+//				if (td < dist) {
+//					dist = td;
+//				}
+//			}
+//		}
+
+        // Normal Index Check
+        const auto &Lu = new_L[u];
+        const auto &Lv = new_L[v];
+//		unsorted_map<VertexID, weighti> markers;
+        std::map<VertexID, weighti> markers;
+        for (VertexID i = 0; i < Lu.size(); ++i) {
+            markers[Lu[i].first] = Lu[i].second;
+        }
+        for (VertexID i = 0; i < Lv.size(); ++i) {
+            const auto &tmp_l = markers.find(Lv[i].first);
+            if (tmp_l == markers.end()) {
+                continue;
+            }
+            int d = tmp_l->second + Lv[i].second;
+            if (d < dist) {
+                dist = d;
+            }
+        }
+        if (dist == 255) {
+            printf("2147483647\n");
+        } else {
+            printf("%u\n", dist);
+        }
+    }
+}
+
+template <VertexID BATCH_SIZE, VertexID BITPARALLEL_SIZE>
 void DistBVCPLL<BATCH_SIZE, BITPARALLEL_SIZE>::switch_labels_to_old_id(
         const vector<VertexID> &rank2id)
 //        const vector<VertexID> &rank)
@@ -1486,6 +1531,7 @@ void DistBVCPLL<BATCH_SIZE, BITPARALLEL_SIZE>::switch_labels_to_old_id(
 //	}
 
 //	// Try query
+    test_queries_normal_index(new_L);
 //	VertexID u;
 //	VertexID v;
 //	while (std::cin >> u >> v) {

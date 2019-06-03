@@ -11,71 +11,80 @@
 
 using namespace PADO;
 
-void test_dynamic_receive()
-{
-    int host_id;
-    int num_hosts;
-    MPI_Comm_rank(MPI_COMM_WORLD, &host_id);
-    MPI_Comm_size(MPI_COMM_WORLD, &num_hosts);
-    // Send
-    std::vector< std::pair<int, int> > send_buffer;
-//    send_buffer.emplace_back(1, 2);
-//    send_buffer.emplace_back(2, 4);
-//    send_buffer.emplace_back(3, 5);
-    send_buffer.emplace_back(4, 7);
-    send_buffer.emplace_back(5, 9);
-
-    printf("sizeof(send_buffer): %lu\n", sizeof(send_buffer));
-    MPI_Send(send_buffer.data(),
-//             sizeof(send_buffer),
-             MPI_Instance::get_sending_size(send_buffer),
-             MPI_CHAR,
-             0,
-             GRAPH_SHUFFLE,
-             MPI_COMM_WORLD);
-    // Receive
-    std::vector< std::pair<int, int> > recv_buffer;
-    int count = MPI_Instance::receive_dynamic_buffer(recv_buffer, num_hosts, GRAPH_SHUFFLE);
-    printf("received_count: %d\n", count);
-    for (const auto &p : recv_buffer) {
-        printf("%d %d\n", p.first, p.second);
-    }
-}
+//void test_dynamic_receive()
+//{
+//    int host_id;
+//    int num_hosts;
+//    MPI_Comm_rank(MPI_COMM_WORLD, &host_id);
+//    MPI_Comm_size(MPI_COMM_WORLD, &num_hosts);
+//    // Send
+//    std::vector< std::pair<int, int> > send_buffer;
+////    send_buffer.emplace_back(1, 2);
+////    send_buffer.emplace_back(2, 4);
+////    send_buffer.emplace_back(3, 5);
+//    send_buffer.emplace_back(4, 7);
+//    send_buffer.emplace_back(5, 9);
+//
+//    printf("sizeof(send_buffer): %lu\n", sizeof(send_buffer));
+//    MPI_Send(send_buffer.data(),
+////             sizeof(send_buffer),
+//             MPI_Instance::get_sending_size(send_buffer),
+//             MPI_CHAR,
+//             0,
+//             GRAPH_SHUFFLE,
+//             MPI_COMM_WORLD);
+//    // Receive
+//    std::vector< std::pair<int, int> > recv_buffer;
+//    int count = MPI_Instance::receive_dynamic_buffer(recv_buffer, num_hosts, GRAPH_SHUFFLE);
+//    printf("received_count: %d\n", count);
+//    for (const auto &p : recv_buffer) {
+//        printf("%d %d\n", p.first, p.second);
+//    }
+//}
 
 void dpado(char *argv[])
 {
     DistGraph G(argv[1]);
 
-//    DistBVCPLL<1024, 50> dist_bvcpll(G); // batch size 1024, bit-parallel size 50.
+    DistBVCPLL<1024, 0> dist_bvcpll(G); // batch size 1024, bit-parallel size 50.
 
-    // print the local graph
-	{
+    // test the index
+    {
         std::vector<VertexID> rank2id(G.num_v);
         for (VertexID v = 0; v < G.num_v; ++v) {
             rank2id[G.rank[v]] = v;
         }
-		std::string filename = "output_" + std::to_string(G.host_id) + ".txt";
-		FILE *fout = fopen(filename.c_str(), "w");
-		fprintf(fout, "num_master: %d (/%u) num_edges_local: %lu (/%lu) host_id: %d (/%d)\n",
-						G.num_masters, G.num_v, G.num_edges_local, G.num_e * 2, G.host_id, G.num_hosts);
-        // Traverse the local G
-        for (VertexID v_i = 0; v_i < G.num_masters; ++v_i) {
-//            VertexID head = v_i + G.offset_vertex_id;
-            VertexID head = rank2id[v_i + G.offset_vertex_id];
-            EdgeID start_e_i = G.vertices_idx[v_i];
-            EdgeID bound_e_i = G.num_edges_local;
-            if (v_i != G.num_masters - 1) {
-                bound_e_i = G.vertices_idx[v_i + 1];
-            }
-            for (EdgeID e_i = start_e_i; e_i < bound_e_i; ++e_i) {
-//                VertexID tail = G.out_edges[e_i];
-                VertexID tail = rank2id[G.out_edges[e_i]];
-                //std::cout << head << " " << tail << std::endl;
-				fprintf(fout, "%u %u\n", head, tail);
-            }
-        }
-		fclose(fout);
-	}
+        dist_bvcpll.switch_labels_to_old_id(rank2id);
+    }
+
+//    // print the local graph
+//	{
+//        std::vector<VertexID> rank2id(G.num_v);
+//        for (VertexID v = 0; v < G.num_v; ++v) {
+//            rank2id[G.rank[v]] = v;
+//        }
+//		std::string filename = "output_" + std::to_string(G.host_id) + ".txt";
+//		FILE *fout = fopen(filename.c_str(), "w");
+//		fprintf(fout, "num_master: %d (/%u) num_edges_local: %lu (/%lu) host_id: %d (/%d)\n",
+//						G.num_masters, G.num_v, G.num_edges_local, G.num_e * 2, G.host_id, G.num_hosts);
+//        // Traverse the local G
+//        for (VertexID v_i = 0; v_i < G.num_masters; ++v_i) {
+////            VertexID head = v_i + G.offset_vertex_id;
+//            VertexID head = rank2id[v_i + G.offset_vertex_id];
+//            EdgeID start_e_i = G.vertices_idx[v_i];
+//            EdgeID bound_e_i = G.num_edges_local;
+//            if (v_i != G.num_masters - 1) {
+//                bound_e_i = G.vertices_idx[v_i + 1];
+//            }
+//            for (EdgeID e_i = start_e_i; e_i < bound_e_i; ++e_i) {
+////                VertexID tail = G.out_edges[e_i];
+//                VertexID tail = rank2id[G.out_edges[e_i]];
+//                //std::cout << head << " " << tail << std::endl;
+//				fprintf(fout, "%u %u\n", head, tail);
+//            }
+//        }
+//		fclose(fout);
+//	}
 
 //    if (0 == G.host_id) {
 //		std::cout << "num_master: " << G.num_masters << " (/" << G.num_v << ")"

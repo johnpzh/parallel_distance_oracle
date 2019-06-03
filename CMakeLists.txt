@@ -6,7 +6,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
 # FLAGS
-set(CMAKE_BUILD_TYPE Debug)
+#set(CMAKE_BUILD_TYPE Debug)
 if (${CMAKE_BUILD_TYPE} MATCHES "Debug")
     set(CMAKE_VERBOSE_MAKEFILE ON)
     add_compile_options(-O0 -Wall -Wextra -pedantic -Werror)
