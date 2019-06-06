@@ -6,6 +6,7 @@
 #define PADO_DGLOBALS_H
 
 #include <stdlib.h>
+#include <limits.h>
 #include <sys/stat.h>
 #include <assert.h>
 
@@ -13,6 +14,8 @@ namespace PADO {
 
 typedef uint32_t VertexID;
 typedef uint64_t EdgeID;
+typedef uint8_t UnweightedDist;
+const UnweightedDist MAX_UNWEIGHTED_DIST = UCHAR_MAX;
 
 // Get the file size
 unsigned long get_file_size(char *filename)

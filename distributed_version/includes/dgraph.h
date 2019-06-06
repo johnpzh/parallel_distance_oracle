@@ -18,7 +18,6 @@ class DistGraph final {
 private:
     VertexID vertex_divide = 0; // the (maximum) number of vertices assigned to a host, supposed to be ceiling(num_v / num_hosts).
 
-
     // Init function: do some initialization work for the system.
     // List:    MPI,
     //          class members.
@@ -40,6 +39,58 @@ private:
         out_degrees.resize(num_v, 0);
     }
 
+    // Function: compute the vertex divide value, which is ceiling(num_v / num_hosts).
+    VertexID get_vertex_divide() const
+    {
+        assert(num_hosts && num_v);
+        VertexID tmp_divide = num_v / num_hosts;
+        if (tmp_divide * num_hosts < num_v) {
+            ++tmp_divide;
+        }
+
+        return tmp_divide;
+    }
+
+public:
+    int num_hosts = 1; // number of hosts
+    int host_id = 0; // host ID
+    VertexID num_v = 0; // number of vertices
+    EdgeID num_e = 0; // number of edges
+    VertexID offset_vertex_id = 0; // The offset for global vertex id to local id.
+    VertexID num_masters = 0; // Number of masters on this host.
+//    EdgeID num_edges_local = 0; // Number of local edges on this host.
+    MPI_Datatype vid_type = MPI_Instance::get_mpi_datatype<VertexID>(); // MPI type of the type VertexID
+
+    std::vector<VertexID> rank;
+    std::vector<VertexID> vertices_idx; // vertices indices
+    std::vector<VertexID> out_edges; // out edges
+    std::vector<VertexID> out_degrees; // out degrees of vertices
+
+    DistGraph() = default;
+    ~DistGraph() = default;
+
+    explicit DistGraph(char *input_filename);
+
+    // Function: convert a vertex ID to its master host ID.
+    // For example, vertex v should belong to host v / ceiling(num_v / num_hosts).
+    int get_master_host_id(VertexID v_id) const
+    {
+        assert(vertex_divide);
+        return v_id / vertex_divide;
+    }
+
+    // Function: get the local vertex ID from the global ID
+    VertexID get_local_vertex_id(VertexID global_id) const
+    {
+        return global_id - offset_vertex_id;
+    }
+
+    // Function: get the global vertex ID from the local ID
+    VertexID get_global_vertex_id(VertexID local_id) const
+    {
+        return local_id + offset_vertex_id;
+    }
+
     // Function: convert the master host id to the location of local sending buffer list.
     // For example, a message belonging to host x should be put into
     // buffer_send_list[(x + num_hosts - host_id - 1) % num_hosts]
@@ -56,58 +107,6 @@ private:
         assert(loc >= 0 && loc < num_hosts - 1);
         return (host_id + loc + 1) % num_hosts;
     }
-
-    // Function: convert a vertex ID to its master host ID.
-    // For example, vertex v should belong to host v / ceiling(num_v / num_hosts).
-    int get_master_host_id(VertexID v_id)
-    {
-        assert(vertex_divide);
-        return v_id / vertex_divide;
-    }
-
-    // Function: compute the vertex divide value, which is ceiling(num_v / num_hosts).
-    VertexID get_vertex_divide()
-    {
-        assert(num_hosts && num_v);
-        VertexID tmp_divide = num_v / num_hosts;
-        if (tmp_divide * num_hosts < num_v) {
-            ++tmp_divide;
-        }
-
-        return tmp_divide;
-    }
-
-    // Function: get the local vertex ID from the global ID
-    VertexID get_local_vertex_id(VertexID global_id)
-    {
-        return global_id - offset_vertex_id;
-    }
-
-    // Function: get the global vertex ID from the local ID
-    VertexID get_global_vertex_id(VertexID local_id)
-    {
-        return local_id + offset_vertex_id;
-    }
-
-public:
-    int num_hosts = 1; // number of hosts
-    int host_id = 0; // host ID
-    VertexID num_v = 0; // number of vertices
-    EdgeID num_e = 0; // number of edges
-    VertexID offset_vertex_id = 0; // The offset for global vertex id to local id.
-    VertexID num_masters = 0; // Number of masters on this host.
-    EdgeID num_edges_local = 0; // Number of local edges on this host.
-    MPI_Datatype vid_type = MPI_Instance::get_mpi_datatype<VertexID>(); // MPI type of the type VertexID
-
-    std::vector<VertexID> rank;
-    std::vector<VertexID> vertices_idx; // vertices indices
-    std::vector<VertexID> out_edges; // out edges
-    std::vector<VertexID> out_degrees; // out degrees of vertices
-
-    DistGraph() = default;
-    ~DistGraph() = default;
-
-    explicit DistGraph(char *input_filename);
 };
 
 // Constructor from a input file.
@@ -239,7 +238,7 @@ DistGraph::DistGraph(char *input_filename)
     std::vector<EdgeType> buffer_recv;
     for (int h_i = 0; h_i < num_hosts - 1; ++h_i) {
         // Receive into the buffer_recv.
-        num_edges_recv += MPI_Instance::receive_dynamic_buffer(buffer_recv, num_hosts, GRAPH_SHUFFLE);
+        num_edges_recv += MPI_Instance::receive_dynamic_buffer_from_any(buffer_recv, num_hosts, GRAPH_SHUFFLE);
         // Put into edgelist_recv
         for (const auto &e : buffer_recv) {
             VertexID head = e.first;
