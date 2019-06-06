@@ -58,7 +58,7 @@ public:
     EdgeID num_e = 0; // number of edges
     VertexID offset_vertex_id = 0; // The offset for global vertex id to local id.
     VertexID num_masters = 0; // Number of masters on this host.
-//    EdgeID num_edges_local = 0; // Number of local edges on this host.
+    EdgeID num_edges_local = 0; // Number of local edges on this host.
     MPI_Datatype vid_type = MPI_Instance::get_mpi_datatype<VertexID>(); // MPI type of the type VertexID
 
     std::vector<VertexID> rank;

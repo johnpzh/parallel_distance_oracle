@@ -41,6 +41,7 @@ private:
             VertexID start_index; // Index to the array distances where the batch starts
             VertexID size; // Number of distances element in this batch
 
+            Batch() = default;
             Batch(VertexID batch_id_, VertexID start_index_, VertexID size_):
                     batch_id(batch_id_), start_index(start_index_), size(size_)
             { }
@@ -51,7 +52,8 @@ private:
             VertexID size; // Number of the same-distance vertices
             UnweightedDist dist; // The real distance
 
-            DistanceIndexType(VertexID start_index_, VertexID size_, smalli dist_):
+            DistanceIndexType() = default;
+            DistanceIndexType(VertexID start_index_, VertexID size_, UnweightedDist dist_):
                     start_index(start_index_), size(size_), dist(dist_)
             { }
         };
@@ -123,7 +125,7 @@ private:
             vector<VertexID> &got_candidates_queue,
             VertexID &end_got_candidates_queue,
             vector<ShortIndex> &short_index,
-            vector< vector<UnweightedDist> > &dist_matrix,
+            vector< vector<UnweightedDist> > &dist_table,
             vector<bool> &got_candidates,
             vector<bool> &is_active,
             vector<VertexID> &once_candidated_queue,
@@ -133,7 +135,7 @@ private:
     inline void initialization(
             const DistGraph &G,
             vector<ShortIndex> &short_index,
-            vector< vector<UnweightedDist> > &dist_matrix,
+            vector< vector<UnweightedDist> > &dist_table,
             vector<VertexID> &active_queue,
             VertexID &end_active_queue,
             vector<VertexID> &once_candidated_queue,
@@ -163,7 +165,7 @@ private:
             VertexID v_id,
             VertexID roots_start,
 //            const vector<IndexType> &L,
-            const vector< vector<UnweightedDist> > &dist_matrix,
+            const vector< vector<UnweightedDist> > &dist_table,
             UnweightedDist iter);
     inline void insert_label_only(
             VertexID cand_root_id,
@@ -171,7 +173,7 @@ private:
             VertexID roots_start,
             VertexID roots_size,
 //            vector<IndexType> &L,
-            vector< vector<UnweightedDist> > &dist_matrix,
+            vector< vector<UnweightedDist> > &dist_table,
             UnweightedDist iter);
     inline void update_label_indices(
             VertexID v_id,
@@ -184,7 +186,7 @@ private:
             VertexID roots_start,
             VertexID roots_size,
 //            vector<IndexType> &L,
-            vector< vector<UnweightedDist> > &dist_matrix);
+            vector< vector<UnweightedDist> > &dist_table);
 
     inline void test_queries_normal_index(std::vector< std::vector< std::pair<VertexID, UnweightedDist> > > new_L);
 
@@ -406,7 +408,7 @@ template <VertexID BATCH_SIZE, VertexID BITPARALLEL_SIZE>
 inline void DistBVCPLL<BATCH_SIZE, BITPARALLEL_SIZE>::initialization(
         const DistGraph &G,
         vector<ShortIndex> &short_index,
-        vector< vector<UnweightedDist> > &dist_matrix,
+        vector< vector<UnweightedDist> > &dist_table,
         vector<VertexID> &active_queue,
         VertexID &end_active_queue,
         vector<VertexID> &once_candidated_queue,
@@ -482,7 +484,7 @@ inline void DistBVCPLL<BATCH_SIZE, BITPARALLEL_SIZE>::initialization(
                     Lr.vertices.size(), // start_index
                     1, // size
                     0); // dist
-            Lr.vertices.push_back(G.get_global_vertex_id(r_local));
+            Lr.vertices.push_back(G.get_global_vertex_id(r_local) - roots_start);
         }
 //        for (VertexID r_id = 0; r_id < roots_size; ++r_id) {
 //            if (used_bp_roots[r_id + roots_start]) {
@@ -521,13 +523,13 @@ inline void DistBVCPLL<BATCH_SIZE, BITPARALLEL_SIZE>::initialization(
 //        };
 //        std::vector<Label> buffer_send; // buffer for sending, (root, dis
 //		IndexType &Lr;
-        VertexID b_i_bound;
-        VertexID id_offset;
-        VertexID dist_start_index;
-        VertexID dist_bound_index;
-        VertexID v_start_index;
-        VertexID v_bound_index;
-        UnweightedDist dist;
+//        VertexID b_i_bound;
+//        VertexID id_offset;
+//        VertexID dist_start_index;
+//        VertexID dist_bound_index;
+//        VertexID v_start_index;
+//        VertexID v_bound_index;
+//        UnweightedDist dist;
 //        for (VertexID r_id = 0; r_id < roots_size; ++r_id) {
 //            if (used_bp_roots[r_id + roots_start]) {
 //                continue;
@@ -537,22 +539,25 @@ inline void DistBVCPLL<BATCH_SIZE, BITPARALLEL_SIZE>::initialization(
             // The distance table.
             IndexType &Lr = L[r_local];
             VertexID r_root_id = G.get_global_vertex_id(r_local) - roots_start;
-            b_i_bound = Lr.batches.size();
+            VertexID b_i_bound = Lr.batches.size();
             _mm_prefetch(&Lr.batches[0], _MM_HINT_T0);
             _mm_prefetch(&Lr.distances[0], _MM_HINT_T0);
             _mm_prefetch(&Lr.vertices[0], _MM_HINT_T0);
+            // Traverse batches array
             for (VertexID b_i = 0; b_i < b_i_bound; ++b_i) {
-                id_offset = Lr.batches[b_i].batch_id * BATCH_SIZE;
-                dist_start_index = Lr.batches[b_i].start_index;
-                dist_bound_index = dist_start_index + Lr.batches[b_i].size;
-                // Traverse dist_matrix
+                VertexID id_offset = Lr.batches[b_i].batch_id * BATCH_SIZE;
+                VertexID dist_start_index = Lr.batches[b_i].start_index;
+                VertexID dist_bound_index = dist_start_index + Lr.batches[b_i].size;
+                // Traverse distances array
                 for (VertexID dist_i = dist_start_index; dist_i < dist_bound_index; ++dist_i) {
-                    v_start_index = Lr.distances[dist_i].start_index;
-                    v_bound_index = v_start_index + Lr.distances[dist_i].size;
-                    dist = Lr.distances[dist_i].dist;
+                    VertexID v_start_index = Lr.distances[dist_i].start_index;
+                    VertexID v_bound_index = v_start_index + Lr.distances[dist_i].size;
+                    UnweightedDist dist = Lr.distances[dist_i].dist;
+                    // Traverse vertices array
                     for (VertexID v_i = v_start_index; v_i < v_bound_index; ++v_i) {
+                        // Write into the dist_table
 //                        VertexID label_global_id = Lr.vertices[v_i] + id_offset;
-                        dist_matrix[r_root_id][Lr.vertices[v_i] + id_offset] = dist; // distance table
+                        dist_table[r_root_id][Lr.vertices[v_i] + id_offset] = dist; // distance table
 //                        buffer_send.emplace_back(r_root_id, label_global_id, dist); // buffer for sending
                     }
                 }
@@ -589,14 +594,14 @@ inline void DistBVCPLL<BATCH_SIZE, BITPARALLEL_SIZE>::initialization(
                          Lr.batches.size() * sizeof(Lr.batches[0]),
                          MPI_CHAR,
                          dest_host_id,
-                         SENDING_INDEXTYPE_BATCH,
+                         SENDING_INDEXTYPE_BATCHES,
                          MPI_COMM_WORLD);
                 // The Distances array
                 MPI_Send(Lr.distances.data(),
                          Lr.distances.size() * sizeof(Lr.distances[0]),
                          MPI_CHAR,
                          dest_host_id,
-                         SENDING_INDEXTYPE_DISTANCE,
+                         SENDING_INDEXTYPE_DISTANCES,
                          MPI_COMM_WORLD);
                 // The Vertices arrray
                 MPI_Send(Lr.vertices.data(),
@@ -613,11 +618,77 @@ inline void DistBVCPLL<BATCH_SIZE, BITPARALLEL_SIZE>::initialization(
     {
         for (int h_i = 0; h_i < num_hosts - 1; ++h_i) {
             VertexID num_root_recieved;
-//            MPI_Recv(&num_root_recieved,
-//                    1,
-//                    VIDType,
-//                    )
+            MPI_Status status_recv;
+            MPI_Recv(&num_root_recieved,
+                    1,
+                    VIDType,
+                    MPI_ANY_SOURCE,
+                    SENDING_NUM_ROOT_MASTERS,
+                    MPI_COMM_WORLD,
+                    &status_recv);
+            int source = status_recv.MPI_SOURCE;
+            for (VertexID r_i = 0; r_i < num_root_recieved; ++r_i) {
+                // Receive the root_id
+                VertexID r_root_id;
+                MPI_Recv(&r_root_id,
+                        1,
+                        VIDType,
+                        source,
+                        SENDING_ROOT_ID,
+                        MPI_COMM_WORLD,
+                        MPI_STATUS_IGNORE);
+                // Receive Batches array
+                std::vector<typename IndexType::Batch> batches;
+                MPI_Instance::receive_dynamic_buffer_from_source(batches,
+                        num_hosts,
+                        source,
+                        SENDING_INDEXTYPE_BATCHES);
+                // Receive Distances array
+                std::vector<typename IndexType::DistanceIndexType> distances;
+                MPI_Instance::receive_dynamic_buffer_from_source(distances,
+                        num_hosts,
+                        source,
+                        SENDING_INDEXTYPE_DISTANCES);
+                // Receive Vertices array
+                std::vector<VertexID> vertices;
+                MPI_Instance::receive_dynamic_buffer_from_source(vertices,
+                        num_hosts,
+                        source,
+                        SENDING_INDEXTYPE_VERTICES);
+                // Traverse labels to setup distance table
+                VertexID b_i_bound = batches.size();
+                // Traverse the batches array
+                for (VertexID b_i = 0; b_i < b_i_bound; ++b_i) {
+                    VertexID id_offset = batches[b_i].batch_id * BATCH_SIZE;
+                    VertexID dist_start_index = batches[b_i].start_index;
+                    VertexID dist_bound_index = dist_start_index + batches[b_i].size;
+                    // Traverse distances array
+                    for (VertexID dist_i = dist_start_index; dist_i < dist_bound_index; ++dist_i) {
+                        VertexID v_start_index = distances[dist_i].start_index;
+                        VertexID v_bound_index = v_start_index + distances[dist_i].size;
+                        UnweightedDist dist = distances[dist_i].dist;
+                        // Traverse vertices array
+                        for (VertexID v_i = v_start_index; v_i < v_bound_index; ++v_i) {
+//                        VertexID label_global_id = Lr.vertices[v_i] + id_offset;
+                            dist_table[r_root_id][vertices[v_i] + id_offset] = dist; // distance table
+//                        buffer_send.emplace_back(r_root_id, label_global_id, dist); // buffer for sending
+                        }
+                    }
+                }
+            }
         }
+    }
+
+    {// test
+    // Print the dist table
+        std::string filename = "output_" + std::to_string(host_id) + ".txt";
+        FILE *fout = fopen(filename.c_str(), "w");
+        for (VertexID r = 0; r < dist_table.size(); ++r) {
+            for (VertexID v = 0; v < dist_table[r].size(); ++v) {
+                fprintf(fout, "[%u,%u]: %u\n", r, v, dist_table[r][v]);
+            }
+        }
+        exit(EXIT_SUCCESS);
     }
 }
 
@@ -744,7 +815,7 @@ inline bool DistBVCPLL<BATCH_SIZE, BITPARALLEL_SIZE>::distance_query(
         VertexID v_id,
         VertexID roots_start,
 //        const vector<IndexType> &L,
-        const vector< vector<UnweightedDist> > &dist_matrix,
+        const vector< vector<UnweightedDist> > &dist_table,
         UnweightedDist iter)
 {
 //	++total_check_count;
@@ -760,12 +831,12 @@ inline bool DistBVCPLL<BATCH_SIZE, BITPARALLEL_SIZE>::distance_query(
     _mm_prefetch(&Lv.batches[0], _MM_HINT_T0);
     _mm_prefetch(&Lv.distances[0], _MM_HINT_T0);
     _mm_prefetch(&Lv.vertices[0], _MM_HINT_T0);
-    //_mm_prefetch(&dist_matrix[cand_root_id][0], _MM_HINT_T0);
+    //_mm_prefetch(&dist_table[cand_root_id][0], _MM_HINT_T0);
     for (VertexID b_i = 0; b_i < b_i_bound; ++b_i) {
         VertexID id_offset = Lv.batches[b_i].batch_id * BATCH_SIZE;
         VertexID dist_start_index = Lv.batches[b_i].start_index;
         VertexID dist_bound_index = dist_start_index + Lv.batches[b_i].size;
-        // Traverse dist_matrix
+        // Traverse dist_table
         for (VertexID dist_i = dist_start_index; dist_i < dist_bound_index; ++dist_i) {
             UnweightedDist dist = Lv.distances[dist_i].dist;
             if (dist >= iter) { // In a batch, the labels' distances are increasingly ordered.
@@ -774,16 +845,16 @@ inline bool DistBVCPLL<BATCH_SIZE, BITPARALLEL_SIZE>::distance_query(
             }
             VertexID v_start_index = Lv.distances[dist_i].start_index;
             VertexID v_bound_index = v_start_index + Lv.distances[dist_i].size;
-//            _mm_prefetch(&dist_matrix[cand_root_id][0], _MM_HINT_T0);
-            _mm_prefetch(reinterpret_cast<const char *>(dist_matrix[cand_root_id].data()), _MM_HINT_T0);
+//            _mm_prefetch(&dist_table[cand_root_id][0], _MM_HINT_T0);
+            _mm_prefetch(reinterpret_cast<const char *>(dist_table[cand_root_id].data()), _MM_HINT_T0);
             for (VertexID v_i = v_start_index; v_i < v_bound_index; ++v_i) {
                 VertexID v = Lv.vertices[v_i] + id_offset; // v is a label hub of v_id
                 if (v >= cand_real_id) {
                     // Vertex cand_real_id cannot have labels whose ranks are lower than it,
-                    // in which case dist_matrix[cand_root_id][v] does not exist.
+                    // in which case dist_table[cand_root_id][v] does not exist.
                     continue;
                 }
-                VertexID d_tmp = dist + dist_matrix[cand_root_id][v];
+                VertexID d_tmp = dist + dist_table[cand_root_id][v];
                 if (d_tmp <= iter) {
 //					distance_query_time += WallTimer::get_time_mark();
 //					dist_query_ins_count.measure_stop();
@@ -798,7 +869,7 @@ inline bool DistBVCPLL<BATCH_SIZE, BITPARALLEL_SIZE>::distance_query(
 }
 
 // Function inserts candidate cand_root_id into vertex v_id's labels;
-// update the distance buffer dist_matrix;
+// update the distance buffer dist_table;
 // but it only update the v_id's labels' vertices array;
 template <VertexID BATCH_SIZE, VertexID BITPARALLEL_SIZE>
 inline void DistBVCPLL<BATCH_SIZE, BITPARALLEL_SIZE>::insert_label_only(
@@ -807,14 +878,14 @@ inline void DistBVCPLL<BATCH_SIZE, BITPARALLEL_SIZE>::insert_label_only(
         VertexID roots_start,
         VertexID roots_size,
 //        vector<IndexType> &L,
-        vector< vector<UnweightedDist> > &dist_matrix,
+        vector< vector<UnweightedDist> > &dist_table,
         UnweightedDist iter)
 {
     L[v_id].vertices.push_back(cand_root_id);
     // Update the distance buffer if necessary
     VertexID v_root_id = v_id - roots_start;
     if (v_id >= roots_start && v_root_id < roots_size) {
-        dist_matrix[v_root_id][cand_root_id + roots_start] = iter;
+        dist_table[v_root_id][cand_root_id + roots_start] = iter;
     }
 }
 
@@ -848,7 +919,7 @@ inline void DistBVCPLL<BATCH_SIZE, BITPARALLEL_SIZE>::update_label_indices(
             iter));
 }
 
-// Function to reset dist_matrix the distance buffer to INF
+// Function to reset dist_table the distance buffer to INF
 // Traverse every root's labels to reset its distance buffer elements to INF.
 // In this way to reduce the cost of initialization of the next batch.
 template <VertexID BATCH_SIZE, VertexID BITPARALLEL_SIZE>
@@ -856,7 +927,7 @@ inline void DistBVCPLL<BATCH_SIZE, BITPARALLEL_SIZE>::reset_at_end(
         VertexID roots_start,
         VertexID roots_size,
 //        vector<IndexType> &L,
-        vector< vector<UnweightedDist> > &dist_matrix)
+        vector< vector<UnweightedDist> > &dist_table)
 {
     VertexID b_i_bound;
     VertexID id_offset;
@@ -874,12 +945,12 @@ inline void DistBVCPLL<BATCH_SIZE, BITPARALLEL_SIZE>::reset_at_end(
             id_offset = Lr.batches[b_i].batch_id * BATCH_SIZE;
             dist_start_index = Lr.batches[b_i].start_index;
             dist_bound_index = dist_start_index + Lr.batches[b_i].size;
-            // Traverse dist_matrix
+            // Traverse dist_table
             for (VertexID dist_i = dist_start_index; dist_i < dist_bound_index; ++dist_i) {
                 v_start_index = Lr.distances[dist_i].start_index;
                 v_bound_index = v_start_index + Lr.distances[dist_i].size;
                 for (VertexID v_i = v_start_index; v_i < v_bound_index; ++v_i) {
-                    dist_matrix[r_id][Lr.vertices[v_i] + id_offset] = MAX_UNWEIGHTED_DIST;
+                    dist_table[r_id][Lr.vertices[v_i] + id_offset] = MAX_UNWEIGHTED_DIST;
                 }
             }
         }
@@ -902,7 +973,7 @@ inline void DistBVCPLL<BATCH_SIZE, BITPARALLEL_SIZE>::batch_process(
         vector<VertexID> &got_candidates_queue,
         VertexID &end_got_candidates_queue,
         vector<ShortIndex> &short_index,
-        vector< vector<UnweightedDist> > &dist_matrix,
+        vector< vector<UnweightedDist> > &dist_table,
         vector<bool> &got_candidates,
         vector<bool> &is_active,
         vector<VertexID> &once_candidated_queue,
@@ -911,12 +982,12 @@ inline void DistBVCPLL<BATCH_SIZE, BITPARALLEL_SIZE>::batch_process(
 {
 
 //	initializing_time -= WallTimer::get_time_mark();
-    // At the beginning of a batch, initialize the labels L and distance buffer dist_matrix;
+    // At the beginning of a batch, initialize the labels L and distance buffer dist_table;
 //	puts("Initializing...");//test
     initialization(
             G,
             short_index,
-            dist_matrix,
+            dist_table,
             active_queue,
             end_active_queue,
             once_candidated_queue,
@@ -991,7 +1062,7 @@ inline void DistBVCPLL<BATCH_SIZE, BITPARALLEL_SIZE>::batch_process(
                         v_id,
                         roots_start,
 //                        L,
-                        dist_matrix,
+                        dist_table,
                         iter) ) {
                     if (!is_active[v_id]) {
                         is_active[v_id] = true;
@@ -1005,7 +1076,7 @@ inline void DistBVCPLL<BATCH_SIZE, BITPARALLEL_SIZE>::batch_process(
                             roots_start,
                             roots_size,
 //                            L,
-                            dist_matrix,
+                            dist_table,
                             iter);
                 }
             }
@@ -1028,7 +1099,7 @@ inline void DistBVCPLL<BATCH_SIZE, BITPARALLEL_SIZE>::batch_process(
 //		adding_time += WallTimer::get_time_mark();
     }
 
-    // Reset the dist_matrix
+    // Reset the dist_table
 //	initializing_time -= WallTimer::get_time_mark();
 //	init_dist_matrix_time -= WallTimer::get_time_mark();
 //	puts("Resetting...");//test
@@ -1036,7 +1107,7 @@ inline void DistBVCPLL<BATCH_SIZE, BITPARALLEL_SIZE>::batch_process(
             roots_start,
             roots_size,
 //            L,
-            dist_matrix);
+            dist_table);
 //	puts("Reset done.");//test
 //	init_dist_matrix_time += WallTimer::get_time_mark();
 //	initializing_time += WallTimer::get_time_mark();
@@ -1085,7 +1156,7 @@ void DistBVCPLL<BATCH_SIZE, BITPARALLEL_SIZE>::construct(const DistGraph &G)
 //    vector<bool> got_candidates(num_v, false); // got_candidates[v] is true means vertex v is in the queue got_candidates_queue
     vector<ShortIndex> short_index(num_masters);
 //    vector<ShortIndex> short_index(num_v);
-    vector< vector<UnweightedDist> > dist_matrix(BATCH_SIZE, vector<UnweightedDist>(num_v, MAX_UNWEIGHTED_DIST));
+    vector< vector<UnweightedDist> > dist_table(BATCH_SIZE, vector<UnweightedDist>(num_v, MAX_UNWEIGHTED_DIST));
 
 
     vector<VertexID> once_candidated_queue(num_masters); // if short_index[v].indicator.any() is true, v is in the queue.
@@ -1110,7 +1181,7 @@ void DistBVCPLL<BATCH_SIZE, BITPARALLEL_SIZE>::construct(const DistGraph &G)
                 got_candidates_queue,
                 end_got_candidates_queue,
                 short_index,
-                dist_matrix,
+                dist_table,
                 got_candidates,
                 is_active,
                 once_candidated_queue,
@@ -1131,7 +1202,7 @@ void DistBVCPLL<BATCH_SIZE, BITPARALLEL_SIZE>::construct(const DistGraph &G)
                 got_candidates_queue,
                 end_got_candidates_queue,
                 short_index,
-                dist_matrix,
+                dist_table,
                 got_candidates,
                 is_active,
                 once_candidated_queue,
@@ -1215,7 +1286,7 @@ void DistBVCPLL<BATCH_SIZE, BITPARALLEL_SIZE>::store_index_to_file(
             VertexID id_offset = Lv.batches[b_i].batch_id * BATCH_SIZE;
             VertexID dist_start_index = Lv.batches[b_i].start_index;
             VertexID dist_bound_index = dist_start_index + Lv.batches[b_i].size;
-            // Traverse dist_matrix
+            // Traverse dist_table
             for (VertexID dist_i = dist_start_index; dist_i < dist_bound_index; ++dist_i) {
                 VertexID v_start_index = Lv.distances[dist_i].start_index;
                 VertexID v_bound_index = v_start_index + Lv.distances[dist_i].size;
@@ -1316,7 +1387,7 @@ void DistBVCPLL<BATCH_SIZE, BITPARALLEL_SIZE>::order_labels(
             VertexID id_offset = Lv.batches[b_i].batch_id * BATCH_SIZE;
             VertexID dist_start_index = Lv.batches[b_i].start_index;
             VertexID dist_bound_index = dist_start_index + Lv.batches[b_i].size;
-            // Traverse dist_matrix
+            // Traverse dist_table
             for (VertexID dist_i = dist_start_index; dist_i < dist_bound_index; ++dist_i) {
                 VertexID v_start_index = Lv.distances[dist_i].start_index;
                 VertexID v_bound_index = v_start_index + Lv.distances[dist_i].size;
@@ -1595,7 +1666,7 @@ void DistBVCPLL<BATCH_SIZE, BITPARALLEL_SIZE>::switch_labels_to_old_id(
             VertexID id_offset = Lv.batches[b_i].batch_id * BATCH_SIZE;
             VertexID dist_start_index = Lv.batches[b_i].start_index;
             VertexID dist_bound_index = dist_start_index + Lv.batches[b_i].size;
-            // Traverse dist_matrix
+            // Traverse dist_table
             for (VertexID dist_i = dist_start_index; dist_i < dist_bound_index; ++dist_i) {
                 label_sum += Lv.distances[dist_i].size;
                 VertexID v_start_index = Lv.distances[dist_i].start_index;

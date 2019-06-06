@@ -7,8 +7,8 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 
 # FLAGS
 #set(CMAKE_BUILD_TYPE Debug)
+set(CMAKE_VERBOSE_MAKEFILE ON)
 if (${CMAKE_BUILD_TYPE} MATCHES "Debug")
-    set(CMAKE_VERBOSE_MAKEFILE ON)
     add_compile_options(-O0 -Wall -Wextra -pedantic -Werror)
     add_definitions(-DDEBUG_MESSAGES_ON)
     message("DEBUG ON")
