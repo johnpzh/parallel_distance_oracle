@@ -92,8 +92,8 @@ private:
 
     // Structure of the public ordered index for distance queries.
     struct IndexOrdered {
-        UnweightedDist bp_dist[BITPARALLEL_SIZE];
-        uint64_t bp_sets[BITPARALLEL_SIZE][2]; // [0]: S^{-1}, [1]: S^{0}
+//        UnweightedDist bp_dist[BITPARALLEL_SIZE];
+//        uint64_t bp_sets[BITPARALLEL_SIZE][2]; // [0]: S^{-1}, [1]: S^{0}
 
         vector<VertexID> label_id;
         vector<UnweightedDist> label_dists;
@@ -681,13 +681,19 @@ inline void DistBVCPLL<BATCH_SIZE, BITPARALLEL_SIZE>::initialization(
 
     {// test
     // Print the dist table
+		printf("host_id: %d size_roots_master_local: %lu\n", host_id, roots_master_local.size());
         std::string filename = "output_" + std::to_string(host_id) + ".txt";
         FILE *fout = fopen(filename.c_str(), "w");
+		if (fout == nullptr) {
+			fprintf(stderr, "Error: cannot create file %s\n", filename.c_str());
+			exit(EXIT_FAILURE);
+		}
         for (VertexID r = 0; r < dist_table.size(); ++r) {
             for (VertexID v = 0; v < dist_table[r].size(); ++v) {
                 fprintf(fout, "[%u,%u]: %u\n", r, v, dist_table[r][v]);
             }
         }
+		fclose(fout);
         exit(EXIT_SUCCESS);
     }
 }
@@ -732,7 +738,7 @@ inline void DistBVCPLL<BATCH_SIZE, BITPARALLEL_SIZE>::push_labels(
 //		if (v_tail <= Lv.vertices[l_i_start] + roots_start) { // v_tail has higher rank than any v_head's labels
 //			return;
 //		} // This condition cannot be used anymore since v_head's last inserted labels are not ordered from higher rank to lower rank now, because v_head's candidate set is a queue now rather than a bitmap. For a queue, its order of candidates are not ordered by ranks.
-        const IndexType &L_tail = L[v_tail];
+//        const IndexType &L_tail = L[v_tail];
 //        _mm_prefetch(&L_tail.bp_dist[0], _MM_HINT_T0);
 //        _mm_prefetch(&L_tail.bp_sets[0][0], _MM_HINT_T0);
         // Traverse v_head's last inserted labels
@@ -803,6 +809,10 @@ inline void DistBVCPLL<BATCH_SIZE, BITPARALLEL_SIZE>::push_labels(
             }
         }
     }
+
+	{
+		assert(iter >= iter);
+	}
 }
 
 
@@ -907,16 +917,16 @@ inline void DistBVCPLL<BATCH_SIZE, BITPARALLEL_SIZE>::update_label_indices(
     } else {
         short_index[v_id].indicator.set(BATCH_SIZE);
         // Insert a new Batch with batch_id, start_index, and size because a new distance element need to be added
-        Lv.batches.push_back(IndexType::Batch(
+        Lv.batches.emplace_back(
                 b_id,
                 Lv.distances.size(),
-                1));
+                1);
     }
     // Insert a new distance element with start_index, size, and dist
-    Lv.distances.push_back(IndexType::DistanceIndexType(
+    Lv.distances.emplace_back(
             Lv.vertices.size() - inserted_count,
             inserted_count,
-            iter));
+            iter);
 }
 
 // Function to reset dist_table the distance buffer to INF
