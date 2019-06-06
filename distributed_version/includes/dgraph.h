@@ -21,7 +21,7 @@ private:
     // Init function: do some initialization work for the system.
     // List:    MPI,
     //          class members.
-    void init() {
+    void initialization() {
         MPI_Comm_rank(MPI_COMM_WORLD, &host_id);
         MPI_Comm_size(MPI_COMM_WORLD, &num_hosts);
 
@@ -127,7 +127,7 @@ DistGraph::DistGraph(char *input_filename)
     uint64_t bytes_size = sizeof(VertexID) + sizeof(EdgeID) + num_e * 2 * sizeof(VertexID);
     assert(bytes_size == file_size);
     // Initialize class members.
-    init();
+    initialization();
 
     // Get the offset (in bytes) for reading.
     uint64_t edge_byte_size = 2 * sizeof(VertexID); // the size (in bytes) of one edge

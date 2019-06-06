@@ -31,6 +31,7 @@ using std::stable_sort;
 using std::min;
 using std::fill;
 using std::ofstream;
+using std::pair;
 
 namespace PADO {
 
