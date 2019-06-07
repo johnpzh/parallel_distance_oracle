@@ -112,7 +112,6 @@ private:
 //            VertexID w_id,
 //            const vector<IndexType> &L,
 //            UnweightedDist iter);
-
     inline void batch_process(
             const DistGraph &G,
             VertexID b_id,
@@ -131,7 +130,6 @@ private:
             vector<VertexID> &once_candidated_queue,
             VertexID &end_once_candidated_queue,
             vector<bool> &once_candidated);
-
     inline void initialization(
             const DistGraph &G,
             vector<ShortIndex> &short_index,
@@ -159,6 +157,15 @@ private:
             VertexID &end_once_candidated_queue,
             vector<bool> &once_candidated,
             const vector<bool> &used_bp_roots,
+            UnweightedDist iter);
+    inline bool check_pushed_labels(
+            VertexID v_tail_global,
+            VertexID label_root_id,
+            VertexID roots_start,
+            std::vector<ShortIndex> &short_index,
+            std::vector<VertexID> &once_candidated_queue,
+            VertexID &end_once_candidated_queue,
+            std::vector<bool> &once_candidated,
             UnweightedDist iter);
     inline bool distance_query(
             VertexID cand_root_id,
@@ -591,21 +598,24 @@ inline void DistBVCPLL<BATCH_SIZE, BITPARALLEL_SIZE>::initialization(
                         MPI_COMM_WORLD);
                 // The Batches array
                 MPI_Send(Lr.batches.data(),
-                         Lr.batches.size() * sizeof(Lr.batches[0]),
+//                         Lr.batches.size() * sizeof(Lr.batches[0]),
+                         MPI_Instance::get_sending_size(Lr.batches),
                          MPI_CHAR,
                          dest_host_id,
                          SENDING_INDEXTYPE_BATCHES,
                          MPI_COMM_WORLD);
                 // The Distances array
                 MPI_Send(Lr.distances.data(),
-                         Lr.distances.size() * sizeof(Lr.distances[0]),
+//                         Lr.distances.size() * sizeof(Lr.distances[0]),
+                         MPI_Instance::get_sending_size(Lr.distances),
                          MPI_CHAR,
                          dest_host_id,
                          SENDING_INDEXTYPE_DISTANCES,
                          MPI_COMM_WORLD);
                 // The Vertices arrray
                 MPI_Send(Lr.vertices.data(),
-                         Lr.vertices.size() * sizeof(Lr.vertices[0]),
+//                         Lr.vertices.size() * sizeof(Lr.vertices[0]),
+                         MPI_Instance::get_sending_size(Lr.vertices),
                          MPI_CHAR,
                          dest_host_id,
                          SENDING_INDEXTYPE_VERTICES,
@@ -679,95 +689,60 @@ inline void DistBVCPLL<BATCH_SIZE, BITPARALLEL_SIZE>::initialization(
         }
     }
 
-    {// test
-    // Print the dist table
-		printf("host_id: %d size_roots_master_local: %lu\n", host_id, roots_master_local.size());
-        std::string filename = "output_" + std::to_string(host_id) + ".txt";
-        FILE *fout = fopen(filename.c_str(), "w");
-		if (fout == nullptr) {
-			fprintf(stderr, "Error: cannot create file %s\n", filename.c_str());
-			exit(EXIT_FAILURE);
-		}
-        for (VertexID r = 0; r < dist_table.size(); ++r) {
-            for (VertexID v = 0; v < dist_table[r].size(); ++v) {
-                fprintf(fout, "[%u,%u]: %u\n", r, v, dist_table[r][v]);
-            }
-        }
-		fclose(fout);
-        exit(EXIT_SUCCESS);
-    }
+//    {// test
+//    // Print the dist table
+//		printf("host_id: %d size_roots_master_local: %lu\n", host_id, roots_master_local.size());
+//        std::string filename = "output_" + std::to_string(host_id) + ".txt";
+//        FILE *fout = fopen(filename.c_str(), "w");
+//		if (fout == nullptr) {
+//			fprintf(stderr, "Error: cannot create file %s\n", filename.c_str());
+//			exit(EXIT_FAILURE);
+//		}
+//        for (VertexID r = 0; r < dist_table.size(); ++r) {
+//            for (VertexID v = 0; v < dist_table[r].size(); ++v) {
+//                fprintf(fout, "[%u,%u]: %u\n", r, v, dist_table[r][v]);
+//            }
+//        }
+//		fclose(fout);
+//        exit(EXIT_SUCCESS);
+//    }
 }
 
-// Function: (sequential version) pushes v_head's labels to v_head's every neighbor
+// Function: Vertex v_tail checks label (label_root_id, iter) received from its neighbor,
+// If the label is valid as candidate (need to be added into its candidate labels), return true; otherwise return false.
 template <VertexID BATCH_SIZE, VertexID BITPARALLEL_SIZE>
-inline void DistBVCPLL<BATCH_SIZE, BITPARALLEL_SIZE>::push_labels(
-        VertexID v_head,
+inline bool DistBVCPLL<BATCH_SIZE, BITPARALLEL_SIZE>::check_pushed_labels(
+        VertexID v_tail_global,
+        VertexID label_root_id,
         VertexID roots_start,
-        const DistGraph &G,
-//        const vector<IndexType> &L,
-        vector<ShortIndex> &short_index,
-        vector<VertexID> &got_candidates_queue,
-        VertexID &end_got_candidates_queue,
-        vector<bool> &got_candidates,
-        vector<VertexID> &once_candidated_queue,
+        std::vector<ShortIndex> &short_index,
+        std::vector<VertexID> &once_candidated_queue,
         VertexID &end_once_candidated_queue,
-        vector<bool> &once_candidated,
-        const vector<bool> &used_bp_roots,
+        std::vector<bool> &once_candidated,
         UnweightedDist iter)
 {
-    const IndexType &Lv = L[v_head];
-    // These 2 index are used for traversing v_head's last inserted labels
-    VertexID l_i_start = Lv.distances.rbegin() -> start_index;
-    VertexID l_i_bound = l_i_start + Lv.distances.rbegin() -> size;
-    // Traverse v_head's every neighbor v_tail
-    EdgeID e_i_start = G.vertices_idx[v_head];
-    EdgeID e_i_bound = e_i_start + G.out_degrees[v_head];
-    for (EdgeID e_i = e_i_start; e_i < e_i_bound; ++e_i) {
-        idi v_tail = G.out_edges[e_i];
+    VertexID label_global_id = label_root_id + roots_start;
+    if (v_tail_global <= label_global_id) {
+        // v_tail_global has higher rank than all remaining labels
+        return false;
+    }
+    ShortIndex &SI_v_tail = short_index[v_tail_global];
+    if (SI_v_tail.indicator[label_root_id]) {
+        // The label is already selected before
+        return false;
+    }
+    // Record label_root_id as once selected by v_tail_global
+    SI_v_tail.indicator.set(label_root_id);
+    // Add into once_candidated_queue
+    if (!once_candidated[v_tail_global]) {
+        // If v_tail_global is not in the once_candidated_queue yet, add it in
+        once_candidated[v_tail_global] = true;
+        once_candidated_queue[end_once_candidated_queue++] = v_tail_global;
+    }
 
-        if (used_bp_roots[v_tail]) {
-            continue;
-        }
-//		if (used_bp_roots[v_head]) {
-//			continue;
-//		}
-
-        if (v_tail < roots_start) { // v_tail has higher rank than any roots, then no roots can push new labels to it.
-            return;
-        }
-//		if (v_tail <= Lv.vertices[l_i_start] + roots_start) { // v_tail has higher rank than any v_head's labels
-//			return;
-//		} // This condition cannot be used anymore since v_head's last inserted labels are not ordered from higher rank to lower rank now, because v_head's candidate set is a queue now rather than a bitmap. For a queue, its order of candidates are not ordered by ranks.
-//        const IndexType &L_tail = L[v_tail];
-//        _mm_prefetch(&L_tail.bp_dist[0], _MM_HINT_T0);
-//        _mm_prefetch(&L_tail.bp_sets[0][0], _MM_HINT_T0);
-        // Traverse v_head's last inserted labels
-        for (VertexID l_i = l_i_start; l_i < l_i_bound; ++l_i) {
-            VertexID label_root_id = Lv.vertices[l_i];
-            VertexID label_real_id = label_root_id + roots_start;
-            if (v_tail <= label_real_id) {
-                // v_tail has higher rank than all remaining labels
-                // For candidates_que, this is not true any more!
-//				break;
-                continue;
-            }
-            ShortIndex &SI_v_tail = short_index[v_tail];
-            if (SI_v_tail.indicator[label_root_id]) {
-                // The label is already selected before
-                continue;
-            }
-            // Record label_root_id as once selected by v_tail
-            SI_v_tail.indicator.set(label_root_id);
-            // Add into once_candidated_queue
-            if (!once_candidated[v_tail]) {
-                // If v_tail is not in the once_candidated_queue yet, add it in
-                once_candidated[v_tail] = true;
-                once_candidated_queue[end_once_candidated_queue++] = v_tail;
-            }
-
-//            // Bit Parallel Checking: if label_real_id to v_tail has shorter distance already
+//            // Bit Parallel Checking: if label_global_id to v_tail_global has shorter distance already
 //            //			++total_check_count;
-//            const IndexType &L_label = L[label_real_id];
+//            const IndexType &L_label = L[label_global_id];
 //
 //            _mm_prefetch(&L_label.bp_dist[0], _MM_HINT_T0);
 //            _mm_prefetch(&L_label.bp_sets[0][0], _MM_HINT_T0);
@@ -793,27 +768,225 @@ inline void DistBVCPLL<BATCH_SIZE, BITPARALLEL_SIZE>::push_labels(
 //                continue;
 //            }
 ////			bp_checking_ins_count.measure_stop();
+    if (SI_v_tail.is_candidate[label_root_id]) {
+        return false;
+    }
+    SI_v_tail.is_candidate[label_root_id] = true;
+    SI_v_tail.candidates_que[SI_v_tail.end_candidates_que++] = label_root_id;
+    {// Just for the complain from the compiler
+        assert(iter >= iter);
+    }
+    return true;
+}
 
-            // Record vertex label_root_id as v_tail's candidates label
-//			SI_v_tail.candidates.set(label_root_id);
-            if (!SI_v_tail.is_candidate[label_root_id]) {
-                SI_v_tail.is_candidate[label_root_id] = true;
-                SI_v_tail.candidates_que[SI_v_tail.end_candidates_que++] = label_root_id;
+// Function: (sequential version) pushes v_head's labels to v_head's every neighbor
+template <VertexID BATCH_SIZE, VertexID BITPARALLEL_SIZE>
+inline void DistBVCPLL<BATCH_SIZE, BITPARALLEL_SIZE>::push_labels(
+        VertexID v_head,
+        VertexID roots_start,
+        const DistGraph &G,
+//        const vector<IndexType> &L,
+        vector<ShortIndex> &short_index,
+        vector<VertexID> &got_candidates_queue,
+        VertexID &end_got_candidates_queue,
+        vector<bool> &got_candidates,
+        vector<VertexID> &once_candidated_queue,
+        VertexID &end_once_candidated_queue,
+        vector<bool> &once_candidated,
+        const vector<bool> &used_bp_roots,
+        UnweightedDist iter)
+{
+    // The data structure of a message
+    using MessageUnitType = std::pair<VertexID, VertexID>;
+        // first: Vertex V: the receiver of this label
+        // second: Root R: the root ID of this label
+    // Set up the sending buffer
+    std::vector< std::vector< MessageUnitType > > buffer_send_list(num_hosts - 1);
+//    // Set up the receiving buffer
+//    std::vector< LabelUnitType > buffer_recv;
+    const IndexType &Lv = L[v_head];
+    // These 2 index are used for traversing v_head's last inserted labels
+    VertexID l_i_start = Lv.distances.rbegin() -> start_index;
+    VertexID l_i_bound = l_i_start + Lv.distances.rbegin() -> size;
+    // Traverse v_head's every neighbor v_tail
+    EdgeID e_i_start = G.vertices_idx[v_head];
+    EdgeID e_i_bound = e_i_start + G.out_degrees[v_head];
+    for (EdgeID e_i = e_i_start; e_i < e_i_bound; ++e_i) {
+        VertexID v_tail = G.out_edges[e_i];
+        if (used_bp_roots[v_tail]) {
+            continue;
+        }
+        if (v_tail < roots_start) { // v_tail has higher rank than any roots, then no roots can push new labels to it.
+            return;
+        }
+        int host_v_tail = G.get_master_host_id(v_tail);
+        if (host_v_tail == host_id) {
+            // If v_tail belongs to this host, then check labels locally
+            // Traverse v_head's last inserted labels
+            for (VertexID l_i = l_i_start; l_i < l_i_bound; ++l_i) {
+                VertexID label_root_id = Lv.vertices[l_i];
+                if (check_pushed_labels(
+                        v_tail,
+                        label_root_id,
+                        roots_start,
+                        short_index,
+                        once_candidated_queue,
+                        end_once_candidated_queue,
+                        once_candidated,
+                        iter)) {
+                    // Add into got_candidates_queue
+                    if (!got_candidates[v_tail]) {
+                        // If v_tail is not in got_candidates_queue, add it in (prevent duplicate)
+                        got_candidates[v_tail] = true;
+                        got_candidates_queue[end_got_candidates_queue++] = v_tail;
+                    }
+                }
             }
+        } else {
+            // If v_tail belongs to other hosts, then prepare the message.
+            for (VertexID l_i = l_i_start; l_i < l_i_bound; ++l_i) {
+                VertexID label_root_id = Lv.vertices[l_i];
+                if (v_tail <= label_root_id + roots_start) {
+                    // If v_tail has higher rank than the label
+                    continue;
+                }
+                // Put into the sending buffer
+                buffer_send_list[host_v_tail].emplace_back(v_tail, label_root_id);
+            }
+        }
 
-            // Add into got_candidates_queue
-            if (!got_candidates[v_tail]) {
-                // If v_tail is not in got_candidates_queue, add it in (prevent duplicate)
-                got_candidates[v_tail] = true;
-                got_candidates_queue[end_got_candidates_queue++] = v_tail;
+////        const IndexType &L_tail = L[v_tail];
+////        _mm_prefetch(&L_tail.bp_dist[0], _MM_HINT_T0);
+////        _mm_prefetch(&L_tail.bp_sets[0][0], _MM_HINT_T0);
+//        // Traverse v_head's last inserted labels
+//        for (VertexID l_i = l_i_start; l_i < l_i_bound; ++l_i) {
+//            VertexID label_root_id = Lv.vertices[l_i];
+//            if (check_pushed_labels(
+//                    v_tail,
+//                    label_root_id,
+//                    roots_start,
+//                    short_index,
+//                    once_candidated_queue,
+//                    end_once_candidated_queue,
+//                    once_candidated,
+//                    iter)) {
+//                // Add into got_candidates_queue
+//                if (!got_candidates[v_tail]) {
+//                    // If v_tail is not in got_candidates_queue, add it in (prevent duplicate)
+//                    got_candidates[v_tail] = true;
+//                    got_candidates_queue[end_got_candidates_queue++] = v_tail;
+//                }
+//            }
+//
+//
+////            VertexID label_real_id = label_root_id + roots_start;
+////            if (v_tail <= label_real_id) {
+////                // v_tail has higher rank than all remaining labels
+////                // For candidates_que, this is not true any more!
+//////				break;
+////                continue;
+////            }
+////            ShortIndex &SI_v_tail = short_index[v_tail];
+////            if (SI_v_tail.indicator[label_root_id]) {
+////                // The label is already selected before
+////                continue;
+////            }
+////            // Record label_root_id as once selected by v_tail
+////            SI_v_tail.indicator.set(label_root_id);
+////            // Add into once_candidated_queue
+////            if (!once_candidated[v_tail]) {
+////                // If v_tail is not in the once_candidated_queue yet, add it in
+////                once_candidated[v_tail] = true;
+////                once_candidated_queue[end_once_candidated_queue++] = v_tail;
+////            }
+////
+//////            // Bit Parallel Checking: if label_real_id to v_tail has shorter distance already
+//////            //			++total_check_count;
+//////            const IndexType &L_label = L[label_real_id];
+//////
+//////            _mm_prefetch(&L_label.bp_dist[0], _MM_HINT_T0);
+//////            _mm_prefetch(&L_label.bp_sets[0][0], _MM_HINT_T0);
+////////			bp_checking_ins_count.measure_start();
+//////            bool no_need_add = false;
+//////            for (VertexID i = 0; i < BITPARALLEL_SIZE; ++i) {
+//////                VertexID td = L_label.bp_dist[i] + L_tail.bp_dist[i];
+//////                if (td - 2 <= iter) {
+//////                    td +=
+//////                            (L_label.bp_sets[i][0] & L_tail.bp_sets[i][0]) ? -2 :
+//////                            ((L_label.bp_sets[i][0] & L_tail.bp_sets[i][1]) |
+//////                             (L_label.bp_sets[i][1] & L_tail.bp_sets[i][0]))
+//////                            ? -1 : 0;
+//////                    if (td <= iter) {
+//////                        no_need_add = true;
+////////						++bp_hit_count;
+//////                        break;
+//////                    }
+//////                }
+//////            }
+//////            if (no_need_add) {
+////////				bp_checking_ins_count.measure_stop();
+//////                continue;
+//////            }
+////////			bp_checking_ins_count.measure_stop();
+////
+////            // Record vertex label_root_id as v_tail's candidates label
+//////			SI_v_tail.candidates.set(label_root_id);
+////            if (!SI_v_tail.is_candidate[label_root_id]) {
+////                SI_v_tail.is_candidate[label_root_id] = true;
+////                SI_v_tail.candidates_que[SI_v_tail.end_candidates_que++] = label_root_id;
+////
+////                // Add into got_candidates_queue
+////                if (!got_candidates[v_tail]) {
+////                    // If v_tail is not in got_candidates_queue, add it in (prevent duplicate)
+////                    got_candidates[v_tail] = true;
+////                    got_candidates_queue[end_got_candidates_queue++] = v_tail;
+////                }
+////            }
+//        }
+    }
+
+    // Send the messages to other hosts.
+    for (int loc = 0; loc < num_hosts - 1; ++loc) {
+        int dest_host_id = G.buffer_send_list_loc_2_master_host_id(loc);
+        MPI_Send(buffer_send_list[loc].data(),
+                MPI_Instance::get_sending_size(buffer_send_list[loc]),
+                MPI_CHAR,
+                dest_host_id,
+                SENDING_PUSHED_LABELS,
+                MPI_COMM_WORLD);
+    }
+
+    // Receive messages from other hosts.
+    std::vector<MessageUnitType> buffer_recv;
+    for (int h_i = 0; h_i < num_hosts - 1; ++h_i) {
+        // Receive labels
+        MPI_Instance::receive_dynamic_buffer_from_any(buffer_recv,
+                num_hosts,
+                SENDING_PUSHED_LABELS);
+        // Check labels
+        for (const MessageUnitType &m : buffer_recv) {
+            VertexID v_tail_global = m.first;
+            VertexID label_root_id = m.second;
+            if (check_pushed_labels(
+                    v_tail_global,
+                    label_root_id,
+                    roots_start,
+                    short_index,
+                    once_candidated_queue,
+                    end_once_candidated_queue,
+                    once_candidated,
+                    iter)) {
+                // Add into got_candidates_queue
+                if (!got_candidates[v_tail_global]) {
+                    // If v_tail is not in got_candidates_queue, add it in (prevent duplicate)
+                    got_candidates[v_tail_global] = true;
+                    got_candidates_queue[end_got_candidates_queue++] = v_tail_global;
+                }
             }
         }
     }
-
-	{
-		assert(iter >= iter);
-	}
 }
+
 
 
 // Function for distance query;

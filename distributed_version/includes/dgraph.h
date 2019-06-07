@@ -194,32 +194,24 @@ DistGraph::DistGraph(char *input_filename)
         // buffer_send_list[i] should be sending to (host_id + i + 1) % num_hosts.
         // A host x's message should be put to buffer_send_list[(x + num_hosts - host_id - 1) % num_hosts].
     for (const auto &edge : edgelist_buffer) {
-//        VertexID head_new = edge.first; // rank[head]
-//        VertexID tail_new = edge.second; // rank[tail]
         VertexID head_new = rank[edge.first]; // rank[head]
         VertexID tail_new = rank[edge.second]; // rank[tail]
         int master_host_id_head = get_master_host_id(head_new); // master host id
-//        printf("@%d master_host_id_head: %d head_new: %u\n", __LINE__, master_host_id_head, head_new); //test
         int master_host_id_tail = get_master_host_id(tail_new);
-//        printf("@%d master_host_id_tail: %d tail_new: %u\n", __LINE__, master_host_id_tail, tail_new); //test
         if (master_host_id_head != host_id) {
             int loc_head = master_host_id_2_buffer_send_list_loc(master_host_id_head); // location in the sending buffer list
-//            printf("@%d loc_head: %d master_host_id_head: %d\n", __LINE__, loc_head, master_host_id_head); //test
             buffer_send_list[loc_head].emplace_back(head_new, tail_new); // add the edge into the sending buffer.
         } else {
             // put edge into local edgelist
             edgelist_recv[get_local_vertex_id(head_new)].push_back(tail_new);
-//            printf("@%d local_vertex_id: %u head_new: %u\n", __LINE__, get_local_vertex_id(head_new), head_new); //test
             ++num_edges_recv;
         }
         if (master_host_id_tail != host_id) {
             int loc_tail = master_host_id_2_buffer_send_list_loc(master_host_id_tail);
-//            printf("@%d loc_tail: %d master_host_id_tail: %d\n", __LINE__, loc_tail, master_host_id_tail); //test
             buffer_send_list[loc_tail].emplace_back(tail_new, head_new);
         } else {
             // put edge into local edgelist
             edgelist_recv[get_local_vertex_id(tail_new)].push_back(head_new);
-//            printf("@%d local_vertex_id: %u tail_new: %u\n", __LINE__, get_local_vertex_id(tail_new), tail_new);
             ++num_edges_recv;
         }
     }
