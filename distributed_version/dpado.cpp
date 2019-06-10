@@ -46,7 +46,8 @@ void dpado(char *argv[])
 {
     DistGraph G(argv[1]);
 
-    DistBVCPLL<1024, 0> dist_bvcpll(G); // batch size 1024, bit-parallel size 50.
+//    DistBVCPLL<1024, 0> dist_bvcpll(G); // batch size 1024, bit-parallel size 0.
+    DistBVCPLL<4, 0> dist_bvcpll(G); // batch size 1024, bit-parallel size 0.
 
     // test the index
     {

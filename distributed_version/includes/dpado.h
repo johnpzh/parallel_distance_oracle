@@ -1214,6 +1214,14 @@ inline void DistBVCPLL<BATCH_SIZE, BITPARALLEL_SIZE>::batch_process(
                     iter);
         }
         end_active_queue = 0; // Set the active_queue empty
+        {// test
+            std::string filename = "output" + std::to_string(host_id);
+            FILE *fout = fopen(filename.c_str(), "w");
+            printf("end_got_candidates_queue: %u\n", end_got_candidates_queue);
+            printf("end_once_candidates_queue: %u\n", end_once_candidated_queue);
+            fclose(fout);
+            exit(EXIT_SUCCESS);
+        }
 //		puts("Push done.");//test
 //		candidating_ins_count.measure_stop();
 //		candidating_time += WallTimer::get_time_mark();
