@@ -1217,8 +1217,8 @@ inline void DistBVCPLL<BATCH_SIZE, BITPARALLEL_SIZE>::batch_process(
         {// test
             std::string filename = "output" + std::to_string(host_id);
             FILE *fout = fopen(filename.c_str(), "w");
-            printf("end_got_candidates_queue: %u\n", end_got_candidates_queue);
-            printf("end_once_candidates_queue: %u\n", end_once_candidated_queue);
+            fprintf(fout, "end_got_candidates_queue: %u\n", end_got_candidates_queue);
+            fprintf(fout, "end_once_candidates_queue: %u\n", end_once_candidated_queue);
             fclose(fout);
             exit(EXIT_SUCCESS);
         }
