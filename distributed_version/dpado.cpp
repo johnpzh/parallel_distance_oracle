@@ -45,9 +45,10 @@ using namespace PADO;
 void dpado(char *argv[])
 {
     DistGraph G(argv[1]);
+	printf("host_id: %u num_v: %u num_masters: %u\n", G.host_id, G.num_v, G.num_masters);//test
 
-//    DistBVCPLL<1024, 0> dist_bvcpll(G); // batch size 1024, bit-parallel size 0.
-    DistBVCPLL<4, 0> dist_bvcpll(G); // batch size 1024, bit-parallel size 0.
+	DistBVCPLL<1024, 0> dist_bvcpll(G); // batch size 1024, bit-parallel size 0.
+	//DistBVCPLL<64, 0> dist_bvcpll(G); // batch size 1024, bit-parallel size 0.
 
     // test the index
     {

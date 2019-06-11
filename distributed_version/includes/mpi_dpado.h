@@ -20,7 +20,8 @@ enum MessageTags {
     SENDING_INDEXTYPE_BATCHES,
     SENDING_INDEXTYPE_DISTANCES,
     SENDING_INDEXTYPE_VERTICES,
-    SENDING_PUSHED_LABELS
+    SENDING_PUSHED_LABELS,
+	SENDING_DIST_TABEL
 };
 
 // MPI_Instance class: for MPI initialization
@@ -143,7 +144,7 @@ public:
                  message_tag,
                  MPI_COMM_WORLD,
                  MPI_STATUS_IGNORE);
-        return num_e_recv;
+        return source_host_id;
     }
 
     // Function: Receive MPI message with dynamic buffer size from a certain source with a certain tag.
