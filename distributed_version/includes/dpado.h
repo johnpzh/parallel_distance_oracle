@@ -427,7 +427,7 @@ inline void DistBVCPLL<BATCH_SIZE, BITPARALLEL_SIZE>::initialization(
 //        vector<IndexType> &L,
         const vector<bool> &used_bp_roots)
 {
-    MPI_Datatype VIDType = MPI_Instance::get_mpi_datatype<VertexID>();
+    //MPI_Datatype VIDType = MPI_Instance::get_mpi_datatype<VertexID>();
     VertexID roots_bound = roots_start + roots_size;
     std::vector<VertexID> roots_master_local; // Roots which belongs to this host.
     for (VertexID r_global = roots_start; r_global < roots_bound; ++r_global) {
@@ -442,6 +442,7 @@ inline void DistBVCPLL<BATCH_SIZE, BITPARALLEL_SIZE>::initialization(
         for (VertexID r_local : roots_master_local) {
             active_queue[end_active_queue++] = r_local;
         }
+		printf("@%u host_id: %d end_active_queue: %u\n", __LINE__, host_id, end_active_queue); //test
 //        for (VertexID r_real_id = roots_start; r_real_id < roots_bound; ++r_real_id) {
 //            if (!used_bp_roots[r_real_id]) {
 //                active_queue[end_active_queue++] = r_real_id;
@@ -519,29 +520,18 @@ inline void DistBVCPLL<BATCH_SIZE, BITPARALLEL_SIZE>::initialization(
     }
 //	init_index_time += WallTimer::get_time_mark();
 //	init_dist_matrix_time -= WallTimer::get_time_mark();
+	struct LabelTableUnit {
+		VertexID root_id;
+		VertexID label_global_id;
+		UnweightedDist dist;
+		LabelTableUnit() = default;
+		LabelTableUnit(VertexID r, VertexID l, UnweightedDist d) :
+			root_id(r), label_global_id(l), dist(d) {  }
+	};
+	std::vector<LabelTableUnit> buffer_send; // buffer for sending, (root, dis
     // Dist_matrix
     {
-//        using Label = std::pair<VertexID, UnweightedDist>;
         // Deprecated Old method: unpack the IndexType structure before sending.
-//        struct Label {
-//            VertexID root_id;
-//            VertexID label_global_id;
-//            UnweightedDist dist;
-//        };
-//        std::vector<Label> buffer_send; // buffer for sending, (root, dis
-//		IndexType &Lr;
-//        VertexID b_i_bound;
-//        VertexID id_offset;
-//        VertexID dist_start_index;
-//        VertexID dist_bound_index;
-//        VertexID v_start_index;
-//        VertexID v_bound_index;
-//        UnweightedDist dist;
-//        for (VertexID r_id = 0; r_id < roots_size; ++r_id) {
-//            if (used_bp_roots[r_id + roots_start]) {
-//                continue;
-//            }
-//            IndexType &Lr = L[r_id + roots_start];
         for (VertexID r_local : roots_master_local) {
             // The distance table.
             IndexType &Lr = L[r_local];
@@ -563,9 +553,8 @@ inline void DistBVCPLL<BATCH_SIZE, BITPARALLEL_SIZE>::initialization(
                     // Traverse vertices array
                     for (VertexID v_i = v_start_index; v_i < v_bound_index; ++v_i) {
                         // Write into the dist_table
-//                        VertexID label_global_id = Lr.vertices[v_i] + id_offset;
                         dist_table[r_root_id][Lr.vertices[v_i] + id_offset] = dist; // distance table
-//                        buffer_send.emplace_back(r_root_id, label_global_id, dist); // buffer for sending
+						buffer_send.emplace_back(r_root_id, Lr.vertices[v_i] + id_offset, dist); // buffer for sending
                     }
                 }
             }
@@ -573,136 +562,189 @@ inline void DistBVCPLL<BATCH_SIZE, BITPARALLEL_SIZE>::initialization(
 //        }
     }
 //	init_dist_matrix_time += WallTimer::get_time_mark();
-    // Broadcast local roots labels
-    {
-        for (int loc = 0; loc < num_hosts - 1; ++loc) {
-            int dest_host_id = G.buffer_send_list_loc_2_master_host_id(loc);
-            // How many masters to be sent
-            VertexID num_root_masters = roots_master_local.size();
-            MPI_Send(&num_root_masters,
-                    1,
-                    VIDType,
-                    dest_host_id,
-                    SENDING_NUM_ROOT_MASTERS,
-                    MPI_COMM_WORLD);
-            // For every root master
-            for (VertexID r_local : roots_master_local) {
-                // Which root
-                IndexType &Lr = L[r_local];
-                VertexID r_root_id = G.get_global_vertex_id(r_local) - roots_start;
-                MPI_Send(&r_root_id,
-                        1,
-                        VIDType,
-                        dest_host_id,
-                        SENDING_ROOT_ID,
-                        MPI_COMM_WORLD);
-                // The Batches array
-                MPI_Send(Lr.batches.data(),
-//                         Lr.batches.size() * sizeof(Lr.batches[0]),
-                         MPI_Instance::get_sending_size(Lr.batches),
-                         MPI_CHAR,
-                         dest_host_id,
-                         SENDING_INDEXTYPE_BATCHES,
-                         MPI_COMM_WORLD);
-                // The Distances array
-                MPI_Send(Lr.distances.data(),
-//                         Lr.distances.size() * sizeof(Lr.distances[0]),
-                         MPI_Instance::get_sending_size(Lr.distances),
-                         MPI_CHAR,
-                         dest_host_id,
-                         SENDING_INDEXTYPE_DISTANCES,
-                         MPI_COMM_WORLD);
-                // The Vertices arrray
-                MPI_Send(Lr.vertices.data(),
-//                         Lr.vertices.size() * sizeof(Lr.vertices[0]),
-                         MPI_Instance::get_sending_size(Lr.vertices),
-                         MPI_CHAR,
-                         dest_host_id,
-                         SENDING_INDEXTYPE_VERTICES,
-                         MPI_COMM_WORLD);
-            }
-        }
-    }
+//    // Broadcast local roots labels
+	std::vector<MPI_Request> requests_send(num_hosts - 1);
+	{
+		for (int loc = 0; loc < num_hosts - 1; ++loc) {
+			int dest_host_id = G.buffer_send_list_loc_2_master_host_id(loc);
+			MPI_Isend(buffer_send.data(),
+					MPI_Instance::get_sending_size(buffer_send),
+					MPI_CHAR,
+					dest_host_id,
+					SENDING_DIST_TABEL,
+					MPI_COMM_WORLD,
+					&requests_send[loc]);
+		}
+	}
+//	std::vector<MPI_Request> requests_send((num_hosts - 1) * (1 + 4 * roots_master_local.size()));
+//	VertexID end_requests_send = 0;
+//    {
+//        for (int loc = 0; loc < num_hosts - 1; ++loc) {
+//            int dest_host_id = G.buffer_send_list_loc_2_master_host_id(loc);
+//            // How many masters to be sent
+//            VertexID num_root_masters = roots_master_local.size();
+//            MPI_Isend(&num_root_masters,
+//                    1,
+//                    VIDType,
+//                    dest_host_id,
+//                    SENDING_NUM_ROOT_MASTERS,
+//                    MPI_COMM_WORLD,
+//					&requests_send[end_requests_send++]);
+//			printf("@%u host_id: %u send_to: %u num_root_masters: %u\n", __LINE__, host_id, dest_host_id, num_root_masters);//test
+//            // For every root master
+//            for (VertexID r_local : roots_master_local) {
+//                // Which root
+//                IndexType &Lr = L[r_local];
+//                VertexID r_root_id = G.get_global_vertex_id(r_local) - roots_start;
+//                MPI_Isend(&r_root_id,
+//                        1,
+//                        VIDType,
+//                        dest_host_id,
+//                        SENDING_ROOT_ID,
+//                        MPI_COMM_WORLD,
+//						&requests_send[end_requests_send++]);
+//				//printf("@%u host_id: %u send_to: %u r_root_id: %u\n", __LINE__, host_id, dest_host_id, r_root_id);//test
+//                // The Batches array
+//                MPI_Isend(Lr.batches.data(),
+//                         MPI_Instance::get_sending_size(Lr.batches),
+//                         MPI_CHAR,
+//                         dest_host_id,
+//                         SENDING_INDEXTYPE_BATCHES,
+//                         MPI_COMM_WORLD,
+//						 &requests_send[end_requests_send++]);
+//				//printf("@%u host_id: %u send_to: %u batches.size(): %lu\n", __LINE__, host_id, dest_host_id, Lr.batches.size());//test
+//                // The Distances array
+//                MPI_Isend(Lr.distances.data(),
+//                         MPI_Instance::get_sending_size(Lr.distances),
+//                         MPI_CHAR,
+//                         dest_host_id,
+//                         SENDING_INDEXTYPE_DISTANCES,
+//                         MPI_COMM_WORLD,
+//						 &requests_send[end_requests_send++]);
+//				//printf("@%u host_id: %u send_to: %u distances.size(): %lu\n", __LINE__, host_id, dest_host_id, Lr.distances.size());//test
+//                // The Vertices arrray
+//                MPI_Isend(Lr.vertices.data(),
+//                         MPI_Instance::get_sending_size(Lr.vertices),
+//                         MPI_CHAR,
+//                         dest_host_id,
+//                         SENDING_INDEXTYPE_VERTICES,
+//                         MPI_COMM_WORLD,
+//						 &requests_send[end_requests_send++]);
+//				//printf("@%u host_id: %u send_to: %u vertices.size(): %lu\n", __LINE__, host_id, dest_host_id, Lr.vertices.size());//test
+//            }
+//        }
+//		printf("@%u host_id: %d broadcast\n", __LINE__, host_id);
+//		assert(end_requests_send == requests_send.size());
+//    }
 
-    // Receive labels from every other host
-    {
-        for (int h_i = 0; h_i < num_hosts - 1; ++h_i) {
-            VertexID num_root_recieved;
-            MPI_Status status_recv;
-            MPI_Recv(&num_root_recieved,
-                    1,
-                    VIDType,
-                    MPI_ANY_SOURCE,
-                    SENDING_NUM_ROOT_MASTERS,
-                    MPI_COMM_WORLD,
-                    &status_recv);
-            int source = status_recv.MPI_SOURCE;
-            for (VertexID r_i = 0; r_i < num_root_recieved; ++r_i) {
-                // Receive the root_id
-                VertexID r_root_id;
-                MPI_Recv(&r_root_id,
-                        1,
-                        VIDType,
-                        source,
-                        SENDING_ROOT_ID,
-                        MPI_COMM_WORLD,
-                        MPI_STATUS_IGNORE);
-                // Receive Batches array
-                std::vector<typename IndexType::Batch> batches;
-                MPI_Instance::receive_dynamic_buffer_from_source(batches,
-                        num_hosts,
-                        source,
-                        SENDING_INDEXTYPE_BATCHES);
-                // Receive Distances array
-                std::vector<typename IndexType::DistanceIndexType> distances;
-                MPI_Instance::receive_dynamic_buffer_from_source(distances,
-                        num_hosts,
-                        source,
-                        SENDING_INDEXTYPE_DISTANCES);
-                // Receive Vertices array
-                std::vector<VertexID> vertices;
-                MPI_Instance::receive_dynamic_buffer_from_source(vertices,
-                        num_hosts,
-                        source,
-                        SENDING_INDEXTYPE_VERTICES);
-                // Traverse labels to setup distance table
-                VertexID b_i_bound = batches.size();
-                // Traverse the batches array
-                for (VertexID b_i = 0; b_i < b_i_bound; ++b_i) {
-                    VertexID id_offset = batches[b_i].batch_id * BATCH_SIZE;
-                    VertexID dist_start_index = batches[b_i].start_index;
-                    VertexID dist_bound_index = dist_start_index + batches[b_i].size;
-                    // Traverse distances array
-                    for (VertexID dist_i = dist_start_index; dist_i < dist_bound_index; ++dist_i) {
-                        VertexID v_start_index = distances[dist_i].start_index;
-                        VertexID v_bound_index = v_start_index + distances[dist_i].size;
-                        UnweightedDist dist = distances[dist_i].dist;
-                        // Traverse vertices array
-                        for (VertexID v_i = v_start_index; v_i < v_bound_index; ++v_i) {
-//                        VertexID label_global_id = Lr.vertices[v_i] + id_offset;
-                            dist_table[r_root_id][vertices[v_i] + id_offset] = dist; // distance table
-//                        buffer_send.emplace_back(r_root_id, label_global_id, dist); // buffer for sending
-                        }
-                    }
-                }
-            }
-        }
-    }
+//    // Receive labels from every other host
+	{
+		std::vector<LabelTableUnit> buffer_recv;
+		for (int h_i = 0; h_i < num_hosts - 1; ++h_i) {
+			MPI_Instance::receive_dynamic_buffer_from_any(buffer_recv,
+					num_hosts,
+					SENDING_DIST_TABEL);
+			for (const auto &l : buffer_recv) {
+				VertexID root_id = l.root_id;
+				VertexID label_global_id = l.label_global_id;
+				UnweightedDist dist = l.dist;
+				dist_table[root_id][label_global_id] = dist;
+			}
+		}
+		MPI_Waitall(num_hosts - 1,
+				requests_send.data(),
+				MPI_STATUSES_IGNORE);
+	}
+//    {
+//        for (int h_i = 0; h_i < num_hosts - 1; ++h_i) {
+//            VertexID num_root_recieved;
+//            MPI_Status status_recv;
+//            MPI_Recv(&num_root_recieved,
+//                    1,
+//                    VIDType,
+//                    MPI_ANY_SOURCE,
+//                    SENDING_NUM_ROOT_MASTERS,
+//                    MPI_COMM_WORLD,
+//                    &status_recv);
+//            int source = status_recv.MPI_SOURCE;
+//			printf("@%u host_id: %u recv_from: %u num_root_recieved: %u\n", __LINE__, host_id, source, num_root_recieved);//test
+//            for (VertexID r_i = 0; r_i < num_root_recieved; ++r_i) {
+//                // Receive the root_id
+//                VertexID r_root_id;
+//                MPI_Recv(&r_root_id,
+//                        1,
+//                        VIDType,
+//                        source,
+//                        SENDING_ROOT_ID,
+//                        MPI_COMM_WORLD,
+//                        MPI_STATUS_IGNORE);
+//				printf("@%u host_id: %u recv_from: %u r_root_id: %u\n", __LINE__, host_id, source, r_root_id);//test
+//                // Receive Batches array
+//                std::vector<typename IndexType::Batch> batches;
+//				MPI_Instance::receive_dynamic_buffer_from_source(batches,
+//                        num_hosts,
+//                        source,
+//                        SENDING_INDEXTYPE_BATCHES);
+//				printf("@%u host_id: %u recv_from: %u batches.size(): %lu\n", __LINE__, host_id, source, batches.size());//test
+//                // Receive Distances array
+//                std::vector<typename IndexType::DistanceIndexType> distances;
+//                MPI_Instance::receive_dynamic_buffer_from_source(distances,
+//                        num_hosts,
+//                        source,
+//                        SENDING_INDEXTYPE_DISTANCES);
+//				printf("@%u host_id: %u recv_from: %u distances.size(): %lu\n", __LINE__, host_id, source, distances.size());//test
+//                // Receive Vertices array
+//                std::vector<VertexID> vertices;
+//                MPI_Instance::receive_dynamic_buffer_from_source(vertices,
+//                        num_hosts,
+//                        source,
+//                        SENDING_INDEXTYPE_VERTICES);
+//				printf("@%u host_id: %u recv_from: %u vertices.size(): %lu\n", __LINE__, host_id, source, vertices.size());//test
+//                // Traverse labels to setup distance table
+//                VertexID b_i_bound = batches.size();
+//                // Traverse the batches array
+//                for (VertexID b_i = 0; b_i < b_i_bound; ++b_i) {
+//                    VertexID id_offset = batches[b_i].batch_id * BATCH_SIZE;
+//                    VertexID dist_start_index = batches[b_i].start_index;
+//                    VertexID dist_bound_index = dist_start_index + batches[b_i].size;
+//                    // Traverse distances array
+//                    for (VertexID dist_i = dist_start_index; dist_i < dist_bound_index; ++dist_i) {
+//                        VertexID v_start_index = distances[dist_i].start_index;
+//                        VertexID v_bound_index = v_start_index + distances[dist_i].size;
+//                        UnweightedDist dist = distances[dist_i].dist;
+//                        // Traverse vertices array
+//                        for (VertexID v_i = v_start_index; v_i < v_bound_index; ++v_i) {
+////                        VertexID label_global_id = Lr.vertices[v_i] + id_offset;
+//                            dist_table[r_root_id][vertices[v_i] + id_offset] = dist; // distance table
+////                        buffer_send.emplace_back(r_root_id, label_global_id, dist); // buffer for sending
+//                        }
+//                    }
+//                }
+//            }
+//        }
+//		printf("@%u host_id: %d received\n", __LINE__, host_id);
+//    }
+//	MPI_Waitall(requests_send.size(),
+//			requests_send.data(),
+//			MPI_STATUSES_IGNORE);
 
 //    {// test
 //    // Print the dist table
-//		printf("host_id: %d size_roots_master_local: %lu\n", host_id, roots_master_local.size());
-//        std::string filename = "output_" + std::to_string(host_id) + ".txt";
+//        std::string filename = "output" + std::to_string(host_id) + ".txt";
 //        FILE *fout = fopen(filename.c_str(), "w");
 //		if (fout == nullptr) {
 //			fprintf(stderr, "Error: cannot create file %s\n", filename.c_str());
 //			exit(EXIT_FAILURE);
 //		}
-//        for (VertexID r = 0; r < dist_table.size(); ++r) {
-//            for (VertexID v = 0; v < dist_table[r].size(); ++v) {
-//                fprintf(fout, "[%u,%u]: %u\n", r, v, dist_table[r][v]);
-//            }
-//        }
+//		fprintf(fout, "host_id: %d size_roots_master_local: %lu\n", host_id, roots_master_local.size());
+//		for (VertexID r = 0; r < dist_table.size(); ++r) {
+//			fprintf(fout, "[%u,%u]: %u\n", r, r, dist_table[r][r]);
+//		}
+////        for (VertexID r = 0; r < dist_table.size(); ++r) {
+////            for (VertexID v = 0; v < dist_table[r].size(); ++v) {
+////                fprintf(fout, "[%u,%u]: %u\n", r, v, dist_table[r][v]);
+////            }
+////        }
 //		fclose(fout);
 //        exit(EXIT_SUCCESS);
 //    }
@@ -851,7 +893,7 @@ inline void DistBVCPLL<BATCH_SIZE, BITPARALLEL_SIZE>::push_labels(
                     continue;
                 }
                 // Put into the sending buffer
-                buffer_send_list[host_v_tail].emplace_back(v_tail, label_root_id);
+                buffer_send_list[G.master_host_id_2_buffer_send_list_loc(host_v_tail)].emplace_back(v_tail, label_root_id);
             }
         }
 
@@ -946,23 +988,29 @@ inline void DistBVCPLL<BATCH_SIZE, BITPARALLEL_SIZE>::push_labels(
     }
 
     // Send the messages to other hosts.
+	std::vector<MPI_Request> requests_send(num_hosts - 1);
     for (int loc = 0; loc < num_hosts - 1; ++loc) {
         int dest_host_id = G.buffer_send_list_loc_2_master_host_id(loc);
-        MPI_Send(buffer_send_list[loc].data(),
+        MPI_Isend(buffer_send_list[loc].data(),
                 MPI_Instance::get_sending_size(buffer_send_list[loc]),
                 MPI_CHAR,
                 dest_host_id,
                 SENDING_PUSHED_LABELS,
-                MPI_COMM_WORLD);
+                MPI_COMM_WORLD,
+				&requests_send[loc]);
+		printf("@%u host_id: %u send_to: %u size: %lu\n", __LINE__, host_id, dest_host_id, buffer_send_list[loc].size());//test
     }
+	printf("@%u host_id: %u sent\n", __LINE__, host_id);//test
 
     // Receive messages from other hosts.
     std::vector<MessageUnitType> buffer_recv;
     for (int h_i = 0; h_i < num_hosts - 1; ++h_i) {
         // Receive labels
+		int source = 
         MPI_Instance::receive_dynamic_buffer_from_any(buffer_recv,
                 num_hosts,
                 SENDING_PUSHED_LABELS);
+		printf("@%u host_id: %u recv_from: %u size: %lu\n", __LINE__, host_id, source, buffer_recv.size());//test
         // Check labels
         for (const MessageUnitType &m : buffer_recv) {
             VertexID v_tail_global = m.first;
@@ -985,6 +1033,10 @@ inline void DistBVCPLL<BATCH_SIZE, BITPARALLEL_SIZE>::push_labels(
             }
         }
     }
+	printf("@%u host_id: %u received\n", __LINE__, host_id);//test
+	MPI_Waitall(num_hosts - 1,
+			requests_send.data(),
+			MPI_STATUSES_IGNORE);
 }
 
 
@@ -1193,7 +1245,7 @@ inline void DistBVCPLL<BATCH_SIZE, BITPARALLEL_SIZE>::batch_process(
         ++iter;
 //		printf("iter: %u\n", iter);//test
         // Traverse active vertices to push their labels as candidates
-//		puts("Pushing...");//test
+		puts("Pushing...");//test
         for (VertexID i_queue = 0; i_queue < end_active_queue; ++i_queue) {
             VertexID v_head = active_queue[i_queue];
             is_active[v_head] = false; // reset is_active
@@ -1222,7 +1274,7 @@ inline void DistBVCPLL<BATCH_SIZE, BITPARALLEL_SIZE>::batch_process(
             fclose(fout);
             exit(EXIT_SUCCESS);
         }
-//		puts("Push done.");//test
+		puts("Push done.");//test
 //		candidating_ins_count.measure_stop();
 //		candidating_time += WallTimer::get_time_mark();
 //		adding_time -= WallTimer::get_time_mark();

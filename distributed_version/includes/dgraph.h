@@ -140,6 +140,7 @@ DistGraph::DistGraph(char *input_filename)
         edges_to_read = num_e - edge_divide * host_id;
     }
     // Read from the offset.
+//	printf("@%u host_id: %u read_offset: %lu\n", __LINE__, host_id, read_offset);//test
     fin.seekg(read_offset); // set reading offset
     std::vector< std::pair<VertexID, VertexID> > edgelist_buffer(edges_to_read);
     for (uint64_t e_i = 0; e_i < edges_to_read; ++e_i) {
@@ -161,6 +162,7 @@ DistGraph::DistGraph(char *input_filename)
                   vid_type,
                   MPI_SUM,
                   MPI_COMM_WORLD);
+//	printf("@%u host_id: %u out_degree\n", __LINE__, host_id);//test
     // Reorder the graph by host0.
     if (0 == host_id) {
         std::vector< std::pair<VertexID, VertexID> > degree2id;
@@ -178,6 +180,7 @@ DistGraph::DistGraph(char *input_filename)
             vid_type,
             0,
             MPI_COMM_WORLD);
+//	printf("@%u host_id: %u bcast_rank\n", __LINE__, host_id);//test
     // Update the out_degree array according to the rank.
     {
         std::vector<VertexID> tmp_degrees(num_v);
@@ -215,22 +218,34 @@ DistGraph::DistGraph(char *input_filename)
             ++num_edges_recv;
         }
     }
+//	printf("@%u host_id: %u buffer_sending\n", __LINE__, host_id);//test
     // Send the edges in buffer_sending to corresponding hosts.
+	std::vector<MPI_Request> requests_send(num_hosts - 1);
     for (int loc = 0; loc < num_hosts - 1; ++loc) {
         int master_host_id = buffer_send_list_loc_2_master_host_id(loc);
-        MPI_Send(buffer_send_list[loc].data(),
+//		printf("@%u host_id: %u sent to %u size: %lu\n", __LINE__, host_id, master_host_id, MPI_Instance::get_sending_size(buffer_send_list[loc]));//test
+//        MPI_Send(buffer_send_list[loc].data(),
+//                MPI_Instance::get_sending_size(buffer_send_list[loc]),
+//                MPI_CHAR,
+//                master_host_id,
+//                GRAPH_SHUFFLE,
+//                MPI_COMM_WORLD);
+        MPI_Isend(buffer_send_list[loc].data(),
                 MPI_Instance::get_sending_size(buffer_send_list[loc]),
-//                sizeof(buffer_send_list[loc]),
                 MPI_CHAR,
                 master_host_id,
                 GRAPH_SHUFFLE,
-                MPI_COMM_WORLD);
+                MPI_COMM_WORLD,
+				&requests_send[loc]);
     }
+//	printf("@%u host_id: %u sent\n", __LINE__, host_id);//test
     // Receive the edges
     std::vector<EdgeType> buffer_recv;
     for (int h_i = 0; h_i < num_hosts - 1; ++h_i) {
         // Receive into the buffer_recv.
-        num_edges_recv += MPI_Instance::receive_dynamic_buffer_from_any(buffer_recv, num_hosts, GRAPH_SHUFFLE);
+        //num_edges_recv += MPI_Instance::receive_dynamic_buffer_from_any(buffer_recv, num_hosts, GRAPH_SHUFFLE);
+		MPI_Instance::receive_dynamic_buffer_from_any(buffer_recv, num_hosts, GRAPH_SHUFFLE);
+        num_edges_recv += buffer_recv.size();
         // Put into edgelist_recv
         for (const auto &e : buffer_recv) {
             VertexID head = e.first;
@@ -238,6 +253,10 @@ DistGraph::DistGraph(char *input_filename)
             edgelist_recv[get_local_vertex_id(head)].push_back(tail);
         }
     }
+	MPI_Waitall(num_hosts - 1, 
+			requests_send.data(), 
+			MPI_STATUSES_IGNORE);
+//	printf("@%u host_id: %u received\n", __LINE__, host_id);//test
     // Build up local graph structure
     num_edges_local = num_edges_recv;
     out_edges.resize(num_edges_recv);
@@ -256,6 +275,7 @@ DistGraph::DistGraph(char *input_filename)
         loc += bound_e_i;
     }
     assert(loc == num_edges_recv);
+//	printf("@%u host_id: %u built_up\n", __LINE__, host_id);//test
 }
 
 } // End namespace PADO
