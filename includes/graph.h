@@ -38,13 +38,13 @@ public:
 	idi *out_degrees = nullptr;
 
 //	void construct(const char *filename);
-	void construct(const vector< std::pair<idi, idi> > &edge_list);
+	void construct(const std::vector< std::pair<idi, idi> > &edge_list);
 
 //public:
 	// Constructor
 	Graph() = default;
 	explicit Graph(const char *filename);
-	explicit Graph(vector< std::pair<idi, idi> > &edge_list);
+	explicit Graph(std::vector< std::pair<idi, idi> > &edge_list);
 	~Graph()
 	{
 		free(vertices);
@@ -69,9 +69,9 @@ public:
 	}
 
 	// Rank according to degrees (right now)
-	vector<idi> make_rank() const;
+	std::vector<idi> make_rank() const;
 	// Remap vertex id according to its rank, 1 is the highest rank;
-	vector<idi> id_transfer(const vector<idi> &rank);
+	std::vector<idi> id_transfer(const std::vector<idi> &rank);
 	void print();
 	
 	// Test for Prof. Jin: how many vertices have degree 1 or 2 (and the proportion)
@@ -104,7 +104,7 @@ Graph::Graph(const char *filename)
 	string line;
 	idi head;
 	idi tail;
-	vector < std::pair<idi, idi> > edge_list;
+	std::vector < std::pair<idi, idi> > edge_list;
 	while (getline(ifin, line)) {
 		if (line[0] == '#' || line[0] == '%') {
 			continue;
@@ -117,12 +117,12 @@ Graph::Graph(const char *filename)
 }
 
 // construct the graph from edge_list
-Graph::Graph(vector< std::pair<idi, idi> > &edge_list)
+Graph::Graph(std::vector< std::pair<idi, idi> > &edge_list)
 {
 	construct(edge_list);
 }
 
-void Graph::construct(const vector< std::pair<idi, idi> > &edge_list)
+void Graph::construct(const std::vector< std::pair<idi, idi> > &edge_list)
 {
 	num_e = 2 * edge_list.size(); // Undirected Graph
 //	num_e = edge_list.size(); // Directed Graph
@@ -134,7 +134,7 @@ void Graph::construct(const vector< std::pair<idi, idi> > &edge_list)
 	out_degrees = (idi *) malloc(num_v * sizeof(idi));
 
 	// Sort edge_list according to heads
-	vector< vector<idi> > edge_tmp(num_v);
+	std::vector< std::vector<idi> > edge_tmp(num_v);
 	for (const auto &edge: edge_list) {
 		edge_tmp[edge.first].push_back(edge.second);
 		edge_tmp[edge.second].push_back(edge.first); // Undirected Graph
@@ -153,11 +153,11 @@ void Graph::construct(const vector< std::pair<idi, idi> > &edge_list)
 }
 
 // Rank according to degrees
-vector<idi> Graph::make_rank() const
+std::vector<idi> Graph::make_rank() const
 {
-	vector< std::pair<float, idi> > degree2id;
-	//vector< std::pair<double, idi> > degree2id;
-	//vector< std::pair<idi, idi> > degree2id;
+	std::vector< std::pair<float, idi> > degree2id;
+	//std::vector< std::pair<double, idi> > degree2id;
+	//std::vector< std::pair<idi, idi> > degree2id;
 	for (idi v = 0; v < num_v; ++v) {
 		// Add a random value here to diffuse nearby vertices, according to PLL's implementation.
 		// Somehow it decreases the label size a little bit.
@@ -166,17 +166,17 @@ vector<idi> Graph::make_rank() const
 		//degree2id.push_back(make_pair(out_degrees[v], v));
 	}
 	sort(degree2id.rbegin(), degree2id.rend());
-	vector<idi> rank(num_v);
+	std::vector<idi> rank(num_v);
 	for (idi r = 0; r < num_v; ++r) {
 		rank[degree2id[r].second] = r;
 	}
 	return rank;
 }
 
-vector<idi> Graph::id_transfer(const vector<idi> &rank)
+std::vector<idi> Graph::id_transfer(const std::vector<idi> &rank)
 {
 	// The new edge list
-	vector< vector<idi> > edge_list(num_v);
+	std::vector< std::vector<idi> > edge_list(num_v);
 	for (idi v = 0; v < num_v; ++v) {
 		idi new_v = rank[v];
 		idi ei_start = vertices[v];
@@ -198,7 +198,7 @@ vector<idi> Graph::id_transfer(const vector<idi> &rank)
 		loc += degree;
 	}
 
-	vector<idi> rank2id(num_v);
+	std::vector<idi> rank2id(num_v);
 	for (idi v = 0; v < num_v; ++v) {
 		rank2id[rank[v]] = v;
 	}
@@ -231,16 +231,16 @@ public:
 	weighti *out_weights = nullptr;
 
 	void construct(
-			const vector< std::pair<idi, idi> > &edge_list,
-			const vector<weighti> &weight_list);
+			const std::vector< std::pair<idi, idi> > &edge_list,
+			const std::vector<weighti> &weight_list);
 
 //public:
 	// Constructor
 	WeightedGraph() = default;
 	explicit WeightedGraph(const char *filename);
 	explicit WeightedGraph(
-			const vector< std::pair<idi, idi> > &edge_list,
-			const vector<weighti> &weight_list);
+			const std::vector< std::pair<idi, idi> > &edge_list,
+			const std::vector<weighti> &weight_list);
 	~WeightedGraph()
 	{
 		free(vertices);
@@ -266,9 +266,9 @@ public:
 	}
 
 	// Rank according to degrees (right now)
-	vector<idi> make_rank();
+	std::vector<idi> make_rank();
 	// Remap vertex id according to its rank, 1 is the highest rank;
-	vector<idi> id_transfer(const vector<idi> &rank);
+	std::vector<idi> id_transfer(const std::vector<idi> &rank);
 	void print();
 	
 }; // class WeightedGraph
@@ -287,8 +287,8 @@ WeightedGraph::WeightedGraph(const char *filename)
 	idi head;
 	idi tail;
 	inti weight;
-	vector < std::pair<idi, idi> > edge_list;
-	vector <weighti> weight_list;
+	std::vector < std::pair<idi, idi> > edge_list;
+	std::vector <weighti> weight_list;
 
 	while (getline(ifin, line)) {
 		if (line[0] == '#' || line[0] == '%') {
@@ -304,15 +304,15 @@ WeightedGraph::WeightedGraph(const char *filename)
 
 // construct the WeightedGraph from edge_list
 WeightedGraph::WeightedGraph(
-		const vector< std::pair<idi, idi> > &edge_list,
-		const vector<weighti> &weight_list)
+		const std::vector< std::pair<idi, idi> > &edge_list,
+		const std::vector<weighti> &weight_list)
 {
 	construct(edge_list, weight_list);
 }
 
 void WeightedGraph::construct(
-		const vector< std::pair<idi, idi> > &edge_list,
-		const vector<weighti> &weight_list)
+		const std::vector< std::pair<idi, idi> > &edge_list,
+		const std::vector<weighti> &weight_list)
 {
 	num_e = 2 * edge_list.size(); // Undirected Graph
 //	num_e = edge_list.size(); // Directed Graph
@@ -325,8 +325,8 @@ void WeightedGraph::construct(
 	out_weights = (weighti *) malloc(num_e * sizeof(weighti));
 
 	// Sort edge_list according to heads
-	vector< vector<idi> > edge_tmp(num_v);
-	vector< vector<weighti> > weights_tmp(num_v);
+	std::vector< std::vector<idi> > edge_tmp(num_v);
+	std::vector< std::vector<weighti> > weights_tmp(num_v);
 	idi w_i = 0;
 	for (const auto &edge: edge_list) {
 		edge_tmp[edge.first].push_back(edge.second);
@@ -350,11 +350,11 @@ void WeightedGraph::construct(
 }
 
 // Rank according to degrees
-vector<idi> WeightedGraph::make_rank()
+std::vector<idi> WeightedGraph::make_rank()
 {
-	vector< std::pair<float, idi> > degree2id;
-	//vector< std::pair<double, idi> > degree2id;
-	//vector< std::pair<idi, idi> > degree2id;
+	std::vector< std::pair<float, idi> > degree2id;
+	//std::vector< std::pair<double, idi> > degree2id;
+	//std::vector< std::pair<idi, idi> > degree2id;
 	for (idi v = 0; v < num_v; ++v) {
 		// Add a random value here to diffuse nearby vertices, according to PLL's implementation.
 		// Somehow it decreases the label size a little bit.
@@ -363,7 +363,7 @@ vector<idi> WeightedGraph::make_rank()
 		//degree2id.push_back(make_pair(out_degrees[v], v));
 	}
 	sort(degree2id.rbegin(), degree2id.rend());
-	vector<idi> rank(num_v);
+	std::vector<idi> rank(num_v);
 	for (idi r = 0; r < num_v; ++r) {
 		rank[degree2id[r].second] = r;
 	}
@@ -371,11 +371,11 @@ vector<idi> WeightedGraph::make_rank()
 }
 
 // Function: transfer vertex IDs according to their ranks
-vector<idi> WeightedGraph::id_transfer(const vector<idi> &rank)
+std::vector<idi> WeightedGraph::id_transfer(const std::vector<idi> &rank)
 {
 	// The new edge list
-//	vector< vector<idi> > edge_list(num_v);
-	vector< vector< std::pair<idi, weighti> > > edge_list(num_v); // std::pair of (vertex id, edge weight)
+//	std::vector< std::vector<idi> > edge_list(num_v);
+	std::vector< std::vector< std::pair<idi, weighti> > > edge_list(num_v); // std::pair of (vertex id, edge weight)
 	for (idi v = 0; v < num_v; ++v) {
 		idi new_v = rank[v];
 		idi ei_start = vertices[v];
@@ -400,7 +400,7 @@ vector<idi> WeightedGraph::id_transfer(const vector<idi> &rank)
 		loc += degree;
 	}
 
-	vector<idi> rank2id(num_v);
+	std::vector<idi> rank2id(num_v);
 	for (idi v = 0; v < num_v; ++v) {
 		rank2id[rank[v]] = v;
 	}

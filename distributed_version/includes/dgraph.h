@@ -59,7 +59,7 @@ public:
     VertexID offset_vertex_id = 0; // The offset for global vertex id to local id.
     VertexID num_masters = 0; // Number of masters on this host.
     EdgeID num_edges_local = 0; // Number of local edges on this host.
-    MPI_Datatype vid_type = MPI_Instance::get_mpi_datatype<VertexID>(); // MPI type of the type VertexID
+    MPI_Datatype V_ID_Type = MPI_Instance::get_mpi_datatype<VertexID>(); // MPI type of the type VertexID
 
     std::vector<VertexID> rank;
     std::vector<VertexID> vertices_idx; // vertices indices
@@ -159,7 +159,7 @@ DistGraph::DistGraph(char *input_filename)
     MPI_Allreduce(MPI_IN_PLACE,
                   out_degrees.data(),
                   num_v,
-                  vid_type,
+                  V_ID_Type,
                   MPI_SUM,
                   MPI_COMM_WORLD);
 //	printf("@%u host_id: %u out_degree\n", __LINE__, host_id);//test
@@ -177,7 +177,7 @@ DistGraph::DistGraph(char *input_filename)
     // Send the rank to other hosts
     MPI_Bcast(rank.data(),
             num_v,
-            vid_type,
+            V_ID_Type,
             0,
             MPI_COMM_WORLD);
 //	printf("@%u host_id: %u bcast_rank\n", __LINE__, host_id);//test
@@ -245,6 +245,9 @@ DistGraph::DistGraph(char *input_filename)
         // Receive into the buffer_recv.
         //num_edges_recv += MPI_Instance::receive_dynamic_buffer_from_any(buffer_recv, num_hosts, GRAPH_SHUFFLE);
 		MPI_Instance::receive_dynamic_buffer_from_any(buffer_recv, num_hosts, GRAPH_SHUFFLE);
+		if (!buffer_recv.size()) {
+		    continue;
+		}
         num_edges_recv += buffer_recv.size();
         // Put into edgelist_recv
         for (const auto &e : buffer_recv) {

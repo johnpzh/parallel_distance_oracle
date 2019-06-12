@@ -14,11 +14,11 @@
 #include <limits.h>
 #include <sys/time.h>
 #include <string>
-#include <vector>
+//#include <vector>
 #include <string.h>
 
 using std::string;
-using std::vector;
+//using std::vector;
 
 namespace PADO {
 //typedef uint64_t idi; // unsinged long long
