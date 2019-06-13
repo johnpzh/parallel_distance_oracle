@@ -955,18 +955,19 @@ inline void DistBVCPLL<BATCH_SIZE, BITPARALLEL_SIZE>::sync_potential_candidates(
                   SENDING_PUSHED_LABELS,
                   MPI_COMM_WORLD,
                   &requests_send[loc]);
-        printf("@%u host_id: %u send_to: %u size: %lu\n", __LINE__, host_id, dest_host_id, buffer_send_list[loc].size());//test
+//        printf("@%u host_id: %u send_to: %u size: %lu\n", __LINE__, host_id, dest_host_id, buffer_send_list[loc].size());//test
     }
-    printf("@%u host_id: %u sent\n", __LINE__, host_id);//test
+//    printf("@%u host_id: %u sent\n", __LINE__, host_id);//test
 
     // Receive messages from other hosts.
     std::vector<std::pair<VertexID, VertexID>> buffer_recv;
     for (int h_i = 0; h_i < num_hosts - 1; ++h_i) {
         // Receive labels
-        int source = MPI_Instance::receive_dynamic_buffer_from_any(buffer_recv,
+//        int source =
+        MPI_Instance::receive_dynamic_buffer_from_any(buffer_recv,
                 num_hosts,
                 SENDING_PUSHED_LABELS);
-        printf("@%u host_id: %u recv_from: %u size: %lu\n", __LINE__, host_id, source, buffer_recv.size());//test
+//        printf("@%u host_id: %u recv_from: %u size: %lu\n", __LINE__, host_id, source, buffer_recv.size());//test
         // Check labels
         if (buffer_recv.empty()) {
             continue;
@@ -994,7 +995,7 @@ inline void DistBVCPLL<BATCH_SIZE, BITPARALLEL_SIZE>::sync_potential_candidates(
             }
         }
     }
-    printf("@%u host_id: %u received\n", __LINE__, host_id);//test
+//    printf("@%u host_id: %u received\n", __LINE__, host_id);//test
     MPI_Waitall(num_hosts - 1,
                 requests_send.data(),
                 MPI_STATUSES_IGNORE);
@@ -1206,7 +1207,7 @@ inline void DistBVCPLL<BATCH_SIZE, BITPARALLEL_SIZE>::batch_process(
         ++iter;
 //		printf("iter: %u\n", iter);//test
         // Traverse active vertices to push their labels as candidates
-		puts("Pushing...");//test
+//		puts("Pushing...");//test
         for (VertexID i_queue = 0; i_queue < end_active_queue; ++i_queue) {
             VertexID v_head_local = active_queue[i_queue];
             is_active[v_head_local] = false; // reset is_active
@@ -1243,9 +1244,9 @@ inline void DistBVCPLL<BATCH_SIZE, BITPARALLEL_SIZE>::batch_process(
                 iter);
         {// test
             printf("@%u host_id: %u end_got_candidates_queue: %u end_once_candidates_queue: %u\n", __LINE__, host_id, end_got_candidates_queue, end_once_candidated_queue);
-            exit(EXIT_SUCCESS);
+//            exit(EXIT_SUCCESS);
         }
-        puts("Push done.");//test
+//        puts("Push done.");//test
 //		candidating_ins_count.measure_stop();
 //		candidating_time += WallTimer::get_time_mark();
 //		adding_time -= WallTimer::get_time_mark();
