@@ -245,7 +245,7 @@ DistGraph::DistGraph(char *input_filename)
         // Receive into the buffer_recv.
         //num_edges_recv += MPI_Instance::receive_dynamic_buffer_from_any(buffer_recv, num_hosts, GRAPH_SHUFFLE);
 		MPI_Instance::receive_dynamic_buffer_from_any(buffer_recv, num_hosts, GRAPH_SHUFFLE);
-		if (!buffer_recv.size()) {
+		if (buffer_recv.empty()) {
 		    continue;
 		}
         num_edges_recv += buffer_recv.size();

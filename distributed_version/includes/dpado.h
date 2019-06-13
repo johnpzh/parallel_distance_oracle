@@ -643,7 +643,7 @@ inline VertexID DistBVCPLL<BATCH_SIZE, BITPARALLEL_SIZE>::initialization(
 			MPI_Instance::receive_dynamic_buffer_from_any(buffer_recv,
 					num_hosts,
 					SENDING_DIST_TABEL);
-			if (!buffer_recv.size()) {
+			if (buffer_recv.empty()) {
 			    continue;
 			}
 			for (const auto &l : buffer_recv) {
@@ -790,12 +790,13 @@ inline bool DistBVCPLL<BATCH_SIZE, BITPARALLEL_SIZE>::check_pushed_labels(
         std::vector<bool> &once_candidated,
         UnweightedDist iter)
 {
+    VertexID v_tail_local = G.get_local_vertex_id(v_tail_global);
     VertexID label_global_id = label_root_id + roots_start;
     if (v_tail_global <= label_global_id) {
         // v_tail_global has higher rank than all remaining labels
         return false;
     }
-    ShortIndex &SI_v_tail = short_index[v_tail_global];
+    ShortIndex &SI_v_tail = short_index[v_tail_local];
     if (SI_v_tail.indicator[label_root_id]) {
         // The label is already selected before
         return false;
@@ -803,7 +804,7 @@ inline bool DistBVCPLL<BATCH_SIZE, BITPARALLEL_SIZE>::check_pushed_labels(
     // Record label_root_id as once selected by v_tail_global
     SI_v_tail.indicator.set(label_root_id);
     // Add into once_candidated_queue
-    VertexID v_tail_local = G.get_local_vertex_id(v_tail_global);
+
     if (!once_candidated[v_tail_local]) {
         // If v_tail_global is not in the once_candidated_queue yet, add it in
         once_candidated[v_tail_local] = true;
@@ -967,7 +968,7 @@ inline void DistBVCPLL<BATCH_SIZE, BITPARALLEL_SIZE>::sync_potential_candidates(
                 SENDING_PUSHED_LABELS);
         printf("@%u host_id: %u recv_from: %u size: %lu\n", __LINE__, host_id, source, buffer_recv.size());//test
         // Check labels
-        if (!buffer_recv.size()) {
+        if (buffer_recv.empty()) {
             continue;
         }
         for (const auto &m : buffer_recv) {
