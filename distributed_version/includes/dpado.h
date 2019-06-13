@@ -102,7 +102,7 @@ private:
     std::vector<IndexType> L;
     std::vector<IndexOrdered> Index; // Ordered labels for original vertex ID
 
-    void construct(const DistGraph &G);
+//    void construct(const DistGraph &G);
 //    inline void bit_parallel_labeling(
 //            const DistGraph &G,
 //            std::vector<IndexType> &L,
@@ -194,6 +194,7 @@ private:
             VertexID roots_start,
             VertexID roots_size,
 //            std::vector<IndexType> &L,
+            const DistGraph &G,
             std::vector< std::vector<UnweightedDist> > &dist_table,
             UnweightedDist iter);
     inline void update_label_indices(
@@ -265,7 +266,133 @@ public:
 template <VertexID BATCH_SIZE, VertexID BITPARALLEL_SIZE>
 DistBVCPLL<BATCH_SIZE, BITPARALLEL_SIZE>::DistBVCPLL(const DistGraph &G)
 {
-    construct(G);
+    num_v = G.num_v;
+    assert(num_v >= BATCH_SIZE);
+    num_masters = G.num_masters;
+    host_id = G.host_id;
+    num_hosts = G.num_hosts;
+    V_ID_Type = G.V_ID_Type;
+//    L.resize(num_v);
+    L.resize(num_masters);
+    VertexID remainer = num_v % BATCH_SIZE;
+    VertexID b_i_bound = num_v / BATCH_SIZE;
+    std::vector<bool> used_bp_roots(num_v, false);
+    //cache_miss.measure_start();
+    double time_labeling = -WallTimer::get_time_mark();
+
+//	double bp_labeling_time = -WallTimer::get_time_mark();
+//	bp_labeling_ins_count.measure_start();
+//    bit_parallel_labeling(
+//            G,
+////            L,
+//            used_bp_roots);
+//	bp_labeling_ins_count.measure_stop();
+//	bp_labeling_time += WallTimer::get_time_mark();
+
+    std::vector<VertexID> active_queue(num_masters); // Any vertex v who is active should be put into this queue.
+//    std::vector<VertexID> active_queue(num_v); // Any vertex v who is active should be put into this queue.
+    VertexID end_active_queue = 0;
+    std::vector<bool> is_active(num_masters, false);// is_active[v] is true means vertex v is in the active queue.
+//    std::vector<bool> is_active(num_v, false);// is_active[v] is true means vertex v is in the active queue.
+    std::vector<VertexID> got_candidates_queue(num_masters); // Any vertex v who got candidates should be put into this queue.
+//    std::vector<VertexID> got_candidates_queue(num_v); // Any vertex v who got candidates should be put into this queue.
+    VertexID end_got_candidates_queue = 0;
+    std::vector<bool> got_candidates(num_masters, false); // got_candidates[v] is true means vertex v is in the queue got_candidates_queue
+//    std::vector<bool> got_candidates(num_v, false); // got_candidates[v] is true means vertex v is in the queue got_candidates_queue
+    std::vector<ShortIndex> short_index(num_masters);
+//    std::vector<ShortIndex> short_index(num_v);
+    std::vector< std::vector<UnweightedDist> > dist_table(BATCH_SIZE, std::vector<UnweightedDist>(num_v, MAX_UNWEIGHTED_DIST));
+
+
+    std::vector<VertexID> once_candidated_queue(num_masters); // if short_index[v].indicator.any() is true, v is in the queue.
+//    std::vector<VertexID> once_candidated_queue(num_v); // if short_index[v].indicator.any() is true, v is in the queue.
+    // Used mainly for resetting short_index[v].indicator.
+    VertexID end_once_candidated_queue = 0;
+    std::vector<bool> once_candidated(num_masters, false);
+//    std::vector<bool> once_candidated(num_v, false);
+
+    //printf("b_i_bound: %u\n", b_i_bound);//test
+    for (VertexID b_i = 0; b_i < b_i_bound; ++b_i) {
+        printf("b_i: %u\n", b_i);//test
+        batch_process(
+                G,
+                b_i,
+                b_i * BATCH_SIZE,
+                BATCH_SIZE,
+//                L,
+                used_bp_roots,
+                active_queue,
+                end_active_queue,
+                got_candidates_queue,
+                end_got_candidates_queue,
+                short_index,
+                dist_table,
+                got_candidates,
+                is_active,
+                once_candidated_queue,
+                end_once_candidated_queue,
+                once_candidated);
+    }
+    if (remainer != 0) {
+        printf("b_i: %u\n", b_i_bound);//test
+        batch_process(
+                G,
+                b_i_bound,
+                b_i_bound * BATCH_SIZE,
+                remainer,
+//                L,
+                used_bp_roots,
+                active_queue,
+                end_active_queue,
+                got_candidates_queue,
+                end_got_candidates_queue,
+                short_index,
+                dist_table,
+                got_candidates,
+                is_active,
+                once_candidated_queue,
+                end_once_candidated_queue,
+                once_candidated);
+    }
+    time_labeling += WallTimer::get_time_mark();
+    //cache_miss.measure_stop();
+
+    // Test
+    setlocale(LC_NUMERIC, "");
+    printf("BATCH_SIZE: %u\n", BATCH_SIZE);
+    printf("BP_Size: %u\n", BITPARALLEL_SIZE);
+//	printf("BP_labeling: %f %.2f%%\n", bp_labeling_time, bp_labeling_time / time_labeling * 100);
+//	printf("Initializing: %f %.2f%%\n", initializing_time, initializing_time / time_labeling * 100);
+//		printf("\tinit_start_reset_time: %f (%f%%)\n", init_start_reset_time, init_start_reset_time / initializing_time * 100);
+//		printf("\tinit_index_time: %f (%f%%)\n", init_index_time, init_index_time / initializing_time * 100);
+//			printf("\t\tinit_indicators_time: %f (%f%%)\n", init_indicators_time, init_indicators_time / init_index_time * 100);
+//		printf("\tinit_dist_matrix_time: %f (%f%%)\n", init_dist_matrix_time, init_dist_matrix_time / initializing_time * 100);
+//	printf("Candidating: %f %.2f%%\n", candidating_time, candidating_time / time_labeling * 100);
+//	printf("Adding: %f %.2f%%\n", adding_time, adding_time / time_labeling * 100);
+//		printf("distance_query_time: %f %.2f%%\n", distance_query_time, distance_query_time / time_labeling * 100);
+//		uint64_t total_check_count = bp_hit_count + normal_check_count;
+//		printf("total_check_count: %'llu\n", total_check_count);
+//		printf("bp_hit_count: %'llu %.2f%%\n",
+//						bp_hit_count,
+//						bp_hit_count * 100.0 / total_check_count);
+//		printf("normal_check_count: %'llu %.2f%%\n", normal_check_count, normal_check_count * 100.0 / total_check_count);
+//		printf("total_candidates_num: %'llu set_candidates_num: %'llu %.2f%%\n",
+//							total_candidates_num,
+//							set_candidates_num,
+//							set_candidates_num * 100.0 / total_candidates_num);
+//		printf("\tnormal_hit_count (to total_check, to normal_check): %llu (%f%%, %f%%)\n",
+//						normal_hit_count,
+//						normal_hit_count * 100.0 / total_check_count,
+//						normal_hit_count * 100.0 / (total_check_count - bp_hit_count));
+    //cache_miss.print();
+//	printf("Candidating: "); candidating_ins_count.print();
+//	printf("Adding: "); adding_ins_count.print();
+//	printf("BP_Labeling: "); bp_labeling_ins_count.print();
+//	printf("BP_Checking: "); bp_checking_ins_count.print();
+//	printf("distance_query: "); dist_query_ins_count.print();
+
+    printf("Total_labeling_time: %.2f seconds\n", time_labeling);
+    // End test
 }
 
 //template <VertexID BATCH_SIZE, VertexID BITPARALLEL_SIZE>
@@ -1008,7 +1135,7 @@ inline void DistBVCPLL<BATCH_SIZE, BITPARALLEL_SIZE>::sync_potential_candidates(
 template <VertexID BATCH_SIZE, VertexID BITPARALLEL_SIZE>
 inline bool DistBVCPLL<BATCH_SIZE, BITPARALLEL_SIZE>::distance_query(
         VertexID cand_root_id,
-        VertexID v_id,
+        VertexID v_id_local,
         VertexID roots_start,
 //        const std::vector<IndexType> &L,
         const std::vector< std::vector<UnweightedDist> > &dist_table,
@@ -1020,7 +1147,7 @@ inline bool DistBVCPLL<BATCH_SIZE, BITPARALLEL_SIZE>::distance_query(
 //	dist_query_ins_count.measure_start();
 
     VertexID cand_real_id = cand_root_id + roots_start;
-    const IndexType &Lv = L[v_id];
+    const IndexType &Lv = L[v_id_local];
 
     // Traverse v_id's all existing labels
     VertexID b_i_bound = Lv.batches.size();
@@ -1070,17 +1197,19 @@ inline bool DistBVCPLL<BATCH_SIZE, BITPARALLEL_SIZE>::distance_query(
 template <VertexID BATCH_SIZE, VertexID BITPARALLEL_SIZE>
 inline void DistBVCPLL<BATCH_SIZE, BITPARALLEL_SIZE>::insert_label_only(
         VertexID cand_root_id,
-        VertexID v_id,
+        VertexID v_id_local,
         VertexID roots_start,
         VertexID roots_size,
 //        std::vector<IndexType> &L,
+        const DistGraph &G,
         std::vector< std::vector<UnweightedDist> > &dist_table,
         UnweightedDist iter)
 {
-    L[v_id].vertices.push_back(cand_root_id);
-    // Update the distance buffer if necessary
-    VertexID v_root_id = v_id - roots_start;
-    if (v_id >= roots_start && v_root_id < roots_size) {
+    L[v_id_local].vertices.push_back(cand_root_id);
+    // Update the distance buffer if v_id is a root
+    VertexID v_id_global = G.get_global_vertex_id(v_id_local);
+    VertexID v_root_id = v_id_global - roots_start;
+    if (v_id_global >= roots_start && v_root_id < roots_size) {
         dist_table[v_root_id][cand_root_id + roots_start] = iter;
     }
 }
@@ -1088,31 +1217,31 @@ inline void DistBVCPLL<BATCH_SIZE, BITPARALLEL_SIZE>::insert_label_only(
 // Function updates those index arrays in v_id's label only if v_id has been inserted new labels
 template <VertexID BATCH_SIZE, VertexID BITPARALLEL_SIZE>
 inline void DistBVCPLL<BATCH_SIZE, BITPARALLEL_SIZE>::update_label_indices(
-        VertexID v_id,
+        VertexID v_id_local,
         VertexID inserted_count,
 //        std::vector<IndexType> &L,
         std::vector<ShortIndex> &short_index,
         VertexID b_id,
         UnweightedDist iter)
 {
-    IndexType &Lv = L[v_id];
+    IndexType &Lv = L[v_id_local];
     // indicator[BATCH_SIZE + 1] is true, means v got some labels already in this batch
-    if (short_index[v_id].indicator[BATCH_SIZE]) {
+    if (short_index[v_id_local].indicator[BATCH_SIZE]) {
         // Increase the batches' last element's size because a new distance element need to be added
         ++(Lv.batches.rbegin() -> size);
     } else {
-        short_index[v_id].indicator.set(BATCH_SIZE);
+        short_index[v_id_local].indicator.set(BATCH_SIZE);
         // Insert a new Batch with batch_id, start_index, and size because a new distance element need to be added
         Lv.batches.emplace_back(
-                b_id,
-                Lv.distances.size(),
-                1);
+                b_id, // batch id
+                Lv.distances.size(), // start index
+                1); // size
     }
     // Insert a new distance element with start_index, size, and dist
     Lv.distances.emplace_back(
-            Lv.vertices.size() - inserted_count,
-            inserted_count,
-            iter);
+            Lv.vertices.size() - inserted_count, // start index
+            inserted_count, // size
+            iter); // distance
 }
 
 // Function to reset dist_table the distance buffer to INF
@@ -1125,26 +1254,26 @@ inline void DistBVCPLL<BATCH_SIZE, BITPARALLEL_SIZE>::reset_at_end(
 //        std::vector<IndexType> &L,
         std::vector< std::vector<UnweightedDist> > &dist_table)
 {
-    VertexID b_i_bound;
-    VertexID id_offset;
-    VertexID dist_start_index;
-    VertexID dist_bound_index;
-    VertexID v_start_index;
-    VertexID v_bound_index;
+//    VertexID b_i_bound;
+//    VertexID id_offset;
+//    VertexID dist_start_index;
+//    VertexID dist_bound_index;
+//    VertexID v_start_index;
+//    VertexID v_bound_index;
     for (VertexID r_id = 0; r_id < roots_size; ++r_id) {
         IndexType &Lr = L[r_id + roots_start];
-        b_i_bound = Lr.batches.size();
+        VertexID b_i_bound = Lr.batches.size();
         _mm_prefetch(&Lr.batches[0], _MM_HINT_T0);
         _mm_prefetch(&Lr.distances[0], _MM_HINT_T0);
         _mm_prefetch(&Lr.vertices[0], _MM_HINT_T0);
         for (VertexID b_i = 0; b_i < b_i_bound; ++b_i) {
-            id_offset = Lr.batches[b_i].batch_id * BATCH_SIZE;
-            dist_start_index = Lr.batches[b_i].start_index;
-            dist_bound_index = dist_start_index + Lr.batches[b_i].size;
+            VertexID id_offset = Lr.batches[b_i].batch_id * BATCH_SIZE;
+            VertexID dist_start_index = Lr.batches[b_i].start_index;
+            VertexID dist_bound_index = dist_start_index + Lr.batches[b_i].size;
             // Traverse dist_table
             for (VertexID dist_i = dist_start_index; dist_i < dist_bound_index; ++dist_i) {
-                v_start_index = Lr.distances[dist_i].start_index;
-                v_bound_index = v_start_index + Lr.distances[dist_i].size;
+                VertexID v_start_index = Lr.distances[dist_i].start_index;
+                VertexID v_bound_index = v_start_index + Lr.distances[dist_i].size;
                 for (VertexID v_i = v_start_index; v_i < v_bound_index; ++v_i) {
                     dist_table[r_id][Lr.vertices[v_i] + id_offset] = MAX_UNWEIGHTED_DIST;
                 }
@@ -1255,52 +1384,44 @@ inline void DistBVCPLL<BATCH_SIZE, BITPARALLEL_SIZE>::batch_process(
         // Traverse vertices in the got_candidates_queue to insert labels
 //		puts("Checking...");//test
         for (VertexID i_queue = 0; i_queue < end_got_candidates_queue; ++i_queue) {
-            VertexID v_id = got_candidates_queue[i_queue];
+            VertexID v_id_local = got_candidates_queue[i_queue];
             VertexID inserted_count = 0; //recording number of v_id's truly inserted candidates
-            got_candidates[v_id] = false; // reset got_candidates
+            got_candidates[v_id_local] = false; // reset got_candidates
             // Traverse v_id's all candidates
-//			total_candidates_num += roots_size;
-//			for (VertexID cand_root_id = 0; cand_root_id < roots_size; ++cand_root_id) {
-//				if (!short_index[v_id].candidates[cand_root_id]) {
-//					// Root cand_root_id is not vertex v_id's candidate
-//					continue;
-//				}
-//				++set_candidates_num;
-//				short_index[v_id].candidates.reset(cand_root_id);
-            VertexID bound_cand_i = short_index[v_id].end_candidates_que;
+            VertexID bound_cand_i = short_index[v_id_local].end_candidates_que;
             for (VertexID cand_i = 0; cand_i < bound_cand_i; ++cand_i) {
-                VertexID cand_root_id = short_index[v_id].candidates_que[cand_i];
-                short_index[v_id].is_candidate[cand_root_id] = false;
+                VertexID cand_root_id = short_index[v_id_local].candidates_que[cand_i];
+                short_index[v_id_local].is_candidate[cand_root_id] = false;
                 // Only insert cand_root_id into v_id's label if its distance to v_id is shorter than existing distance
                 if ( distance_query(
                         cand_root_id,
-                        v_id,
+                        v_id_local,
                         roots_start,
 //                        L,
                         dist_table,
                         iter) ) {
-                    if (!is_active[v_id]) {
-                        is_active[v_id] = true;
-                        active_queue[end_active_queue++] = v_id;
+                    if (!is_active[v_id_local]) {
+                        is_active[v_id_local] = true;
+                        active_queue[end_active_queue++] = v_id_local;
                     }
                     ++inserted_count;
                     // The candidate cand_root_id needs to be added into v_id's label
                     insert_label_only(
                             cand_root_id,
-                            v_id,
+                            v_id_local,
                             roots_start,
                             roots_size,
 //                            L,
+                            G,
                             dist_table,
                             iter);
                 }
             }
-            short_index[v_id].end_candidates_que = 0;
-//			}
+            short_index[v_id_local].end_candidates_que = 0;
             if (0 != inserted_count) {
                 // Update other arrays in L[v_id] if new labels were inserted in this iteration
                 update_label_indices(
-                        v_id,
+                        v_id_local,
                         inserted_count,
 //                        L,
                         short_index,
@@ -1320,6 +1441,7 @@ inline void DistBVCPLL<BATCH_SIZE, BITPARALLEL_SIZE>::batch_process(
                 V_ID_Type,
                 MPI_SUM,
                 MPI_COMM_WORLD);
+        printf("@%u host_id: %u global_num_actives: %u\n", __LINE__, host_id, global_num_actives);//test
     }
 
     // Reset the dist_table
@@ -1342,137 +1464,137 @@ inline void DistBVCPLL<BATCH_SIZE, BITPARALLEL_SIZE>::batch_process(
 }
 
 
-template <VertexID BATCH_SIZE, VertexID BITPARALLEL_SIZE>
-void DistBVCPLL<BATCH_SIZE, BITPARALLEL_SIZE>::construct(const DistGraph &G)
-{
-    num_v = G.num_v;
-    assert(num_v >= BATCH_SIZE);
-    num_masters = G.num_masters;
-    host_id = G.host_id;
-    num_hosts = G.num_hosts;
-    V_ID_Type = G.V_ID_Type;
-//    L.resize(num_v);
-    L.resize(num_masters);
-    VertexID remainer = num_v % BATCH_SIZE;
-    VertexID b_i_bound = num_v / BATCH_SIZE;
-    std::vector<bool> used_bp_roots(num_v, false);
-    //cache_miss.measure_start();
-    double time_labeling = -WallTimer::get_time_mark();
-
-//	double bp_labeling_time = -WallTimer::get_time_mark();
-//	bp_labeling_ins_count.measure_start();
-//    bit_parallel_labeling(
-//            G,
-////            L,
-//            used_bp_roots);
-//	bp_labeling_ins_count.measure_stop();
-//	bp_labeling_time += WallTimer::get_time_mark();
-
-    std::vector<VertexID> active_queue(num_masters); // Any vertex v who is active should be put into this queue.
-//    std::vector<VertexID> active_queue(num_v); // Any vertex v who is active should be put into this queue.
-    VertexID end_active_queue = 0;
-    std::vector<bool> is_active(num_masters, false);// is_active[v] is true means vertex v is in the active queue.
-//    std::vector<bool> is_active(num_v, false);// is_active[v] is true means vertex v is in the active queue.
-    std::vector<VertexID> got_candidates_queue(num_masters); // Any vertex v who got candidates should be put into this queue.
-//    std::vector<VertexID> got_candidates_queue(num_v); // Any vertex v who got candidates should be put into this queue.
-    VertexID end_got_candidates_queue = 0;
-    std::vector<bool> got_candidates(num_masters, false); // got_candidates[v] is true means vertex v is in the queue got_candidates_queue
-//    std::vector<bool> got_candidates(num_v, false); // got_candidates[v] is true means vertex v is in the queue got_candidates_queue
-    std::vector<ShortIndex> short_index(num_masters);
-//    std::vector<ShortIndex> short_index(num_v);
-    std::vector< std::vector<UnweightedDist> > dist_table(BATCH_SIZE, std::vector<UnweightedDist>(num_v, MAX_UNWEIGHTED_DIST));
-
-
-    std::vector<VertexID> once_candidated_queue(num_masters); // if short_index[v].indicator.any() is true, v is in the queue.
-//    std::vector<VertexID> once_candidated_queue(num_v); // if short_index[v].indicator.any() is true, v is in the queue.
-        // Used mainly for resetting short_index[v].indicator.
-    VertexID end_once_candidated_queue = 0;
-    std::vector<bool> once_candidated(num_masters, false);
-//    std::vector<bool> once_candidated(num_v, false);
-
-    //printf("b_i_bound: %u\n", b_i_bound);//test
-    for (VertexID b_i = 0; b_i < b_i_bound; ++b_i) {
-        printf("b_i: %u\n", b_i);//test
-        batch_process(
-                G,
-                b_i,
-                b_i * BATCH_SIZE,
-                BATCH_SIZE,
-//                L,
-                used_bp_roots,
-                active_queue,
-                end_active_queue,
-                got_candidates_queue,
-                end_got_candidates_queue,
-                short_index,
-                dist_table,
-                got_candidates,
-                is_active,
-                once_candidated_queue,
-                end_once_candidated_queue,
-                once_candidated);
-    }
-    if (remainer != 0) {
-		printf("b_i: %u\n", b_i_bound);//test
-        batch_process(
-                G,
-                b_i_bound,
-                b_i_bound * BATCH_SIZE,
-                remainer,
-//                L,
-                used_bp_roots,
-                active_queue,
-                end_active_queue,
-                got_candidates_queue,
-                end_got_candidates_queue,
-                short_index,
-                dist_table,
-                got_candidates,
-                is_active,
-                once_candidated_queue,
-                end_once_candidated_queue,
-                once_candidated);
-    }
-    time_labeling += WallTimer::get_time_mark();
-    //cache_miss.measure_stop();
-
-    // Test
-    setlocale(LC_NUMERIC, "");
-    printf("BATCH_SIZE: %u\n", BATCH_SIZE);
-    printf("BP_Size: %u\n", BITPARALLEL_SIZE);
-//	printf("BP_labeling: %f %.2f%%\n", bp_labeling_time, bp_labeling_time / time_labeling * 100);
-//	printf("Initializing: %f %.2f%%\n", initializing_time, initializing_time / time_labeling * 100);
-//		printf("\tinit_start_reset_time: %f (%f%%)\n", init_start_reset_time, init_start_reset_time / initializing_time * 100);
-//		printf("\tinit_index_time: %f (%f%%)\n", init_index_time, init_index_time / initializing_time * 100);
-//			printf("\t\tinit_indicators_time: %f (%f%%)\n", init_indicators_time, init_indicators_time / init_index_time * 100);
-//		printf("\tinit_dist_matrix_time: %f (%f%%)\n", init_dist_matrix_time, init_dist_matrix_time / initializing_time * 100);
-//	printf("Candidating: %f %.2f%%\n", candidating_time, candidating_time / time_labeling * 100);
-//	printf("Adding: %f %.2f%%\n", adding_time, adding_time / time_labeling * 100);
-//		printf("distance_query_time: %f %.2f%%\n", distance_query_time, distance_query_time / time_labeling * 100);
-//		uint64_t total_check_count = bp_hit_count + normal_check_count;
-//		printf("total_check_count: %'llu\n", total_check_count);
-//		printf("bp_hit_count: %'llu %.2f%%\n",
-//						bp_hit_count,
-//						bp_hit_count * 100.0 / total_check_count);
-//		printf("normal_check_count: %'llu %.2f%%\n", normal_check_count, normal_check_count * 100.0 / total_check_count);
-//		printf("total_candidates_num: %'llu set_candidates_num: %'llu %.2f%%\n",
-//							total_candidates_num,
-//							set_candidates_num,
-//							set_candidates_num * 100.0 / total_candidates_num);
-//		printf("\tnormal_hit_count (to total_check, to normal_check): %llu (%f%%, %f%%)\n",
-//						normal_hit_count,
-//						normal_hit_count * 100.0 / total_check_count,
-//						normal_hit_count * 100.0 / (total_check_count - bp_hit_count));
-    //cache_miss.print();
-//	printf("Candidating: "); candidating_ins_count.print();
-//	printf("Adding: "); adding_ins_count.print();
-//	printf("BP_Labeling: "); bp_labeling_ins_count.print();
-//	printf("BP_Checking: "); bp_checking_ins_count.print();
-//	printf("distance_query: "); dist_query_ins_count.print();
-
-    printf("Total_labeling_time: %.2f seconds\n", time_labeling);
-    // End test
-}
+//template <VertexID BATCH_SIZE, VertexID BITPARALLEL_SIZE>
+//void DistBVCPLL<BATCH_SIZE, BITPARALLEL_SIZE>::construct(const DistGraph &G)
+//{
+//    num_v = G.num_v;
+//    assert(num_v >= BATCH_SIZE);
+//    num_masters = G.num_masters;
+//    host_id = G.host_id;
+//    num_hosts = G.num_hosts;
+//    V_ID_Type = G.V_ID_Type;
+////    L.resize(num_v);
+//    L.resize(num_masters);
+//    VertexID remainer = num_v % BATCH_SIZE;
+//    VertexID b_i_bound = num_v / BATCH_SIZE;
+//    std::vector<bool> used_bp_roots(num_v, false);
+//    //cache_miss.measure_start();
+//    double time_labeling = -WallTimer::get_time_mark();
+//
+////	double bp_labeling_time = -WallTimer::get_time_mark();
+////	bp_labeling_ins_count.measure_start();
+////    bit_parallel_labeling(
+////            G,
+//////            L,
+////            used_bp_roots);
+////	bp_labeling_ins_count.measure_stop();
+////	bp_labeling_time += WallTimer::get_time_mark();
+//
+//    std::vector<VertexID> active_queue(num_masters); // Any vertex v who is active should be put into this queue.
+////    std::vector<VertexID> active_queue(num_v); // Any vertex v who is active should be put into this queue.
+//    VertexID end_active_queue = 0;
+//    std::vector<bool> is_active(num_masters, false);// is_active[v] is true means vertex v is in the active queue.
+////    std::vector<bool> is_active(num_v, false);// is_active[v] is true means vertex v is in the active queue.
+//    std::vector<VertexID> got_candidates_queue(num_masters); // Any vertex v who got candidates should be put into this queue.
+////    std::vector<VertexID> got_candidates_queue(num_v); // Any vertex v who got candidates should be put into this queue.
+//    VertexID end_got_candidates_queue = 0;
+//    std::vector<bool> got_candidates(num_masters, false); // got_candidates[v] is true means vertex v is in the queue got_candidates_queue
+////    std::vector<bool> got_candidates(num_v, false); // got_candidates[v] is true means vertex v is in the queue got_candidates_queue
+//    std::vector<ShortIndex> short_index(num_masters);
+////    std::vector<ShortIndex> short_index(num_v);
+//    std::vector< std::vector<UnweightedDist> > dist_table(BATCH_SIZE, std::vector<UnweightedDist>(num_v, MAX_UNWEIGHTED_DIST));
+//
+//
+//    std::vector<VertexID> once_candidated_queue(num_masters); // if short_index[v].indicator.any() is true, v is in the queue.
+////    std::vector<VertexID> once_candidated_queue(num_v); // if short_index[v].indicator.any() is true, v is in the queue.
+//        // Used mainly for resetting short_index[v].indicator.
+//    VertexID end_once_candidated_queue = 0;
+//    std::vector<bool> once_candidated(num_masters, false);
+////    std::vector<bool> once_candidated(num_v, false);
+//
+//    //printf("b_i_bound: %u\n", b_i_bound);//test
+//    for (VertexID b_i = 0; b_i < b_i_bound; ++b_i) {
+//        printf("b_i: %u\n", b_i);//test
+//        batch_process(
+//                G,
+//                b_i,
+//                b_i * BATCH_SIZE,
+//                BATCH_SIZE,
+////                L,
+//                used_bp_roots,
+//                active_queue,
+//                end_active_queue,
+//                got_candidates_queue,
+//                end_got_candidates_queue,
+//                short_index,
+//                dist_table,
+//                got_candidates,
+//                is_active,
+//                once_candidated_queue,
+//                end_once_candidated_queue,
+//                once_candidated);
+//    }
+//    if (remainer != 0) {
+//		printf("b_i: %u\n", b_i_bound);//test
+//        batch_process(
+//                G,
+//                b_i_bound,
+//                b_i_bound * BATCH_SIZE,
+//                remainer,
+////                L,
+//                used_bp_roots,
+//                active_queue,
+//                end_active_queue,
+//                got_candidates_queue,
+//                end_got_candidates_queue,
+//                short_index,
+//                dist_table,
+//                got_candidates,
+//                is_active,
+//                once_candidated_queue,
+//                end_once_candidated_queue,
+//                once_candidated);
+//    }
+//    time_labeling += WallTimer::get_time_mark();
+//    //cache_miss.measure_stop();
+//
+//    // Test
+//    setlocale(LC_NUMERIC, "");
+//    printf("BATCH_SIZE: %u\n", BATCH_SIZE);
+//    printf("BP_Size: %u\n", BITPARALLEL_SIZE);
+////	printf("BP_labeling: %f %.2f%%\n", bp_labeling_time, bp_labeling_time / time_labeling * 100);
+////	printf("Initializing: %f %.2f%%\n", initializing_time, initializing_time / time_labeling * 100);
+////		printf("\tinit_start_reset_time: %f (%f%%)\n", init_start_reset_time, init_start_reset_time / initializing_time * 100);
+////		printf("\tinit_index_time: %f (%f%%)\n", init_index_time, init_index_time / initializing_time * 100);
+////			printf("\t\tinit_indicators_time: %f (%f%%)\n", init_indicators_time, init_indicators_time / init_index_time * 100);
+////		printf("\tinit_dist_matrix_time: %f (%f%%)\n", init_dist_matrix_time, init_dist_matrix_time / initializing_time * 100);
+////	printf("Candidating: %f %.2f%%\n", candidating_time, candidating_time / time_labeling * 100);
+////	printf("Adding: %f %.2f%%\n", adding_time, adding_time / time_labeling * 100);
+////		printf("distance_query_time: %f %.2f%%\n", distance_query_time, distance_query_time / time_labeling * 100);
+////		uint64_t total_check_count = bp_hit_count + normal_check_count;
+////		printf("total_check_count: %'llu\n", total_check_count);
+////		printf("bp_hit_count: %'llu %.2f%%\n",
+////						bp_hit_count,
+////						bp_hit_count * 100.0 / total_check_count);
+////		printf("normal_check_count: %'llu %.2f%%\n", normal_check_count, normal_check_count * 100.0 / total_check_count);
+////		printf("total_candidates_num: %'llu set_candidates_num: %'llu %.2f%%\n",
+////							total_candidates_num,
+////							set_candidates_num,
+////							set_candidates_num * 100.0 / total_candidates_num);
+////		printf("\tnormal_hit_count (to total_check, to normal_check): %llu (%f%%, %f%%)\n",
+////						normal_hit_count,
+////						normal_hit_count * 100.0 / total_check_count,
+////						normal_hit_count * 100.0 / (total_check_count - bp_hit_count));
+//    //cache_miss.print();
+////	printf("Candidating: "); candidating_ins_count.print();
+////	printf("Adding: "); adding_ins_count.print();
+////	printf("BP_Labeling: "); bp_labeling_ins_count.print();
+////	printf("BP_Checking: "); bp_checking_ins_count.print();
+////	printf("distance_query: "); dist_query_ins_count.print();
+//
+//    printf("Total_labeling_time: %.2f seconds\n", time_labeling);
+//    // End test
+//}
 
 template <VertexID BATCH_SIZE, VertexID BITPARALLEL_SIZE>
 void DistBVCPLL<BATCH_SIZE, BITPARALLEL_SIZE>::store_index_to_file(
@@ -1837,19 +1959,32 @@ void DistBVCPLL<BATCH_SIZE, BITPARALLEL_SIZE>::test_queries_normal_index(
         const auto &Lv = new_L[v];
 //		unsorted_map<VertexID, UnweightedDist> markers;
         std::map<VertexID, UnweightedDist> markers;
-        for (VertexID i = 0; i < Lu.size(); ++i) {
-            markers[Lu[i].first] = Lu[i].second;
+        for (const auto &l : Lu) {
+            markers[l.first] = l.second;
         }
-        for (VertexID i = 0; i < Lv.size(); ++i) {
-            const auto &tmp_l = markers.find(Lv[i].first);
+//        for (VertexID i = 0; i < Lu.size(); ++i) {
+//            markers[Lu[i].first] = Lu[i].second;
+//        }
+        for (const auto &l : Lv) {
+            const auto &tmp_l = markers.find(l.first);
             if (tmp_l == markers.end()) {
                 continue;
             }
-            int d = tmp_l->second + Lv[i].second;
+            int d = tmp_l->second + l.second;
             if (d < dist) {
                 dist = d;
             }
         }
+//        for (VertexID i = 0; i < Lv.size(); ++i) {
+//            const auto &tmp_l = markers.find(Lv[i].first);
+//            if (tmp_l == markers.end()) {
+//                continue;
+//            }
+//            int d = tmp_l->second + Lv[i].second;
+//            if (d < dist) {
+//                dist = d;
+//            }
+//        }
         if (dist == 255) {
             printf("2147483647\n");
         } else {
