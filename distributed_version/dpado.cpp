@@ -155,7 +155,7 @@ int main(int argc, char *argv[])
         input_file = std::string(argv[1]);
     }
 
-	setbuf(stdout, nullptr);
+	setbuf(stdout, nullptr); // stdout no buffer
     printf("input_file: %s\n", input_file.c_str());
     MPI_Instance mpi_instance(argc, argv);
     dpado(argv);

@@ -654,7 +654,7 @@ inline VertexID DistBVCPLL<BATCH_SIZE, BITPARALLEL_SIZE>::initialization(
 		LabelTableUnit(VertexID r, VertexID l, UnweightedDist d) :
 			root_id(r), label_global_id(l), dist(d) {  }
 	};
-	std::vector<LabelTableUnit> buffer_send; // buffer for sending, (root, dis
+	std::vector<LabelTableUnit> buffer_send; // buffer for sending
     // Dist_matrix
     {
         // Deprecated Old method: unpack the IndexType structure before sending.
@@ -685,7 +685,6 @@ inline VertexID DistBVCPLL<BATCH_SIZE, BITPARALLEL_SIZE>::initialization(
                 }
             }
         }
-//        }
     }
 //	init_dist_matrix_time += WallTimer::get_time_mark();
 //    // Broadcast local roots labels
@@ -769,7 +768,7 @@ inline VertexID DistBVCPLL<BATCH_SIZE, BITPARALLEL_SIZE>::initialization(
 		for (int h_i = 0; h_i < num_hosts - 1; ++h_i) {
 			MPI_Instance::receive_dynamic_buffer_from_any(buffer_recv,
 					num_hosts,
-					SENDING_DIST_TABEL);
+					SENDING_DIST_TABLE);
 			if (buffer_recv.empty()) {
 			    continue;
 			}
