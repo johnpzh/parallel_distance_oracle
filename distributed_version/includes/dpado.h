@@ -1327,7 +1327,7 @@ inline void DistBVCPLL<BATCH_SIZE, BITPARALLEL_SIZE>::batch_process(
     UnweightedDist iter = 0; // The iterator, also the distance for current iteration
 //	initializing_time += WallTimer::get_time_mark();
 
-    std::vector< std::vector< std::pair<VertexID, VertexID> > > buffer_send_list(num_hosts - 1);
+
         // pair.first: Vertex V: the receiver of this label
         // pair.second: Root R: the root ID of this label
     while (global_num_actives) {
@@ -1337,6 +1337,7 @@ inline void DistBVCPLL<BATCH_SIZE, BITPARALLEL_SIZE>::batch_process(
 //		printf("iter: %u\n", iter);//test
         // Traverse active vertices to push their labels as candidates
 //		puts("Pushing...");//test
+        std::vector< std::vector< std::pair<VertexID, VertexID> > > buffer_send_list(num_hosts - 1);
         for (VertexID i_queue = 0; i_queue < end_active_queue; ++i_queue) {
             VertexID v_head_local = active_queue[i_queue];
             is_active[v_head_local] = false; // reset is_active
