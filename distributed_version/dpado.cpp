@@ -48,8 +48,8 @@ void dpado(char *argv[])
 	printf("host_id: %u num_v: %u num_masters: %u\n", G.host_id, G.num_v, G.num_masters);//test
 
 //	DistBVCPLL<1024, 0> dist_bvcpll(G); // batch size 1024, bit-parallel size 0.
-	//DistBVCPLL<64, 0> dist_bvcpll(G); // batch size 1024, bit-parallel size 0.
-//
+	DistBVCPLL<1, 0> dist_bvcpll(G); // batch size 1024, bit-parallel size 0.
+
 //    // test the index
 //    {
 //        std::vector<VertexID> rank2id(G.num_v);
@@ -59,29 +59,35 @@ void dpado(char *argv[])
 //        dist_bvcpll.switch_labels_to_old_id(rank2id);
 //    }
 
-    // print the local graph
-	{
-        std::vector<VertexID> rank2id(G.num_v);
-        for (VertexID v = 0; v < G.num_v; ++v) {
-            rank2id[G.rank[v]] = v;
-        }
-		std::string filename = "output_" + std::to_string(G.host_id) + ".txt";
-		FILE *fout = fopen(filename.c_str(), "w");
-		fprintf(fout, "num_master: %d (/%u) num_edges_local: %lu (/%lu) host_id: %d (/%d)\n",
-						G.num_masters, G.num_v, G.num_edges_local, G.num_e * 2, G.host_id, G.num_hosts);
-        // Traverse the local G
-        for (VertexID v_i = 0; v_i < G.num_v; ++v_i) {
-            VertexID head = v_i;
-//            VertexID head = rank2id[v_i + G.offset_vertex_id];
-            EdgeID start_e_i = G.vertices_idx[v_i];
-            EdgeID bound_e_i = start_e_i + G.local_out_degrees[v_i];
-            for (EdgeID e_i = start_e_i; e_i < bound_e_i; ++e_i) {
-                VertexID tail = G.out_edges[e_i];
-//                VertexID tail = rank2id[G.out_edges[e_i]];
-                //std::cout << head << " " << tail << std::endl;
-				fprintf(fout, "%u %u\n", head, tail);
-            }
-        }
+//    // print the local graph
+//	{
+//        std::vector<VertexID> rank2id(G.num_v);
+//        for (VertexID v = 0; v < G.num_v; ++v) {
+//            rank2id[G.rank[v]] = v;
+//        }
+//        std::vector< std::pair<VertexID, VertexID> > tmp_edges_by_dst;
+//		std::string filename = "output_" + std::to_string(G.host_id) + ".txt";
+//		FILE *fout = fopen(filename.c_str(), "w");
+//		fprintf(fout, "num_master: %d (/%u) num_edges_local: %lu (/%lu) host_id: %d (/%d)\n",
+//						G.num_masters, G.num_v, G.num_edges_local, G.num_e * 2, G.host_id, G.num_hosts);
+//        // Traverse the local G
+//        for (VertexID v_i = 0; v_i < G.num_v; ++v_i) {
+//            VertexID head = v_i;
+////            VertexID head = rank2id[v_i + G.offset_vertex_id];
+//            EdgeID start_e_i = G.vertices_idx[v_i];
+//            EdgeID bound_e_i = start_e_i + G.local_out_degrees[v_i];
+//            for (EdgeID e_i = start_e_i; e_i < bound_e_i; ++e_i) {
+//                VertexID tail = G.out_edges[e_i];
+////                VertexID tail = rank2id[G.out_edges[e_i]];
+//                //std::cout << head << " " << tail << std::endl;
+////				fprintf(fout, "%u %u\n", head, tail);
+//                tmp_edges_by_dst.emplace_back(tail, head);
+//            }
+//        }
+//        std::sort(tmp_edges_by_dst.begin(), tmp_edges_by_dst.end());
+//        for (const auto &e : tmp_edges_by_dst) {
+//            fprintf(fout, "%u %u\n", e.second, e.first);
+//        }
 //        // Traverse the local G
 //        for (VertexID v_i = 0; v_i < G.num_masters; ++v_i) {
 //            VertexID head = v_i + G.offset_vertex_id;
@@ -98,8 +104,8 @@ void dpado(char *argv[])
 //                fprintf(fout, "%u %u\n", head, tail);
 //            }
 //        }
-		fclose(fout);
-	}
+//		fclose(fout);
+//	}
 
 //    if (0 == G.host_id) {
 //		std::cout << "num_master: " << G.num_masters << " (/" << G.num_v << ")"
