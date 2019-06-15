@@ -38,6 +38,7 @@ private:
         vertices_idx.resize(num_v);
 //        vertices_idx.resize(num_masters);
         out_degrees.resize(num_v, 0);
+        local_out_degrees.resize(num_v, 0);
     }
 
     // Function: compute the vertex divide value, which is ceiling(num_v / num_hosts).
@@ -66,6 +67,7 @@ public:
     std::vector<VertexID> vertices_idx; // vertices indices
     std::vector<VertexID> out_edges; // out edges
     std::vector<VertexID> out_degrees; // out degrees of vertices
+    std::vector<VertexID> local_out_degrees; // out degrees based on local edges.
 
     DistGraph() = default;
     ~DistGraph() = default;
@@ -113,7 +115,6 @@ public:
 // Constructor from a input file.
 DistGraph::DistGraph(char *input_filename)
 {
-
     std::ifstream fin(input_filename);
     if (!fin.is_open()) {
         fprintf(stderr, "Error %s(%d): cannot open file %s\n", __FILE__, __LINE__, input_filename);
@@ -274,21 +275,24 @@ DistGraph::DistGraph(char *input_filename)
     // Build up local graph structure
     num_edges_local = num_edges_recv;
     out_edges.resize(num_edges_recv);
+    std::vector<VertexID> test_in_degrees(num_masters, 0);
     EdgeID loc = 0;
-    for (VertexID v_i = 0; v_i < num_masters; ++v_i) {
+    for (VertexID v_i = 0; v_i < num_v; ++v_i) {
         vertices_idx[v_i] = loc;
         size_t bound_e_i = edgelist_recv[v_i].size();
-        {
-            VertexID tmp_global_id = get_global_vertex_id(v_i);
-            assert(bound_e_i == out_degrees[tmp_global_id]);
-        }
+        local_out_degrees[v_i] = bound_e_i;
         std::sort(edgelist_recv[v_i].rbegin(), edgelist_recv[v_i].rend()); // sort neighbors by ranks from low to high
         for (EdgeID e_i = 0; e_i < bound_e_i; ++e_i) {
             out_edges[loc + e_i] = edgelist_recv[v_i][e_i];
+            ++test_in_degrees[get_local_vertex_id(edgelist_recv[v_i][e_i])];
         }
         loc += bound_e_i;
     }
     assert(loc == num_edges_recv);
+    for (VertexID v_local = 0; v_local < num_masters; ++v_local) {
+        VertexID v_global = get_global_vertex_id(v_local);
+        assert(out_degrees[v_global] == test_in_degrees[v_local]); // undirected graph.
+    }
 //	printf("@%u host_id: %u built_up\n", __LINE__, host_id);//test
 }
 
