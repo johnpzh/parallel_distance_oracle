@@ -213,6 +213,7 @@ private:
 //            std::vector<IndexType> &L,
             const DistGraph &G,
             std::vector< std::vector<UnweightedDist> > &dist_table,
+            std::vector< std::pair<VertexID, VertexID> > &buffer_send,
             UnweightedDist iter);
     inline void update_label_indices(
             VertexID v_id,
@@ -352,6 +353,7 @@ DistBVCPLL<BATCH_SIZE, BITPARALLEL_SIZE>::DistBVCPLL(const DistGraph &G)
                 once_candidated_queue,
                 end_once_candidated_queue,
                 once_candidated);
+//        exit(EXIT_SUCCESS); //test
     }
     if (remainer != 0) {
         if (0 == host_id) {
@@ -1113,8 +1115,9 @@ inline void DistBVCPLL<BATCH_SIZE, BITPARALLEL_SIZE>::local_push_labels(
     VertexID l_i_start = Lv.distances.rbegin() -> start_index;
     VertexID l_i_bound = l_i_start + Lv.distances.rbegin() -> size;
     // Traverse v_head's every neighbor v_tail
-    EdgeID e_i_start = G.vertices_idx[v_head_local];
-    EdgeID e_i_bound = e_i_start + G.out_degrees[v_head_local];
+    VertexID v_head_global = G.get_global_vertex_id(v_head_local);
+    EdgeID e_i_start = G.vertices_idx[v_head_global];
+    EdgeID e_i_bound = e_i_start + G.local_out_degrees[v_head_global];
     for (EdgeID e_i = e_i_start; e_i < e_i_bound; ++e_i) {
         VertexID v_tail_global = G.out_edges[e_i];
         if (used_bp_roots[v_tail_global]) {
@@ -1358,6 +1361,13 @@ inline bool DistBVCPLL<BATCH_SIZE, BITPARALLEL_SIZE>::distance_query(
                     continue;
                 }
                 VertexID d_tmp = dist + dist_table[cand_root_id][v];
+//                {//test
+//                    if ((3 == iter && 20 == v_id_local && 1 == cand_root_id && 1 == host_id)
+//                        || (3 == iter && 44 == v_id_local && 1 == cand_root_id && 0 == host_id)) {
+//                        printf("DISTANCE_QUERY label(%u, %u) c_l_dist %u d_tmp %u\n", v, dist,
+//                               dist_table[cand_root_id][v], d_tmp);//test
+//                    }
+//                }
                 if (d_tmp <= iter) {
 //					distance_query_time += WallTimer::get_time_mark();
 //					dist_query_ins_count.measure_stop();
@@ -1383,6 +1393,7 @@ inline void DistBVCPLL<BATCH_SIZE, BITPARALLEL_SIZE>::insert_label_only(
 //        std::vector<IndexType> &L,
         const DistGraph &G,
         std::vector< std::vector<UnweightedDist> > &dist_table,
+        std::vector< std::pair<VertexID, VertexID> > &buffer_send,
         UnweightedDist iter)
 {
     L[v_id_local].vertices.push_back(cand_root_id);
@@ -1390,7 +1401,10 @@ inline void DistBVCPLL<BATCH_SIZE, BITPARALLEL_SIZE>::insert_label_only(
     VertexID v_id_global = G.get_global_vertex_id(v_id_local);
     VertexID v_root_id = v_id_global - roots_start;
     if (v_id_global >= roots_start && v_root_id < roots_size) {
-        dist_table[v_root_id][cand_root_id + roots_start] = iter;
+        VertexID cand_real_id = cand_root_id + roots_start;
+        dist_table[v_root_id][cand_real_id] = iter;
+        // Put the update into the buffer_send for later sending
+        buffer_send.emplace_back(v_root_id, cand_real_id);
     }
 }
 
@@ -1539,6 +1553,14 @@ inline void DistBVCPLL<BATCH_SIZE, BITPARALLEL_SIZE>::batch_process(
                     used_bp_roots,
                     iter);
         }
+//        { // test
+//            printf("@%u host_id: %u end_got_candidates_queue: %u\n", __LINE__, host_id, end_got_candidates_queue);//test
+//            std::sort(got_candidates_queue.begin(), got_candidates_queue.begin() + end_got_candidates_queue);
+//            for (VertexID i = 0; i < end_got_candidates_queue; ++i) {
+//                printf("@%u host_id: %u got_candidates_queue[%u]: %u\n", __LINE__, host_id, i, got_candidates_queue[i]);
+//            }
+//        }
+
         // Send masters' newly added labels to other hosts
         std::vector<MPI_Request> requests_send(num_hosts - 1);
         sync_masters_2_mirrors(G,
@@ -1577,6 +1599,21 @@ inline void DistBVCPLL<BATCH_SIZE, BITPARALLEL_SIZE>::batch_process(
         MPI_Waitall(num_hosts - 1,
                 requests_send.data(),
                 MPI_STATUSES_IGNORE);
+//        {// test
+//            VertexID global_end_got_candidates_queue;
+//            MPI_Allreduce(&end_got_candidates_queue,
+//                    &global_end_got_candidates_queue,
+//                    1,
+//                    V_ID_Type,
+//                    MPI_SUM,
+//                    MPI_COMM_WORLD);
+//            printf("iter %u @%u host_id: %u global_end_got_candidates_queue: %u\n", iter, __LINE__, host_id, global_end_got_candidates_queue);
+////            std::sort(got_candidates_queue.begin(), got_candidates_queue.begin() + end_got_candidates_queue);
+////            for (VertexID i = 0; i < end_got_candidates_queue; ++i) {
+////                printf("@%u host_id: %u got_candidates_queue[%u]: %u\n", __LINE__, host_id, i, G.get_global_vertex_id(got_candidates_queue[i]));
+////            }
+////            exit(EXIT_SUCCESS);
+//        }
 
 ///////////////////////////////////////////
 //        std::vector< std::vector< std::pair<VertexID, VertexID> > > buffer_send_list(num_hosts - 1);
@@ -1614,10 +1651,7 @@ inline void DistBVCPLL<BATCH_SIZE, BITPARALLEL_SIZE>::batch_process(
 //                once_candidated,
 //                roots_start,
 //                iter);
-        {// test
-            printf("@%u host_id: %u end_got_candidates_queue: %u end_once_candidates_queue: %u\n", __LINE__, host_id, end_got_candidates_queue, end_once_candidated_queue);
-            exit(EXIT_SUCCESS);
-        }
+//
 //        puts("Push done.");//test
 //		candidating_ins_count.measure_stop();
 //		candidating_time += WallTimer::get_time_mark();
@@ -1626,8 +1660,16 @@ inline void DistBVCPLL<BATCH_SIZE, BITPARALLEL_SIZE>::batch_process(
 
         // Traverse vertices in the got_candidates_queue to insert labels
 //		puts("Checking...");//test
+        std::vector< std::pair<VertexID, VertexID> > buffer_send; // For sync elements in the dist_table
+            // pair.first: root id
+            // pair.second: label (global) id of the root
         for (VertexID i_queue = 0; i_queue < end_got_candidates_queue; ++i_queue) {
             VertexID v_id_local = got_candidates_queue[i_queue];
+//            {
+//                if (3 == iter && 44 == G.get_global_vertex_id(v_id_local)) {
+//                    printf("Yes, host_id %u got v_id 44 (local_id %u)\n", host_id, v_id_local);//test
+//                }
+//            }
             VertexID inserted_count = 0; //recording number of v_id's truly inserted candidates
             got_candidates[v_id_local] = false; // reset got_candidates
             // Traverse v_id's all candidates
@@ -1646,6 +1688,16 @@ inline void DistBVCPLL<BATCH_SIZE, BITPARALLEL_SIZE>::batch_process(
                     if (!is_active[v_id_local]) {
                         is_active[v_id_local] = true;
                         active_queue[end_active_queue++] = v_id_local;
+//                        {
+//                            if (3 == iter && 44 == G.get_global_vertex_id(v_id_local)) {
+//                                printf("??? host_id %u v_id %u cand_root_id %u\n", host_id, G.get_global_vertex_id(v_id_local), cand_root_id);
+//                            }
+//                        }
+//                        {
+//                            if (2 == iter && 1 == G.get_global_vertex_id(v_id_local) && 0 == cand_root_id) {
+//                                printf("@@@ host_id %u v_id %u got label (%u,%u)\n", host_id, 1, cand_root_id, 2);//test
+//                            }
+//                        }
                     }
                     ++inserted_count;
                     // The candidate cand_root_id needs to be added into v_id's label
@@ -1657,6 +1709,7 @@ inline void DistBVCPLL<BATCH_SIZE, BITPARALLEL_SIZE>::batch_process(
 //                            L,
                             G,
                             dist_table,
+                            buffer_send,
                             iter);
                 }
             }
@@ -1677,6 +1730,33 @@ inline void DistBVCPLL<BATCH_SIZE, BITPARALLEL_SIZE>::batch_process(
 //		adding_ins_count.measure_stop();
 //		adding_time += WallTimer::get_time_mark();
 
+        // Sync the dist_table
+        for (int loc = 0; loc < num_hosts - 1; ++loc) {
+            // Send updated elements (' coordinates) in dist_table
+            VertexID dest_host_id = G.buffer_send_list_loc_2_master_host_id(loc);
+            MPI_Isend(buffer_send.data(),
+                    MPI_Instance::get_sending_size(buffer_send),
+                    MPI_CHAR,
+                    dest_host_id,
+                    SYNC_DIST_TABLE,
+                    MPI_COMM_WORLD,
+                    &requests_send[loc]);
+        }
+        for (int loc = 0; loc < num_hosts - 1; ++loc) {
+            // Receive coordinates
+            MPI_Instance::receive_dynamic_buffer_from_any(buffer_recv,
+                    num_hosts,
+                    SYNC_DIST_TABLE);
+            for (const auto &e : buffer_recv) {
+                VertexID root_id = e.first;
+                VertexID cand_real_id = e.second;
+                dist_table[root_id][cand_real_id] = iter;
+            }
+        }
+        MPI_Waitall(num_hosts - 1,
+                requests_send.data(),
+                MPI_STATUSES_IGNORE);
+
         // Sync the global_num_actives
         MPI_Allreduce(&end_active_queue,
                 &global_num_actives,
@@ -1684,8 +1764,15 @@ inline void DistBVCPLL<BATCH_SIZE, BITPARALLEL_SIZE>::batch_process(
                 V_ID_Type,
                 MPI_SUM,
                 MPI_COMM_WORLD);
+        {// test
         if (0 == host_id) {
-            printf("@%u host_id: %u global_num_actives: %u\n", __LINE__, host_id, global_num_actives);//test
+            printf("iter: %u @%u host_id: %u global_num_actives: %u\n", iter, __LINE__, host_id, global_num_actives);//test
+//            std::sort(active_queue.begin(), active_queue.begin() + end_active_queue);
+//            for (VertexID i = 0; i < end_active_queue; ++i) {
+//                printf("iter: %u @%u host_id: %u active_queue[%u]: %u\n", iter, __LINE__, host_id, i, G.get_global_vertex_id(active_queue[i]));
+//            }
+//            exit(EXIT_SUCCESS);
+        }
         }
     }
 
