@@ -1642,23 +1642,23 @@ inline void DistBVCPLL<BATCH_SIZE, BITPARALLEL_SIZE>::batch_process(
         MPI_Waitall(num_hosts - 1,
                 requests_send.data(),
                 MPI_STATUSES_IGNORE);
-//        {// test
-//            VertexID global_end_got_candidates_queue;
-//            MPI_Allreduce(&end_got_candidates_queue,
-//                    &global_end_got_candidates_queue,
-//                    1,
-//                    V_ID_Type,
-//                    MPI_SUM,
-//                    MPI_COMM_WORLD);
-//            if (0 == host_id) {
-//                printf("iter %u @%u host_id: %u global_end_got_candidates_queue: %u\n", iter, __LINE__, host_id, global_end_got_candidates_queue);
+        {// test
+            VertexID global_end_got_candidates_queue;
+            MPI_Allreduce(&end_got_candidates_queue,
+                    &global_end_got_candidates_queue,
+                    1,
+                    V_ID_Type,
+                    MPI_SUM,
+                    MPI_COMM_WORLD);
+            if (0 == host_id) {
+                printf("iter %u @%u host_id: %u global_end_got_candidates_queue: %u\n", iter, __LINE__, host_id, global_end_got_candidates_queue);
+            }
+//            std::sort(got_candidates_queue.begin(), got_candidates_queue.begin() + end_got_candidates_queue);
+//            for (VertexID i = 0; i < end_got_candidates_queue; ++i) {
+//                printf("@%u host_id: %u got_candidates_queue[%u]: %u\n", __LINE__, host_id, i, G.get_global_vertex_id(got_candidates_queue[i]));
 //            }
-////            std::sort(got_candidates_queue.begin(), got_candidates_queue.begin() + end_got_candidates_queue);
-////            for (VertexID i = 0; i < end_got_candidates_queue; ++i) {
-////                printf("@%u host_id: %u got_candidates_queue[%u]: %u\n", __LINE__, host_id, i, G.get_global_vertex_id(got_candidates_queue[i]));
-////            }
-////            exit(EXIT_SUCCESS);
-//        }
+//            exit(EXIT_SUCCESS);
+        }
 
 ///////////////////////////////////////////
 //        std::vector< std::vector< std::pair<VertexID, VertexID> > > buffer_send_list(num_hosts - 1);
