@@ -393,8 +393,11 @@ DistBVCPLL<BATCH_SIZE, BITPARALLEL_SIZE>::DistBVCPLL(const DistGraph &G)
 
     // Test
     setlocale(LC_NUMERIC, "");
-    printf("BATCH_SIZE: %u\n", BATCH_SIZE);
-    printf("BP_Size: %u\n", BITPARALLEL_SIZE);
+    if (0 == host_id) {
+        printf("BATCH_SIZE: %u\n", BATCH_SIZE);
+        printf("BP_Size: %u\n", BITPARALLEL_SIZE);
+    }
+
 //	printf("BP_labeling: %f %.2f%%\n", bp_labeling_time, bp_labeling_time / time_labeling * 100);
 //	printf("Initializing: %f %.2f%%\n", initializing_time, initializing_time / time_labeling * 100);
 //		printf("\tinit_start_reset_time: %f (%f%%)\n", init_start_reset_time, init_start_reset_time / initializing_time * 100);
@@ -425,7 +428,18 @@ DistBVCPLL<BATCH_SIZE, BITPARALLEL_SIZE>::DistBVCPLL(const DistGraph &G)
 //	printf("BP_Checking: "); bp_checking_ins_count.print();
 //	printf("distance_query: "); dist_query_ins_count.print();
 
-    printf("Total_labeling_time: %.2f seconds\n", time_labeling);
+    printf("host_id: %u Local_labeling_time: %.2f seconds\n", host_id, time_labeling);
+    double global_time_labeling;
+    MPI_Allreduce(&time_labeling,
+            &global_time_labeling,
+            1,
+            MPI_DOUBLE,
+            MPI_MAX,
+            MPI_COMM_WORLD);
+    MPI_Barrier(MPI_COMM_WORLD);
+    if (0 == host_id) {
+        printf("Global_labeling_time: %.2f seconds\n", global_time_labeling);
+    }
     // End test
 }
 
@@ -2610,7 +2624,7 @@ UnweightedDist DistBVCPLL<BATCH_SIZE, BITPARALLEL_SIZE>::dist_distance_query_pai
             }
             // Receive b's labels
             {
-                std::vector<std::pair<VertexID, VertexID> > buffer_recv;
+                std::vector<std::pair<VertexID, UnweightedDist> > buffer_recv;
                 MPI_Instance::receive_dynamic_buffer_from_source(buffer_recv,
                                                                  num_hosts,
                                                                  b_host_id,
@@ -2633,7 +2647,7 @@ UnweightedDist DistBVCPLL<BATCH_SIZE, BITPARALLEL_SIZE>::dist_distance_query_pai
     MPI_Allreduce(MPI_IN_PLACE,
             &min_d,
             1,
-            MPI_Instance::get_mpi_datatype<UnweightedDist >(),
+            MPI_Instance::get_mpi_datatype<UnweightedDist>(),
             MPI_MIN,
             MPI_COMM_WORLD);
     return min_d;
