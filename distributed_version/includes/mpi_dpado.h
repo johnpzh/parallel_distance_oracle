@@ -23,7 +23,8 @@ enum MessageTags {
 //    SENDING_PUSHED_LABELS,
     SENDING_MASTERS_TO_MIRRORS,
 	SENDING_DIST_TABLE,
-    SYNC_DIST_TABLE
+    SYNC_DIST_TABLE,
+    SENDING_QUERY_LABELS
 };
 
 // MPI_Instance class: for MPI initialization

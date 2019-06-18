@@ -45,10 +45,26 @@ using namespace PADO;
 void dpado(char *argv[])
 {
     DistGraph G(argv[1]);
-	printf("host_id: %u num_v: %u num_masters: %u\n", G.host_id, G.num_v, G.num_masters);//test
+	printf("host_id: %u num_masters: %u(/%u %.2f%%) num_edges_local %lu(/%lu %.2f%%)\n",
+	        G.host_id, G.num_masters, G.num_v, 100.0 * G.num_masters / G.num_v, G.num_edges_local, 2 * G.num_e, 100.0 * G.num_edges_local / (2 * G.num_e));//test
 
 //	DistBVCPLL<1024, 0> dist_bvcpll(G); // batch size 1024, bit-parallel size 0.
 	DistBVCPLL<16, 0> dist_bvcpll(G); // batch size 1024, bit-parallel size 0.
+
+    {
+        VertexID a;
+        VertexID b;
+        while (std::cin >> a >> b) {
+            UnweightedDist dist = dist_bvcpll.dist_distance_query_pair(a, b, G);
+            if (0 == G.host_id) {
+                if (dist == 255) {
+                    printf("2147483647\n");
+                } else {
+                    printf("%u\n", dist);
+                }
+            }
+        }
+    }
 
 //    // test the index
 //    {
