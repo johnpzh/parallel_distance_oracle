@@ -1613,6 +1613,9 @@ inline void DistBVCPLL<BATCH_SIZE, BITPARALLEL_SIZE>::batch_process(
             MPI_Instance::receive_dynamic_buffer_from_any(buffer_recv,
                     num_hosts,
                     SENDING_MASTERS_TO_MIRRORS);
+            if (buffer_recv.empty()) {
+                continue;
+            }
             for (const auto &m : buffer_recv) {
                 VertexID v_head_global = m.first;
                 if (!G.local_out_degrees[v_head_global]) {
@@ -1785,10 +1788,13 @@ inline void DistBVCPLL<BATCH_SIZE, BITPARALLEL_SIZE>::batch_process(
                     &requests_send[loc]);
         }
         for (int loc = 0; loc < num_hosts - 1; ++loc) {
-            // Receive coordinates
+            // Receive roots' new labels from other hosts
             MPI_Instance::receive_dynamic_buffer_from_any(buffer_recv,
                     num_hosts,
                     SYNC_DIST_TABLE);
+            if (buffer_recv.empty()) {
+                continue;
+            }
             for (const auto &e : buffer_recv) {
                 VertexID root_id = e.first;
                 VertexID cand_real_id = e.second;

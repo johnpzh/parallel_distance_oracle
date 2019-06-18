@@ -107,7 +107,7 @@ private:
 	inline void vertex_centric_labeling_in_batches(
 			const WeightedGraph &G,
 			idi b_id,
-			idi root_start,
+			idi roots_start,
 			inti roots_size,
 			vector<IndexType> &L,
 			vector<idi> &active_queue,
