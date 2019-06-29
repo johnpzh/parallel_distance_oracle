@@ -128,25 +128,33 @@ public:
     static int receive_dynamic_buffer_from_any(std::vector<E_T> &buffer_recv, int num_hosts, int message_tag)
     {
         size_t ETypeSize = sizeof(E_T);
-        MPI_Status status_recv;
+        MPI_Status status_prob;
         MPI_Probe(MPI_ANY_SOURCE,
                   message_tag,
                   MPI_COMM_WORLD,
-                  &status_recv);
-        int source_host_id = status_recv.MPI_SOURCE;
+                  &status_prob);
+        int source_host_id = status_prob.MPI_SOURCE;
         assert(source_host_id >=0 && source_host_id < num_hosts);
         int bytes_recv;
-        MPI_Get_count(&status_recv, MPI_CHAR, &bytes_recv);
+        MPI_Get_count(&status_prob, MPI_CHAR, &bytes_recv);
         assert(bytes_recv % ETypeSize == 0);
         int num_e_recv = bytes_recv / ETypeSize;
         buffer_recv.resize(num_e_recv);
+		MPI_Status status_recv;
         MPI_Recv(buffer_recv.data(),
                  bytes_recv,
                  MPI_CHAR,
                  source_host_id,
                  message_tag,
                  MPI_COMM_WORLD,
-                 MPI_STATUS_IGNORE);
+                 &status_recv);
+		assert(status_prob.MPI_SOURCE == status_recv.MPI_SOURCE);
+//		{// test
+//			if (!buffer_recv.empty()) {
+//				printf("@%u host_id: %u receive_dynamic_buffer_from_source: source_host_id: %u buffer_recv[0]: ", __LINE__, host_id, source_host_id);
+//				std::cout << buffer_recv[0] << std::endl;
+//			}
+//		}
         return source_host_id;
     }
 

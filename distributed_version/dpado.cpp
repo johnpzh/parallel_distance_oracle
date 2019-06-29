@@ -11,36 +11,63 @@
 
 using namespace PADO;
 
-//void test_dynamic_receive()
-//{
-//    int host_id;
-//    int num_hosts;
-//    MPI_Comm_rank(MPI_COMM_WORLD, &host_id);
-//    MPI_Comm_size(MPI_COMM_WORLD, &num_hosts);
-//    // Send
-//    std::vector< std::pair<int, int> > send_buffer;
-////    send_buffer.emplace_back(1, 2);
-////    send_buffer.emplace_back(2, 4);
-////    send_buffer.emplace_back(3, 5);
-//    send_buffer.emplace_back(4, 7);
-//    send_buffer.emplace_back(5, 9);
-//
-//    printf("sizeof(send_buffer): %lu\n", sizeof(send_buffer));
-//    MPI_Send(send_buffer.data(),
-////             sizeof(send_buffer),
-//             MPI_Instance::get_sending_size(send_buffer),
-//             MPI_CHAR,
-//             0,
-//             GRAPH_SHUFFLE,
-//             MPI_COMM_WORLD);
-//    // Receive
-//    std::vector< std::pair<int, int> > recv_buffer;
-//    int count = MPI_Instance::receive_dynamic_buffer(recv_buffer, num_hosts, GRAPH_SHUFFLE);
-//    printf("received_count: %d\n", count);
-//    for (const auto &p : recv_buffer) {
-//        printf("%d %d\n", p.first, p.second);
-//    }
-//}
+void test_dynamic_receive()
+{
+    int host_id;
+    int num_hosts;
+    MPI_Comm_rank(MPI_COMM_WORLD, &host_id);
+    MPI_Comm_size(MPI_COMM_WORLD, &num_hosts);
+    // Send
+    std::vector< std::pair<int, int> > send_buffer;
+
+	send_buffer.emplace_back(host_id, host_id * 1);
+	send_buffer.emplace_back(host_id, host_id * 2);
+	send_buffer.emplace_back(host_id, host_id * 3);
+
+	MPI_Request request;
+	if (0 == host_id) {
+		// Send
+//		MPI_Request request;
+		MPI_Isend(send_buffer.data(),
+				MPI_Instance::get_sending_size(send_buffer),
+				MPI_CHAR,
+				1,
+				GRAPH_SHUFFLE,
+				MPI_COMM_WORLD,
+				&request);
+//		MPI_Wait(&request,
+//				MPI_STATUS_IGNORE);
+	} else if (1 == host_id) {
+		MPI_Isend(send_buffer.data(),
+				MPI_Instance::get_sending_size(send_buffer),
+				MPI_CHAR,
+				0,
+				GRAPH_SHUFFLE,
+				MPI_COMM_WORLD,
+				&request);
+	}
+
+	if (1 == host_id) {
+		// Receive
+		std::vector< std::pair<int, int> > recv_buffer;
+		int source = MPI_Instance::receive_dynamic_buffer_from_any(recv_buffer, num_hosts, GRAPH_SHUFFLE);
+		printf("source: %u recv_buffer.size(): %lu\n", source, recv_buffer.size());
+		for (const auto &p : recv_buffer) {
+			printf("host_id: %u %d %d\n", host_id, p.first, p.second);
+		}
+//		MPI_Wait(&request,
+//				MPI_STATUS_IGNORE);
+	} else if (0 == host_id) {
+		std::vector< std::pair<int, int> > recv_buffer;
+		int source = MPI_Instance::receive_dynamic_buffer_from_any(recv_buffer, num_hosts, GRAPH_SHUFFLE);
+		printf("source: %u recv_buffer.size(): %lu\n", source, recv_buffer.size());
+		for (const auto &p : recv_buffer) {
+			printf("host_id: %u %d %d\n", host_id, p.first, p.second);
+		}
+	}
+	MPI_Wait(&request,
+			MPI_STATUS_IGNORE);
+}
 
 void dpado(char *argv[])
 {
@@ -49,7 +76,7 @@ void dpado(char *argv[])
 	        G.host_id, G.num_masters, G.num_v, 100.0 * G.num_masters / G.num_v, G.num_edges_local, 2 * G.num_e, 100.0 * G.num_edges_local / (2 * G.num_e));//test
 
 	DistBVCPLL<1024, 0> dist_bvcpll(G); // batch size 1024, bit-parallel size 0.
-//	DistBVCPLL<16, 0> dist_bvcpll(G); // batch size 1024, bit-parallel size 0.
+//	DistBVCPLL<8, 0> dist_bvcpll(G); // batch size 1024, bit-parallel size 0.
 
     {// test the index by distance queries
         std::ifstream fin(argv[2]);
@@ -199,6 +226,7 @@ int main(int argc, char *argv[])
 	setbuf(stdout, nullptr); // stdout no buffer
     printf("input_file: %s\n", input_file.c_str());
     MPI_Instance mpi_instance(argc, argv);
+
     dpado(argv);
 //    test_dynamic_receive();
     return EXIT_SUCCESS;
