@@ -90,17 +90,17 @@ private:
 
     }; //__attribute__((aligned(64)));
 
-    // Structure of the public ordered index for distance queries.
-    struct IndexOrdered {
-//        UnweightedDist bp_dist[BITPARALLEL_SIZE];
-//        uint64_t bp_sets[BITPARALLEL_SIZE][2]; // [0]: S^{-1}, [1]: S^{0}
-
-        std::vector<VertexID> label_id;
-        std::vector<UnweightedDist> label_dists;
-    };
+//    // Structure of the public ordered index for distance queries.
+//    struct IndexOrdered {
+////        UnweightedDist bp_dist[BITPARALLEL_SIZE];
+////        uint64_t bp_sets[BITPARALLEL_SIZE][2]; // [0]: S^{-1}, [1]: S^{0}
+//
+//        std::vector<VertexID> label_id;
+//        std::vector<UnweightedDist> label_dists;
+//    };
 
     std::vector<IndexType> L;
-    std::vector<IndexOrdered> Index; // Ordered labels for original vertex ID
+//    std::vector<IndexOrdered> Index; // Ordered labels for original vertex ID
 
 //    void construct(const DistGraph &G);
 //    inline void bit_parallel_labeling(
