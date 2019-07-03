@@ -109,7 +109,7 @@ private:
             VertexID b_id,
             VertexID roots_start,
             VertexID roots_size,
-            const std::vector<bool> &used_bp_roots,
+            const std::vector<uint8_t> &used_bp_roots,
             std::vector<VertexID> &active_queue,
             VertexID &end_active_queue,
             std::vector<VertexID> &got_candidates_queue,
@@ -136,7 +136,7 @@ private:
             VertexID roots_start,
             VertexID roots_size,
             std::vector<VertexID> &roots_master_local,
-            const std::vector<bool> &used_bp_roots);
+            const std::vector<uint8_t> &used_bp_roots);
     inline void sync_masters_2_mirrors(
             const DistGraph &G,
             const std::vector<VertexID> &active_queue,
@@ -155,7 +155,7 @@ private:
             std::vector<VertexID> &once_candidated_queue,
             VertexID &end_once_candidated_queue,
             std::vector<bool> &once_candidated,
-            const std::vector<bool> &used_bp_roots,
+            const std::vector<uint8_t> &used_bp_roots,
             UnweightedDist iter);
     inline void local_push_labels(
             VertexID v_head_local,
@@ -168,7 +168,7 @@ private:
             std::vector<VertexID> &once_candidated_queue,
             VertexID &end_once_candidated_queue,
             std::vector<bool> &once_candidated,
-            const std::vector<bool> &used_bp_roots,
+            const std::vector<uint8_t> &used_bp_roots,
             UnweightedDist iter);
     inline bool distance_query(
             VertexID cand_root_id,
@@ -253,18 +253,14 @@ DistBVCPLL<BATCH_SIZE, BITPARALLEL_SIZE>::DistBVCPLL(const DistGraph &G)
     L.resize(num_masters);
     VertexID remainer = num_v % BATCH_SIZE;
     VertexID b_i_bound = num_v / BATCH_SIZE;
-    std::vector<bool> used_bp_roots(num_v, false);
+    std::vector<uint8_t> used_bp_roots(num_v, 0);
     //cache_miss.measure_start();
     double time_labeling = -WallTimer::get_time_mark();
 
-//	double bp_labeling_time = -WallTimer::get_time_mark();
-//	bp_labeling_ins_count.measure_start();
-//    bit_parallel_labeling(
-//            G,
-////            L,
-//            used_bp_roots);
-//	bp_labeling_ins_count.measure_stop();
-//	bp_labeling_time += WallTimer::get_time_mark();
+    bit_parallel_labeling(
+            G,
+            used_bp_roots);
+    exit(EXIT_SUCCESS);
 
     std::vector<VertexID> active_queue(num_masters); // Any vertex v who is active should be put into this queue.
     VertexID end_active_queue = 0;
@@ -403,10 +399,9 @@ DistBVCPLL<BATCH_SIZE, BITPARALLEL_SIZE>::DistBVCPLL(const DistGraph &G)
 //template <VertexID BATCH_SIZE, VertexID BITPARALLEL_SIZE>
 //inline void DistBVCPLL<BATCH_SIZE, BITPARALLEL_SIZE>::bit_parallel_labeling(
 //        const DistGraph &G,
-//        std::vector<IndexType> &L,
-//        std::vector<bool> &used_bp_roots)
+//        std::vector<uint8_t> &used_bp_roots)
 //{
-//    VertexID num_v = G.num_v;
+////    VertexID num_v = G.num_v;
 //    EdgeID num_e = G.num_e;
 //
 //    std::vector<UnweightedDist> tmp_d(num_v); // distances from the root to every v
@@ -445,8 +440,8 @@ DistBVCPLL<BATCH_SIZE, BITPARALLEL_SIZE>::DistBVCPLL(const DistGraph &G)
 //        //int i_bound = G.vertices[r];
 //        //int i_start = i_bound + G.out_degrees[r] - 1;
 //        //for (int i = i_start; i >= i_bound; --i) {
-//        VertexID d_i_bound = G.out_degrees[r];
-//        EdgeID i_start = G.vertices[r] + d_i_bound - 1;
+//        VertexID d_i_bound = G.local_out_degrees[r];
+//        EdgeID i_start = G.vertices_idx[r] + d_i_bound - 1;
 //        for (VertexID d_i = 0; d_i < d_i_bound; ++d_i) {
 //            EdgeID i = i_start - d_i;
 //            VertexID v = G.out_edges[i];
@@ -467,8 +462,18 @@ DistBVCPLL<BATCH_SIZE, BITPARALLEL_SIZE>::DistBVCPLL(const DistGraph &G)
 //
 //            for (VertexID que_i = que_t0; que_i < que_t1; ++que_i) {
 //                VertexID v = que[que_i];
-//                EdgeID i_start = G.vertices[v];
-//                EdgeID i_bound = i_start + G.out_degrees[v];
+////                bit_parallel_push_labels(G,
+////                        v,
+////                        que,
+////                        que_h,
+////                        sibling_es,
+////                        num_sibling_es,
+////                        child_es,
+////                        num_child_es,
+////                        tmp_d,
+////                        d);
+//                EdgeID i_start = G.vertices_idx[v];
+//                EdgeID i_bound = i_start + G.local_out_degrees[v];
 //                for (EdgeID i = i_start; i < i_bound; ++i) {
 //                    VertexID tv = G.out_edges[i];
 //                    UnweightedDist td = d + 1;
@@ -503,6 +508,13 @@ DistBVCPLL<BATCH_SIZE, BITPARALLEL_SIZE>::DistBVCPLL(const DistGraph &G)
 //                VertexID v = child_es[i].first, c = child_es[i].second;
 //                tmp_s[c].first  |= tmp_s[v].first;
 //                tmp_s[c].second |= tmp_s[v].second;
+//            }
+//
+//            {// test
+//                printf("iter %u @%u host_id: %u num_sibling_es: %u num_child_es: %u\n", d, __LINE__, host_id, num_sibling_es, num_child_es);
+////                if (4 == d) {
+////                    exit(EXIT_SUCCESS);
+////                }
 //            }
 //
 //            que_t0 = que_t1;
@@ -554,6 +566,9 @@ inline void DistBVCPLL<BATCH_SIZE, BITPARALLEL_SIZE>::bit_parallel_push_labels(
             child_es[num_child_es].first = v_global;
             child_es[num_child_es].second = tv_global;
             ++num_child_es;
+//            {
+//                printf("num_child_es: %u v_global: %u tv_global: %u\n", num_child_es, v_global, tv_global);//test
+//            }
         }
     }
 }
@@ -634,12 +649,20 @@ inline void DistBVCPLL<BATCH_SIZE, BITPARALLEL_SIZE>::bit_parallel_labeling(
                 if (!used_bp_roots[v]) {
                     used_bp_roots[v] = 1;
                     // Algo3:line4: for every v in S_r, (dist[v], S_r^{-1}[v], S_r^{0}[v]) <- (1, {v}, empty_set)
-                    que[end_que++] = v;
+//                    que[end_que++] = v;
+                    tmp_que[end_tmp_que++] = v;
                     tmp_d[G.get_local_vertex_id(v)] = 1;
                     tmp_s[v].first = 1ULL << ns;
                     if (++ns == 64) break;
                 }
             }
+        }
+        {//test
+            printf("r: %u @%u host_id: %u end_que: %u end_tmp_que: %u\n", r_global, __LINE__, host_id, end_que, end_tmp_que);
+//            for (VertexID q_i = 0; q_i < end_que; ++q_i) {
+//                printf("que[%u]: %u\n", q_i, que[q_i]);
+//            }
+//            exit(EXIT_SUCCESS);
         }
 //        fill(tmp_d.begin(), tmp_d.end(), MAX_UNWEIGHTED_DIST);
 //        fill(tmp_s.begin(), tmp_s.end(), std::make_pair(0, 0));
@@ -669,9 +692,9 @@ inline void DistBVCPLL<BATCH_SIZE, BITPARALLEL_SIZE>::bit_parallel_labeling(
 
         // Need to synchronize the flag array used_bp_roots.
         MPI_Allreduce(MPI_IN_PLACE,
-                used_bp_roots,
+                used_bp_roots.data(),
                 num_v,
-                V_ID_Type,
+                MPI_UINT8_T,
                 MPI_LOR,
                 MPI_COMM_WORLD);
         // Reduce the global number of active vertices
@@ -688,6 +711,9 @@ inline void DistBVCPLL<BATCH_SIZE, BITPARALLEL_SIZE>::bit_parallel_labeling(
             VertexID num_sibling_es = 0, num_child_es = 0;
 
             // Local scatter
+//            {
+//                printf("iter: %u end_que: %u\n", d, end_que);//test
+//            }
             for (VertexID que_i = 0; que_i < end_que; ++que_i) {
                 VertexID v_global = que[que_i];
                 if (!G.local_out_degrees[v_global]) {
@@ -769,8 +795,10 @@ inline void DistBVCPLL<BATCH_SIZE, BITPARALLEL_SIZE>::bit_parallel_labeling(
                     tmp_s[w].second |= tmp_s[v].first;
                     // Put into the buffer sending to others
                     int v_host_id = G.get_master_host_id(v);
-                    buffer_send_list[G.master_host_id_2_buffer_send_list_loc(v_host_id)].emplace_back(v,
-                                                                                            tmp_s[v].second);
+                    if (v_host_id != host_id) {
+                        buffer_send_list[G.master_host_id_2_buffer_send_list_loc(v_host_id)].emplace_back(v,
+                                                                                                    tmp_s[v].second);
+                    }
                 }
                 // Send the messages
                 for (int loc = 0; loc < num_hosts - 1; ++loc) {
@@ -806,6 +834,30 @@ inline void DistBVCPLL<BATCH_SIZE, BITPARALLEL_SIZE>::bit_parallel_labeling(
                     tmp_s[c].second |= tmp_s[v].second;
                 }
             }
+            {// test
+                VertexID global_num_sibling_es;
+                VertexID global_num_child_es;
+                MPI_Allreduce(&num_sibling_es,
+                        &global_num_sibling_es,
+                        1,
+                        V_ID_Type,
+                        MPI_SUM,
+                        MPI_COMM_WORLD);
+                MPI_Allreduce(&num_child_es,
+                              &global_num_child_es,
+                              1,
+                              V_ID_Type,
+                              MPI_SUM,
+                              MPI_COMM_WORLD);
+                if (0 == host_id) {
+                    printf("iter %u num_sibling_es: %u num_child_es: %u\n", d, num_sibling_es, num_child_es);
+                }
+
+//                printf("iter %u @%u host_id: %u num_sibling_es: %u num_child_es: %u\n", d, __LINE__, host_id, num_sibling_es, num_child_es);
+//                if (4 == d) {
+//                    exit(EXIT_SUCCESS);
+//                }
+            }
 
             // Swap que and tmp_que
             tmp_que.swap(que);
@@ -817,6 +869,7 @@ inline void DistBVCPLL<BATCH_SIZE, BITPARALLEL_SIZE>::bit_parallel_labeling(
                       V_ID_Type,
                       MPI_SUM,
                       MPI_COMM_WORLD);
+
 //            }
             ++d;
         }
@@ -884,7 +937,7 @@ inline VertexID DistBVCPLL<BATCH_SIZE, BITPARALLEL_SIZE>::initialization(
         VertexID roots_start,
         VertexID roots_size,
         std::vector<VertexID> &roots_master_local,
-        const std::vector<bool> &used_bp_roots)
+        const std::vector<uint8_t> &used_bp_roots)
 {
     // Get the roots_master_local, containing all local roots.
     VertexID roots_bound = roots_start + roots_size;
@@ -1034,7 +1087,7 @@ inline void DistBVCPLL<BATCH_SIZE, BITPARALLEL_SIZE>::push_label(
         std::vector<VertexID> &once_candidated_queue,
         VertexID &end_once_candidated_queue,
         std::vector<bool> &once_candidated,
-        const std::vector<bool> &used_bp_roots,
+        const std::vector<uint8_t> &used_bp_roots,
         UnweightedDist iter)
 {
     VertexID label_global_id = label_root_id + roots_start;
@@ -1125,7 +1178,7 @@ inline void DistBVCPLL<BATCH_SIZE, BITPARALLEL_SIZE>::local_push_labels(
         std::vector<VertexID> &once_candidated_queue,
         VertexID &end_once_candidated_queue,
         std::vector<bool> &once_candidated,
-        const std::vector<bool> &used_bp_roots,
+        const std::vector<uint8_t> &used_bp_roots,
         UnweightedDist iter)
 {
     // The data structure of a message
@@ -1435,7 +1488,7 @@ inline void DistBVCPLL<BATCH_SIZE, BITPARALLEL_SIZE>::batch_process(
         VertexID b_id,
         VertexID roots_start, // start id of roots
         VertexID roots_size, // how many roots in the batch
-        const std::vector<bool> &used_bp_roots,
+        const std::vector<uint8_t> &used_bp_roots,
         std::vector<VertexID> &active_queue,
         VertexID &end_active_queue,
         std::vector<VertexID> &got_candidates_queue,
