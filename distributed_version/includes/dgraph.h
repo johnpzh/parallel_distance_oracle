@@ -17,6 +17,8 @@ namespace PADO {
 class DistGraph final {
 private:
     VertexID vertex_divide = 0; // the (maximum) number of vertices assigned to a host, supposed to be ceiling(num_v / num_hosts).
+    VertexID offset_vertex_id = 0; // The offset for global vertex id to local id.
+    std::vector<VertexID> out_degrees; // out degrees of vertices
 
     // Init function: do some initialization work for the system.
     // List:    MPI,
@@ -58,15 +60,13 @@ public:
     int host_id = 0; // host ID
     VertexID num_v = 0; // number of vertices
     EdgeID num_e = 0; // number of edges
-    VertexID offset_vertex_id = 0; // The offset for global vertex id to local id.
     VertexID num_masters = 0; // Number of masters on this host.
     EdgeID num_edges_local = 0; // Number of local edges on this host.
     MPI_Datatype V_ID_Type = MPI_Instance::get_mpi_datatype<VertexID>(); // MPI type of the type VertexID
-
     std::vector<VertexID> rank;
     std::vector<VertexID> vertices_idx; // vertices indices
     std::vector<VertexID> out_edges; // out edges
-    std::vector<VertexID> out_degrees; // out degrees of vertices
+
     std::vector<VertexID> local_out_degrees; // out degrees based on local edges.
 
     DistGraph() = default;
