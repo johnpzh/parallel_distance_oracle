@@ -622,7 +622,6 @@ inline void DistBVCPLL<BATCH_SIZE, BITPARALLEL_SIZE>::bit_parallel_labeling(
                 }
                 continue;
             }
-            used_bp_roots[r_global] = 1;
         }
         // Broadcast the r here.
         MPI_Bcast(&r_global,
@@ -630,81 +629,170 @@ inline void DistBVCPLL<BATCH_SIZE, BITPARALLEL_SIZE>::bit_parallel_labeling(
                 V_ID_Type,
                 0,
                 MPI_COMM_WORLD);
+        used_bp_roots[r_global] = 1;
+        {//test
+            if (0 == host_id) {
+                printf("i: %u r: %u\n", i_bpspt, r_global);
+            }
+        }
 
 //        VertexID que_t0 = 0, que_t1 = 0, que_h = 0;
         fill(tmp_d.begin(), tmp_d.end(), MAX_UNWEIGHTED_DIST);
         fill(tmp_s.begin(), tmp_s.end(), std::make_pair(0, 0));
-        if (G.local_out_degrees[r_global]) {
-            que[end_que++] = r_global;
-            tmp_d[G.get_local_vertex_id(r_global)] = 0;
-//            que_t1 = que_h;
 
-            uint32_t ns = 0; // number of selected neighbor, default 64
-            // the edge of one vertex in G is ordered decreasingly to rank, lower rank first, so here need to traverse edges backward
-            VertexID d_i_bound = G.local_out_degrees[r_global];
-            EdgeID i_start = G.vertices_idx[r_global] + d_i_bound - 1;
-            for (VertexID d_i = 0; d_i < d_i_bound; ++d_i) {
-                EdgeID i = i_start - d_i;
-                VertexID v = G.out_edges[i];
-                if (!used_bp_roots[v]) {
-                    used_bp_roots[v] = 1;
-                    // Algo3:line4: for every v in S_r, (dist[v], S_r^{-1}[v], S_r^{0}[v]) <- (1, {v}, empty_set)
-//                    que[end_que++] = v;
-                    tmp_que[end_tmp_que++] = v;
-                    tmp_d[G.get_local_vertex_id(v)] = 1;
-                    tmp_s[v].first = 1ULL << ns;
-                    if (++ns == 64) break;
+        // Mark the r_global
+        if (G.get_master_host_id(r_global) == host_id) {
+            tmp_d[G.get_local_vertex_id(r_global)] = 0;
+            que[end_que++] = r_global;
+        }
+//        {// test
+//            printf("r: %u @%u host_id: %u G.local_out_degrees[%u]: %u\n", r_global, __LINE__, host_id, r_global, G.local_out_degrees[r_global]);
+//        }
+        // Select the r_global's 64 neighbors
+        {
+            // Get r_global's neighbors into buffer_send, rank from low to high.
+            VertexID local_degree = G.local_out_degrees[r_global];
+            std::vector<VertexID> buffer_send(local_degree);
+            if (local_degree) {
+                EdgeID e_i_start = G.vertices_idx[r_global] + local_degree - 1;
+                VertexID v_i = 0;
+                for (VertexID d_i = 0; d_i < local_degree; ++d_i) {
+                    EdgeID e_i = e_i_start - d_i;
+                    buffer_send[v_i++] = G.out_edges[e_i];
                 }
             }
-        }
-        {//test
-            printf("r: %u @%u host_id: %u end_que: %u end_tmp_que: %u\n", r_global, __LINE__, host_id, end_que, end_tmp_que);
-//            for (VertexID q_i = 0; q_i < end_que; ++q_i) {
-//                printf("que[%u]: %u\n", q_i, que[q_i]);
+//            {//test
+//                printf("@%u host_id: %u buffer_send.size(): %lu\n", __LINE__, host_id, buffer_send.size());
 //            }
-//            exit(EXIT_SUCCESS);
+
+//            std::vector<VertexID> all_nbrs(G.get_global_out_degree(r_global));
+            // Get selected neighbors (up to 64)
+            std::vector<VertexID> selected_nbrs;
+            if (host_id) {
+                // Every host other than 0 sends neighbors to host 0
+                MPI_Send(buffer_send.data(),
+                        buffer_send.size(),
+                        V_ID_Type,
+                        0,
+                        SENDING_ROOT_NEIGHBORS,
+                        MPI_COMM_WORLD);
+                // Receive selected neighbors from host 0
+                MPI_Instance::receive_dynamic_buffer_from_source(selected_nbrs,
+                        num_hosts,
+                        0,
+                        SENDING_SELECTED_NEIGHBORS);
+            } else {
+                // Host 0 receives neighbors from others
+                std::vector<VertexID> all_nbrs(buffer_send);
+                std::vector<VertexID > buffer_recv;
+                for (int loc = 0; loc < num_hosts - 1; ++loc) {
+                    MPI_Instance::receive_dynamic_buffer_from_any(buffer_recv,
+                            num_hosts,
+                            SENDING_ROOT_NEIGHBORS);
+                    if (buffer_recv.empty()) {
+                        continue;
+                    }
+//                    {// test
+//                        printf("@%u host_id: %u buffer_recv.size(): %lu\n", __LINE__, host_id, buffer_recv.size());
+//                    }
+                    buffer_send.resize(buffer_send.size() + buffer_recv.size());
+                    std::merge(buffer_recv.begin(), buffer_recv.end(), all_nbrs.begin(), all_nbrs.end(), buffer_send.begin());
+//                    all_nbrs.swap(buffer_send);
+                    all_nbrs.resize(buffer_send.size());
+                    std::copy(buffer_send.begin(), buffer_send.begin(), all_nbrs.begin());
+//                    {
+//                        printf("@%u host_id: %u loc: %u all_nbrs.size(): %lu buffer_send.size(): %lu\n", __LINE__, host_id, loc, all_nbrs.size(), buffer_send.size());
+//                    }
+                }
+//                {//test
+//                    printf("@%u host_id: %u all_nbrs: %lu global_out_degree: %u\n", __LINE__, host_id, all_nbrs.size(), G.get_global_out_degree(r_global));
+//                }
+                assert(all_nbrs.size() == G.get_global_out_degree(r_global));
+                // Select 64 (or less) neighbors
+                VertexID ns = 0; // number of selected neighbor, default 64
+                for (VertexID v_global : all_nbrs) {
+                    if (used_bp_roots[v_global]) {
+                        continue;
+                    }
+                    selected_nbrs.push_back(v_global);
+                    if (++ns == 64) {
+                        break;
+                    }
+                }
+                // Send selected neighbors to other hosts
+                for (int dest = 1; dest < num_hosts; ++dest) {
+                    MPI_Send(selected_nbrs.data(),
+                            selected_nbrs.size(),
+                            V_ID_Type,
+                            dest,
+                            SENDING_SELECTED_NEIGHBORS,
+                            MPI_COMM_WORLD);
+                }
+            }
+
+            // Synchronize the used_bp_roots.
+            for (VertexID v_global : selected_nbrs) {
+                used_bp_roots[v_global] = 1;
+            }
+
+            // Mark selected neighbors
+            for (VertexID v_i = 0; v_i < selected_nbrs.size(); ++v_i) {
+                VertexID v_global = selected_nbrs[v_i];
+                if (host_id != G.get_master_host_id(v_global)) {
+                    continue;
+                }
+                tmp_que[end_tmp_que++] = v_global;
+                tmp_d[G.get_local_vertex_id(v_global)] = 1;
+                tmp_s[v_global].first = 1ULL << v_i;
+            }
         }
-//        fill(tmp_d.begin(), tmp_d.end(), MAX_UNWEIGHTED_DIST);
-//        fill(tmp_s.begin(), tmp_s.end(), std::make_pair(0, 0));
-//
-//
-//        VertexID que_t0 = 0, que_t1 = 0, que_h = 0;
-//        que[que_h++] = r_global;
-//        tmp_d[r] = 0;
-//        que_t1 = que_h;
-//
-//        uint32_t ns = 0; // number of selected neighbor, default 64
-//        // the edge of one vertex in G is ordered decreasingly to rank, lower rank first, so here need to traverse edges backward
-//        VertexID d_i_bound = G.local_out_degrees[r];
-//        EdgeID i_start = G.vertices_idx[r] + d_i_bound - 1;
-//        for (VertexID d_i = 0; d_i < d_i_bound; ++d_i) {
-//            EdgeID i = i_start - d_i;
-//            VertexID v = G.out_edges[i];
-//            if (!used_bp_roots[v]) {
-//                used_bp_roots[v] = true;
-//                // Algo3:line4: for every v in S_r, (dist[v], S_r^{-1}[v], S_r^{0}[v]) <- (1, {v}, empty_set)
-//                que[que_h++] = v;
-//                tmp_d[v] = 1;
-//                tmp_s[v].first = 1ULL << ns;
-//                if (++ns == 64) break;
-//            }
+//        {//test
+//            printf("@%u host_id: %u end_que: %u end_tmp_que: %u\n", __LINE__, host_id, end_que, end_tmp_que);
 //        }
 
-        // Need to synchronize the flag array used_bp_roots.
-        MPI_Allreduce(MPI_IN_PLACE,
-                used_bp_roots.data(),
-                num_v,
-                MPI_UINT8_T,
-                MPI_LOR,
-                MPI_COMM_WORLD);
+//        ///////////////////////////////////////////////////
+//        // TOP
+//        if (G.local_out_degrees[r_global]) {
+//            que[end_que++] = r_global;
+//            if (G.get_master_host_id(r_global) == host_id) {
+//                tmp_d[G.get_local_vertex_id(r_global)] = 0;
+//            }
+//            uint32_t ns = 0; // number of selected neighbor, default 64
+//            // the edge of one vertex in G is ordered decreasingly to rank, lower rank first, so here need to traverse edges backward
+//            VertexID d_i_bound = G.local_out_degrees[r_global];
+//            EdgeID i_start = G.vertices_idx[r_global] + d_i_bound - 1;
+//            for (VertexID d_i = 0; d_i < d_i_bound; ++d_i) {
+//                EdgeID i = i_start - d_i;
+//                VertexID v = G.out_edges[i];
+//                if (!used_bp_roots[v]) {
+//                    used_bp_roots[v] = 1;
+//                    // Algo3:line4: for every v in S_r, (dist[v], S_r^{-1}[v], S_r^{0}[v]) <- (1, {v}, empty_set)
+////                    que[end_que++] = v;
+//                    tmp_que[end_tmp_que++] = v;
+//                    tmp_d[G.get_local_vertex_id(v)] = 1;
+//                    tmp_s[v].first = 1ULL << ns;
+//                    if (++ns == 64) break;
+//                }
+//            }
+//        }
+//        // Need to synchronize the flag array used_bp_roots.
+//        MPI_Allreduce(MPI_IN_PLACE,
+//                used_bp_roots.data(),
+//                num_v,
+//                MPI_UINT8_T,
+//                MPI_LOR,
+//                MPI_COMM_WORLD);
+//        // BOTTOM
+//        ///////////////////////////////////////////////////
+
         // Reduce the global number of active vertices
-        VertexID global_num_actives;
-        MPI_Allreduce(&end_que,
-                &global_num_actives,
-                1,
-                V_ID_Type,
-                MPI_SUM,
-                MPI_COMM_WORLD);
+        VertexID global_num_actives = 1;
+//        MPI_Allreduce(&end_que,
+//                &global_num_actives,
+//                1,
+//                V_ID_Type,
+//                MPI_SUM,
+//                MPI_COMM_WORLD);
         UnweightedDist d = 0;
         while (global_num_actives) {
 //            for (UnweightedDist d = 0; que_t0 < que_h; ++d) {
@@ -730,6 +818,9 @@ inline void DistBVCPLL<BATCH_SIZE, BITPARALLEL_SIZE>::bit_parallel_labeling(
                         tmp_d,
                         d);
             }
+//            {// test
+//                printf("host_id: %u @%u num_sibling_es: %u num_child_es: %u\n", host_id, __LINE__, num_sibling_es, num_child_es);
+//            }
 
             // Send active masters to mirrors
             {
@@ -783,6 +874,9 @@ inline void DistBVCPLL<BATCH_SIZE, BITPARALLEL_SIZE>::bit_parallel_labeling(
                 MPI_Waitall(num_hosts - 1,
                             requests_send.data(),
                             MPI_STATUSES_IGNORE);
+//                {// test
+//                    printf("host_id: %u @%u num_sibling_es: %u num_child_es: %u\n", host_id, __LINE__, num_sibling_es, num_child_es);
+//                }
             }
 
             // Update the sets in tmp_s
@@ -850,7 +944,7 @@ inline void DistBVCPLL<BATCH_SIZE, BITPARALLEL_SIZE>::bit_parallel_labeling(
                               MPI_SUM,
                               MPI_COMM_WORLD);
                 if (0 == host_id) {
-                    printf("iter %u num_sibling_es: %u num_child_es: %u\n", d, num_sibling_es, num_child_es);
+                    printf("iter %u num_sibling_es: %u num_child_es: %u\n", d, global_num_sibling_es, global_num_child_es);
                 }
 
 //                printf("iter %u @%u host_id: %u num_sibling_es: %u num_child_es: %u\n", d, __LINE__, host_id, num_sibling_es, num_child_es);

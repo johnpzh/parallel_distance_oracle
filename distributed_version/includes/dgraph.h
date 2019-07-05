@@ -74,6 +74,12 @@ public:
 
     explicit DistGraph(char *input_filename);
 
+    // Function: return the global out degree of a vertex
+    VertexID get_global_out_degree(VertexID v_global) const
+    {
+        assert(v_global < num_v);
+        return out_degrees[v_global];
+    }
     // Function: convert a vertex ID to its master host ID.
     // For example, vertex v should belong to host v / ceiling(num_v / num_hosts).
     int get_master_host_id(VertexID v_id) const
@@ -167,7 +173,7 @@ DistGraph::DistGraph(char *input_filename)
 //	printf("@%u host_id: %u out_degree\n", __LINE__, host_id);//test
     // Reorder the graph by host0.
     if (0 == host_id) {
-        std::vector< std::pair<VertexID, VertexID> > degree2id;
+        std::vector< std::pair<float, VertexID> > degree2id;
         for (VertexID v_i = 0; v_i < num_v; ++v_i) {
             degree2id.emplace_back(out_degrees[v_i] + float(rand()) / RAND_MAX, v_i);
         }
