@@ -630,11 +630,11 @@ inline void DistBVCPLL<BATCH_SIZE, BITPARALLEL_SIZE>::bit_parallel_labeling(
                 0,
                 MPI_COMM_WORLD);
         used_bp_roots[r_global] = 1;
-        {//test
-            if (0 == host_id) {
-                printf("i: %u r: %u\n", i_bpspt, r_global);
-            }
-        }
+//        {//test
+//            if (0 == host_id) {
+//                printf("i: %u r: %u\n", i_bpspt, r_global);
+//            }
+//        }
 
 //        VertexID que_t0 = 0, que_t1 = 0, que_h = 0;
         fill(tmp_d.begin(), tmp_d.end(), MAX_UNWEIGHTED_DIST);
@@ -746,44 +746,6 @@ inline void DistBVCPLL<BATCH_SIZE, BITPARALLEL_SIZE>::bit_parallel_labeling(
                 tmp_s[v_global].first = 1ULL << v_i;
             }
         }
-//        {//test
-//            printf("@%u host_id: %u end_que: %u end_tmp_que: %u\n", __LINE__, host_id, end_que, end_tmp_que);
-//        }
-
-//        ///////////////////////////////////////////////////
-//        // TOP
-//        if (G.local_out_degrees[r_global]) {
-//            que[end_que++] = r_global;
-//            if (G.get_master_host_id(r_global) == host_id) {
-//                tmp_d[G.get_local_vertex_id(r_global)] = 0;
-//            }
-//            uint32_t ns = 0; // number of selected neighbor, default 64
-//            // the edge of one vertex in G is ordered decreasingly to rank, lower rank first, so here need to traverse edges backward
-//            VertexID d_i_bound = G.local_out_degrees[r_global];
-//            EdgeID i_start = G.vertices_idx[r_global] + d_i_bound - 1;
-//            for (VertexID d_i = 0; d_i < d_i_bound; ++d_i) {
-//                EdgeID i = i_start - d_i;
-//                VertexID v = G.out_edges[i];
-//                if (!used_bp_roots[v]) {
-//                    used_bp_roots[v] = 1;
-//                    // Algo3:line4: for every v in S_r, (dist[v], S_r^{-1}[v], S_r^{0}[v]) <- (1, {v}, empty_set)
-////                    que[end_que++] = v;
-//                    tmp_que[end_tmp_que++] = v;
-//                    tmp_d[G.get_local_vertex_id(v)] = 1;
-//                    tmp_s[v].first = 1ULL << ns;
-//                    if (++ns == 64) break;
-//                }
-//            }
-//        }
-//        // Need to synchronize the flag array used_bp_roots.
-//        MPI_Allreduce(MPI_IN_PLACE,
-//                used_bp_roots.data(),
-//                num_v,
-//                MPI_UINT8_T,
-//                MPI_LOR,
-//                MPI_COMM_WORLD);
-//        // BOTTOM
-//        ///////////////////////////////////////////////////
 
         // Reduce the global number of active vertices
         VertexID global_num_actives = 1;
@@ -818,9 +780,6 @@ inline void DistBVCPLL<BATCH_SIZE, BITPARALLEL_SIZE>::bit_parallel_labeling(
                         tmp_d,
                         d);
             }
-//            {// test
-//                printf("host_id: %u @%u num_sibling_es: %u num_child_es: %u\n", host_id, __LINE__, num_sibling_es, num_child_es);
-//            }
 
             // Send active masters to mirrors
             {
@@ -874,31 +833,31 @@ inline void DistBVCPLL<BATCH_SIZE, BITPARALLEL_SIZE>::bit_parallel_labeling(
                 MPI_Waitall(num_hosts - 1,
                             requests_send.data(),
                             MPI_STATUSES_IGNORE);
-//                {// test
-//                    printf("host_id: %u @%u num_sibling_es: %u num_child_es: %u\n", host_id, __LINE__, num_sibling_es, num_child_es);
-//                }
             }
 
             // Update the sets in tmp_s
             {
-                std::vector<MPI_Request> requests_send(num_hosts - 1);
-                std::vector<std::vector<std::pair<VertexID, uint64_t> > > buffer_send_list(num_hosts - 1);
+
                 for (VertexID i = 0; i < num_sibling_es; ++i) {
                     VertexID v = sibling_es[i].first, w = sibling_es[i].second;
-                    tmp_s[v].second |= tmp_s[w].first; // ??? Need to send back!!!
+                    tmp_s[v].second |= tmp_s[w].first; // !!! Need to send back!!!
                     tmp_s[w].second |= tmp_s[v].first;
-                    // Put into the buffer sending to others
-                    int v_host_id = G.get_master_host_id(v);
-                    if (v_host_id != host_id) {
-                        buffer_send_list[G.master_host_id_2_buffer_send_list_loc(v_host_id)].emplace_back(v,
-                                                                                                    tmp_s[v].second);
-                    }
+
+                }
+                // Put into the buffer sending to others
+                std::vector<MPI_Request> requests_send(num_hosts - 1);
+                std::vector< std::pair<VertexID, uint64_t> > buffer_send;
+                for (VertexID i = 0; i < num_sibling_es; ++i) {
+                    VertexID v = sibling_es[i].first;
+                    VertexID w = sibling_es[i].second;
+                    buffer_send.emplace_back(v, tmp_s[v].second);
+                    buffer_send.emplace_back(w, tmp_s[w].second);
                 }
                 // Send the messages
                 for (int loc = 0; loc < num_hosts - 1; ++loc) {
                     int dest_host_id = G.buffer_send_list_loc_2_master_host_id(loc);
-                    MPI_Isend(buffer_send_list[loc].data(),
-                              MPI_Instance::get_sending_size(buffer_send_list[loc]),
+                    MPI_Isend(buffer_send.data(),
+                              MPI_Instance::get_sending_size(buffer_send),
                               MPI_CHAR,
                               dest_host_id,
                               SENDING_SETS_UPDATES_BP,
@@ -916,6 +875,10 @@ inline void DistBVCPLL<BATCH_SIZE, BITPARALLEL_SIZE>::bit_parallel_labeling(
                     }
                     for (const auto &m : buffer_recv) {
                         VertexID v_global = m.first;
+//                        if (!G.local_out_degrees[v_global] && (G.get_master_host_id(v_global) != host_id)) {
+//                        //  This if-condition is correct, but not necessary for performance improvement
+//                            continue;
+//                        }
                         tmp_s[v_global].second |= m.second;
                     }
                 }
@@ -928,30 +891,30 @@ inline void DistBVCPLL<BATCH_SIZE, BITPARALLEL_SIZE>::bit_parallel_labeling(
                     tmp_s[c].second |= tmp_s[v].second;
                 }
             }
-            {// test
-                VertexID global_num_sibling_es;
-                VertexID global_num_child_es;
-                MPI_Allreduce(&num_sibling_es,
-                        &global_num_sibling_es,
-                        1,
-                        V_ID_Type,
-                        MPI_SUM,
-                        MPI_COMM_WORLD);
-                MPI_Allreduce(&num_child_es,
-                              &global_num_child_es,
-                              1,
-                              V_ID_Type,
-                              MPI_SUM,
-                              MPI_COMM_WORLD);
-                if (0 == host_id) {
-                    printf("iter %u num_sibling_es: %u num_child_es: %u\n", d, global_num_sibling_es, global_num_child_es);
-                }
-
-//                printf("iter %u @%u host_id: %u num_sibling_es: %u num_child_es: %u\n", d, __LINE__, host_id, num_sibling_es, num_child_es);
-//                if (4 == d) {
-//                    exit(EXIT_SUCCESS);
+//            {// test
+//                VertexID global_num_sibling_es;
+//                VertexID global_num_child_es;
+//                MPI_Allreduce(&num_sibling_es,
+//                        &global_num_sibling_es,
+//                        1,
+//                        V_ID_Type,
+//                        MPI_SUM,
+//                        MPI_COMM_WORLD);
+//                MPI_Allreduce(&num_child_es,
+//                              &global_num_child_es,
+//                              1,
+//                              V_ID_Type,
+//                              MPI_SUM,
+//                              MPI_COMM_WORLD);
+//                if (0 == host_id) {
+//                    printf("iter %u num_sibling_es: %u num_child_es: %u\n", d, global_num_sibling_es, global_num_child_es);
 //                }
-            }
+//
+////                printf("iter %u @%u host_id: %u num_sibling_es: %u num_child_es: %u\n", d, __LINE__, host_id, num_sibling_es, num_child_es);
+////                if (4 == d) {
+////                    exit(EXIT_SUCCESS);
+////                }
+//            }
 
             // Swap que and tmp_que
             tmp_que.swap(que);
@@ -973,6 +936,62 @@ inline void DistBVCPLL<BATCH_SIZE, BITPARALLEL_SIZE>::bit_parallel_labeling(
             L[v_local].bp_dist[i_bpspt] = tmp_d[v_local];
             L[v_local].bp_sets[i_bpspt][0] = tmp_s[v_global].first; // S_r^{-1}
             L[v_local].bp_sets[i_bpspt][1] = tmp_s[v_global].second & ~tmp_s[v_global].first; // Only need those r's neighbors who are not already in S_r^{-1}
+        }
+    }
+    {//test
+        struct TmpMsgBP {
+            UnweightedDist dist;
+            uint64_t sn1;
+            uint64_t s0;
+            TmpMsgBP() = default;
+            TmpMsgBP(UnweightedDist d, uint64_t sn1_, uint64_t s0_)
+                : dist(d), sn1(sn1_), s0(s0_) { }
+        };
+        for (VertexID v = 0; v < num_v; ++v) {
+            int v_host_id = G.get_master_host_id(v);
+            if (v_host_id == host_id) {
+                VertexID v_local = G.get_local_vertex_id(v);
+                if (host_id == 0) {
+                    for (VertexID bp_i = 0; bp_i < BITPARALLEL_SIZE; ++bp_i) {
+                        printf("v: %u d[%u]: %u s-1[%u]: %lu s0[%u]: %lu\n",
+                               v, bp_i, L[v_local].bp_dist[bp_i], bp_i, L[v_local].bp_sets[bp_i][0], bp_i, L[v_local].bp_sets[bp_i][1]);
+                    }
+                } else {
+                    std::vector<TmpMsgBP> buffer_send;
+                    for (VertexID bp_i = 0; bp_i < BITPARALLEL_SIZE; ++bp_i) {
+                        buffer_send.emplace_back(L[v_local].bp_dist[bp_i], L[v_local].bp_sets[bp_i][0], L[v_local].bp_sets[bp_i][1]);
+                    }
+                    MPI_Send(buffer_send.data(),
+                            MPI_Instance::get_sending_size(buffer_send),
+                            MPI_CHAR,
+                            0,
+                            GRAPH_SHUFFLE,
+                            MPI_COMM_WORLD);
+                }
+            } else if (0 == host_id) {
+                std::vector<TmpMsgBP> buffer_recv;
+                MPI_Instance::receive_dynamic_buffer_from_source(buffer_recv,
+                        num_hosts,
+                        v_host_id,
+                        GRAPH_SHUFFLE);
+                for (VertexID bp_i = 0; bp_i < BITPARALLEL_SIZE; ++bp_i) {
+                    printf("v: %u d[%u]: %u s-1[%u]: %lu s0[%u]: %lu\n",
+                           v, bp_i, buffer_recv[bp_i].dist, bp_i, buffer_recv[bp_i].sn1, bp_i, buffer_recv[bp_i].s0);
+                }
+            }
+            MPI_Barrier(MPI_COMM_WORLD);
+//            //////////////////////
+//            MPI_Barrier(MPI_COMM_WORLD);
+//            if (G.get_master_host_id(v) != host_id) {
+//                ;
+//            } else {
+//                VertexID v_local = G.get_local_vertex_id(v);
+//                for (VertexID bp_i = 0; bp_i < BITPARALLEL_SIZE; ++bp_i) {
+//                    printf("v: %u d[%u]: %u s-1[%u]: %lu s0[%u]: %lu\n",
+//                           v, bp_i, L[v_local].bp_dist[bp_i], bp_i, L[v_local].bp_sets[bp_i][0], bp_i, L[v_local].bp_sets[bp_i][1]);
+//                }
+//            }
+//            MPI_Barrier(MPI_COMM_WORLD);
         }
     }
 }
