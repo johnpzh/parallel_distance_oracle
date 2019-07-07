@@ -10,79 +10,137 @@
 #include "dpado.h"
 
 using namespace PADO;
-
 void test_dynamic_receive()
 {
-    struct MsgUnitBP {
-        VertexID v_global;
-        UnweightedDist dist;
-        uint64_t S_n1;
-        uint64_t S_0;
+    struct MsgBPLabel {
+        VertexID r_root_id;
+        UnweightedDist bp_dist[2];
+        uint64_t bp_sets[2][2];
 
-        MsgUnitBP() = default;
-        MsgUnitBP(VertexID v, UnweightedDist d, uint64_t sn1, uint64_t s0) :
-            v_global(v), dist(d), S_n1(sn1), S_0(s0) { }
+        MsgBPLabel() = default;
+        MsgBPLabel(VertexID r, UnweightedDist dist[], uint64_t sets[][2])
+            : r_root_id(r)
+        {
+            memcpy(bp_dist, dist, 2 * sizeof(UnweightedDist));
+            memcpy(bp_sets, sets, 2 * 2 * sizeof(uint64_t));
+        }
     };
     int host_id;
     int num_hosts;
     MPI_Comm_rank(MPI_COMM_WORLD, &host_id);
     MPI_Comm_size(MPI_COMM_WORLD, &num_hosts);
     // Send
-    std::vector<MsgUnitBP> send_buffer;
-//    std::vector< std::pair<int, int> > send_buffer;
+    std::vector<MsgBPLabel> send_buffer;
+    UnweightedDist dist0[2] = {1, 2};
+    uint64_t sets0[2][2] = {{1024, 1025},
+                            {1026, 1027}};
+    UnweightedDist dist1[2] = {3, 4};
+    uint64_t sets1[2][2] = {{512, 513},
+                            {514, 515}};
+    send_buffer.emplace_back(0, dist0, sets0);
+    send_buffer.emplace_back(1, dist1, sets1);
 
-	send_buffer.emplace_back(host_id, host_id * 1, host_id + 10, host_id + 100);
-	send_buffer.emplace_back(host_id, host_id * 2, host_id + 11, host_id + 101);
-	send_buffer.emplace_back(host_id, host_id * 3, host_id + 12, host_id + 102);
-//	send_buffer.emplace_back(host_id, host_id * 1);
-//	send_buffer.emplace_back(host_id, host_id * 2);
-//	send_buffer.emplace_back(host_id, host_id * 3);
-
-	MPI_Request request;
-	if (0 == host_id) {
-		// Send
+    if (0 == host_id) {
+        // Send
 //		MPI_Request request;
-		MPI_Isend(send_buffer.data(),
-				MPI_Instance::get_sending_size(send_buffer),
-				MPI_CHAR,
-				1,
-				GRAPH_SHUFFLE,
-				MPI_COMM_WORLD,
-				&request);
+        MPI_Send(send_buffer.data(),
+                  MPI_Instance::get_sending_size(send_buffer),
+                  MPI_CHAR,
+                  1,
+                  GRAPH_SHUFFLE,
+                  MPI_COMM_WORLD);
 //		MPI_Wait(&request,
 //				MPI_STATUS_IGNORE);
-	} else if (1 == host_id) {
-		MPI_Isend(send_buffer.data(),
-				MPI_Instance::get_sending_size(send_buffer),
-				MPI_CHAR,
-				0,
-				GRAPH_SHUFFLE,
-				MPI_COMM_WORLD,
-				&request);
-	}
+    }
 
-	if (1 == host_id) {
-		// Receive
-		std::vector<MsgUnitBP> recv_buffer;
+    if (1 == host_id) {
+        // Receive
+        std::vector<MsgBPLabel> recv_buffer;
 //		std::vector< std::pair<int, int> > recv_buffer;
-		int source = MPI_Instance::receive_dynamic_buffer_from_any(recv_buffer, num_hosts, GRAPH_SHUFFLE);
-		printf("source: %u recv_buffer.size(): %lu\n", source, recv_buffer.size());
-		for (const auto &p : recv_buffer) {
-			printf("host_id: %u (%u %u %lu %lu)\n", host_id, p.v_global, p.dist, p.S_n1, p.S_0);
-		}
+        int source = MPI_Instance::receive_dynamic_buffer_from_any(recv_buffer, num_hosts, GRAPH_SHUFFLE);
+//        printf("source: %u recv_buffer.size(): %lu\n", source, recv_buffer.size());
+        for (const auto &p : recv_buffer) {
+            for (int i = 0; i < 2; ++i) {
+                printf("source: %u host_id: %u r: %u d[%u]: %u s_n1[%u]: %lu s_0[%u]: %lu\n",
+                        source, host_id, p.r_root_id, i, p.bp_dist[i], i, p.bp_sets[i][0], i, p.bp_sets[i][1]);
+            }
+        }
 //		MPI_Wait(&request,
 //				MPI_STATUS_IGNORE);
-	} else if (0 == host_id) {
-		std::vector<MsgUnitBP> recv_buffer;
-		int source = MPI_Instance::receive_dynamic_buffer_from_any(recv_buffer, num_hosts, GRAPH_SHUFFLE);
-		printf("source: %u recv_buffer.size(): %lu\n", source, recv_buffer.size());
-		for (const auto &p : recv_buffer) {
-            printf("host_id: %u (%u %u %lu %lu)\n", host_id, p.v_global, p.dist, p.S_n1, p.S_0);
-		}
-	}
-	MPI_Wait(&request,
-			MPI_STATUS_IGNORE);
+    }
 }
+//void test_dynamic_receive()
+//{
+//    struct MsgUnitBP {
+//        VertexID v_global;
+//        UnweightedDist dist;
+//        uint64_t S_n1;
+//        uint64_t S_0;
+//
+//        MsgUnitBP() = default;
+//        MsgUnitBP(VertexID v, UnweightedDist d, uint64_t sn1, uint64_t s0) :
+//            v_global(v), dist(d), S_n1(sn1), S_0(s0) { }
+//    };
+//    int host_id;
+//    int num_hosts;
+//    MPI_Comm_rank(MPI_COMM_WORLD, &host_id);
+//    MPI_Comm_size(MPI_COMM_WORLD, &num_hosts);
+//    // Send
+//    std::vector<MsgUnitBP> send_buffer;
+////    std::vector< std::pair<int, int> > send_buffer;
+//
+//	send_buffer.emplace_back(host_id, host_id * 1, host_id + 10, host_id + 100);
+//	send_buffer.emplace_back(host_id, host_id * 2, host_id + 11, host_id + 101);
+//	send_buffer.emplace_back(host_id, host_id * 3, host_id + 12, host_id + 102);
+////	send_buffer.emplace_back(host_id, host_id * 1);
+////	send_buffer.emplace_back(host_id, host_id * 2);
+////	send_buffer.emplace_back(host_id, host_id * 3);
+//
+//	MPI_Request request;
+//	if (0 == host_id) {
+//		// Send
+////		MPI_Request request;
+//		MPI_Isend(send_buffer.data(),
+//				MPI_Instance::get_sending_size(send_buffer),
+//				MPI_CHAR,
+//				1,
+//				GRAPH_SHUFFLE,
+//				MPI_COMM_WORLD,
+//				&request);
+////		MPI_Wait(&request,
+////				MPI_STATUS_IGNORE);
+//	} else if (1 == host_id) {
+//		MPI_Isend(send_buffer.data(),
+//				MPI_Instance::get_sending_size(send_buffer),
+//				MPI_CHAR,
+//				0,
+//				GRAPH_SHUFFLE,
+//				MPI_COMM_WORLD,
+//				&request);
+//	}
+//
+//	if (1 == host_id) {
+//		// Receive
+//		std::vector<MsgUnitBP> recv_buffer;
+////		std::vector< std::pair<int, int> > recv_buffer;
+//		int source = MPI_Instance::receive_dynamic_buffer_from_any(recv_buffer, num_hosts, GRAPH_SHUFFLE);
+//		printf("source: %u recv_buffer.size(): %lu\n", source, recv_buffer.size());
+//		for (const auto &p : recv_buffer) {
+//			printf("host_id: %u (%u %u %lu %lu)\n", host_id, p.v_global, p.dist, p.S_n1, p.S_0);
+//		}
+////		MPI_Wait(&request,
+////				MPI_STATUS_IGNORE);
+//	} else if (0 == host_id) {
+//		std::vector<MsgUnitBP> recv_buffer;
+//		int source = MPI_Instance::receive_dynamic_buffer_from_any(recv_buffer, num_hosts, GRAPH_SHUFFLE);
+//		printf("source: %u recv_buffer.size(): %lu\n", source, recv_buffer.size());
+//		for (const auto &p : recv_buffer) {
+//            printf("host_id: %u (%u %u %lu %lu)\n", host_id, p.v_global, p.dist, p.S_n1, p.S_0);
+//		}
+//	}
+//	MPI_Wait(&request,
+//			MPI_STATUS_IGNORE);
+//}
 
 void dpado(char *argv[])
 {
