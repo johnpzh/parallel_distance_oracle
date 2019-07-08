@@ -297,7 +297,7 @@ int main(int argc, char *argv[])
     }
 
 	setbuf(stdout, nullptr); // stdout no buffer
-    printf("input_file: %s\n", input_file.c_str());
+//    printf("input_file: %s\n", input_file.c_str());
     MPI_Instance mpi_instance(argc, argv);
 
     dpado(argv);
