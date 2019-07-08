@@ -302,9 +302,9 @@ DistBVCPLL<BATCH_SIZE, BITPARALLEL_SIZE>::DistBVCPLL(const DistGraph &G)
 
     //printf("b_i_bound: %u\n", b_i_bound);//test
     for (VertexID b_i = 0; b_i < b_i_bound; ++b_i) {
-        if (0 == host_id) {
-            printf("b_i: %u\n", b_i);//test
-        }
+//        if (0 == host_id) {
+//            printf("b_i: %u\n", b_i);//test
+//        }
 
         batch_process(
                 G,
@@ -329,9 +329,9 @@ DistBVCPLL<BATCH_SIZE, BITPARALLEL_SIZE>::DistBVCPLL(const DistGraph &G)
 //        exit(EXIT_SUCCESS); //test
     }
     if (remainer != 0) {
-        if (0 == host_id) {
-            printf("b_i: %u\n", b_i_bound);//test
-        }
+//        if (0 == host_id) {
+//            printf("b_i: %u\n", b_i_bound);//test
+//        }
         batch_process(
                 G,
                 b_i_bound,
@@ -1846,18 +1846,18 @@ inline void DistBVCPLL<BATCH_SIZE, BITPARALLEL_SIZE>::batch_process(
 			MPI_Waitall(num_hosts - 1,
 					requests_send.data(),
 					MPI_STATUSES_IGNORE);
-			{// test
-				VertexID global_end_got_candidates_queue;
-				MPI_Allreduce(&end_got_candidates_queue,
-						&global_end_got_candidates_queue,
-						1,
-						V_ID_Type,
-						MPI_SUM,
-						MPI_COMM_WORLD);
-				if (0 == host_id) {
-					printf("iter %u @%u host_id: %u global_end_got_candidates_queue: %u\n", iter, __LINE__, host_id, global_end_got_candidates_queue);
-				}
-			}
+//			{// test
+//				VertexID global_end_got_candidates_queue;
+//				MPI_Allreduce(&end_got_candidates_queue,
+//						&global_end_got_candidates_queue,
+//						1,
+//						V_ID_Type,
+//						MPI_SUM,
+//						MPI_COMM_WORLD);
+//				if (0 == host_id) {
+//					printf("iter %u @%u host_id: %u global_end_got_candidates_queue: %u\n", iter, __LINE__, host_id, global_end_got_candidates_queue);
+//				}
+//			}
 		}
 
         // Traverse vertices in the got_candidates_queue to insert labels
@@ -1957,11 +1957,11 @@ inline void DistBVCPLL<BATCH_SIZE, BITPARALLEL_SIZE>::batch_process(
                     V_ID_Type,
                     MPI_SUM,
                     MPI_COMM_WORLD);
-            {// test
-                if (0 == host_id) {
-                    printf("iter: %u @%u host_id: %u global_num_actives: %u\n", iter, __LINE__, host_id, global_num_actives);//test
-                }
-            }
+//            {// test
+//                if (0 == host_id) {
+//                    printf("iter: %u @%u host_id: %u global_num_actives: %u\n", iter, __LINE__, host_id, global_num_actives);//test
+//                }
+//            }
 		}
     }
 
