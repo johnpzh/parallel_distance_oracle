@@ -84,8 +84,8 @@ private:
 
     // Type of Bit-Parallel Label
     struct BPLabelType {
-        UnweightedDist bp_dist[BITPARALLEL_SIZE] = {0};
-        uint64_t bp_sets[BITPARALLEL_SIZE][2] = {0}; // [0]: S^{-1}, [1]: S^{0}
+        UnweightedDist bp_dist[BITPARALLEL_SIZE] = { 0 };
+        uint64_t bp_sets[BITPARALLEL_SIZE][2] = { {0} }; // [0]: S^{-1}, [1]: S^{0}
     };
 
     std::vector<IndexType> L;
