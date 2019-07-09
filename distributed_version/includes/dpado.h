@@ -27,12 +27,6 @@ namespace PADO {
 template <VertexID BATCH_SIZE = 1024, VertexID BITPARALLEL_SIZE = 50>
 class DistBVCPLL {
 private:
-    VertexID num_v = 0;
-    VertexID num_masters = 0;
-    int host_id = 0;
-    int num_hosts = 0;
-    MPI_Datatype V_ID_Type;
-
     // Structure for the type of label
     struct IndexType {
         struct Batch {
@@ -88,7 +82,15 @@ private:
         uint64_t bp_sets[BITPARALLEL_SIZE][2] = { {0} }; // [0]: S^{-1}, [1]: S^{0}
     };
 
+    VertexID num_v = 0;
+    VertexID num_masters = 0;
+    int host_id = 0;
+    int num_hosts = 0;
+    MPI_Datatype V_ID_Type;
     std::vector<IndexType> L;
+    const VertexID UNIT_BUFFER_SIZE = (1U << 20U);
+    std::vector<char> unit_buffer_send = std::vector<char>(UNIT_BUFFER_SIZE);
+    std::vector<char> unit_buffer_recv = std::vector<char>(UNIT_BUFFER_SIZE);
 
     inline void bit_parallel_push_labels(
             const DistGraph &G,
