@@ -145,7 +145,7 @@ void test_dynamic_receive()
 void dpado(char *argv[])
 {
     DistGraph G(argv[1]);
-	printf("host_id: %u num_masters: %u(/%u %.2f%%) num_edges_local %lu(/%lu %.2f%%)\n",
+	printf("host_id: %u num_masters: %u /%u %.2f%% num_edges_local %lu /%lu %.2f%%\n",
 	        G.host_id, G.num_masters, G.num_v, 100.0 * G.num_masters / G.num_v, G.num_edges_local, 2 * G.num_e, 100.0 * G.num_edges_local / (2 * G.num_e));//test
 
 	DistBVCPLL<1024, 50> dist_bvcpll(G); // batch size 1024, bit-parallel size 0.

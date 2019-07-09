@@ -378,7 +378,7 @@ DistBVCPLL<BATCH_SIZE, BITPARALLEL_SIZE>::DistBVCPLL(const DistGraph &G)
             MPI_Instance::get_mpi_datatype<EdgeID>(),
             MPI_SUM,
             MPI_COMM_WORLD);
-    printf("host_id: %u local_num_labels: %lu (%.2f%%)\n", host_id, local_num_labels, 100.0 * local_num_labels / global_num_labels);
+    printf("host_id: %u local_num_labels: %lu %.2f%%\n", host_id, local_num_labels, 100.0 * local_num_labels / global_num_labels);
     MPI_Barrier(MPI_COMM_WORLD);
     if (0 == host_id) {
         printf("Global_num_labels: %lu average: %f\n", global_num_labels, 1.0 * global_num_labels / num_v);
