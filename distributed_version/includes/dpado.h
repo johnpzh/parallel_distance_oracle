@@ -88,9 +88,7 @@ private:
     int num_hosts = 0;
     MPI_Datatype V_ID_Type;
     std::vector<IndexType> L;
-    const VertexID UNIT_BUFFER_SIZE = (1U << 20U);
-    std::vector<char> unit_buffer_send = std::vector<char>(UNIT_BUFFER_SIZE);
-    std::vector<char> unit_buffer_recv = std::vector<char>(UNIT_BUFFER_SIZE);
+
 
     inline void bit_parallel_push_labels(
             const DistGraph &G,
@@ -564,6 +562,7 @@ DistBVCPLL<BATCH_SIZE, BITPARALLEL_SIZE>::DistBVCPLL(const DistGraph &G)
 //    }
 //
 //}
+
 
 template <VertexID BATCH_SIZE, VertexID BITPARALLEL_SIZE>
 inline void DistBVCPLL<BATCH_SIZE, BITPARALLEL_SIZE>::bit_parallel_push_labels(
@@ -1158,17 +1157,22 @@ inline VertexID DistBVCPLL<BATCH_SIZE, BITPARALLEL_SIZE>::initialization(
             }
         }
         // Broadcast local roots labels
-        std::vector<MPI_Request> requests_send(num_hosts - 1);
+//        std::vector<MPI_Request> requests_send(num_hosts - 1);
+        std::vector< std::vector<MPI_Request> > requests_list(num_hosts - 1);
         {
             for (int loc = 0; loc < num_hosts - 1; ++loc) {
                 int dest_host_id = G.buffer_send_list_loc_2_master_host_id(loc);
-                MPI_Isend(buffer_send.data(),
-                          MPI_Instance::get_sending_size(buffer_send),
-                          MPI_CHAR,
-                          dest_host_id,
-                          SENDING_DIST_TABLE,
-                          MPI_COMM_WORLD,
-                          &requests_send[loc]);
+//                MPI_Isend(buffer_send.data(),
+//                          MPI_Instance::get_sending_size(buffer_send),
+//                          MPI_CHAR,
+//                          dest_host_id,
+//                          SENDING_DIST_TABLE,
+//                          MPI_COMM_WORLD,
+//                          &requests_send[loc]);
+                MPI_Instance::send_buffer_2_dest(buffer_send,
+                        requests_list[loc],
+                        dest_host_id,
+                        SENDING_DIST_TABLE);
             }
         }
 
@@ -1176,9 +1180,11 @@ inline VertexID DistBVCPLL<BATCH_SIZE, BITPARALLEL_SIZE>::initialization(
         {
             std::vector<LabelTableUnit> buffer_recv;
             for (int h_i = 0; h_i < num_hosts - 1; ++h_i) {
-                MPI_Instance::receive_dynamic_buffer_from_any(buffer_recv,
-                                                              num_hosts,
-                                                              SENDING_DIST_TABLE);
+//                MPI_Instance::receive_dynamic_buffer_from_any(buffer_recv,
+//                                                              num_hosts,
+//                                                              SENDING_DIST_TABLE);
+                MPI_Instance::recv_buffer_from_any(buffer_recv,
+                        SENDING_DIST_TABLE);
                 if (buffer_recv.empty()) {
                     continue;
                 }
@@ -1191,9 +1197,14 @@ inline VertexID DistBVCPLL<BATCH_SIZE, BITPARALLEL_SIZE>::initialization(
                     recved_dist_table[root_id].push_back(label_global_id);
                 }
             }
-            MPI_Waitall(num_hosts - 1,
-                        requests_send.data(),
+//            MPI_Waitall(num_hosts - 1,
+//                        requests_send.data(),
+//                        MPI_STATUSES_IGNORE);
+            for (int loc = 0; loc < num_hosts - 1; ++loc) {
+                MPI_Waitall(requests_list[loc].size(),
+                        requests_list[loc].data(),
                         MPI_STATUSES_IGNORE);
+            }
         }
     }
 
@@ -1959,11 +1970,11 @@ inline void DistBVCPLL<BATCH_SIZE, BITPARALLEL_SIZE>::batch_process(
                     V_ID_Type,
                     MPI_SUM,
                     MPI_COMM_WORLD);
-//            {// test
-//                if (0 == host_id) {
-//                    printf("iter: %u @%u host_id: %u global_num_actives: %u\n", iter, __LINE__, host_id, global_num_actives);//test
-//                }
-//            }
+            {// test
+                if (0 == host_id) {
+                    printf("iter: %u @%u host_id: %u global_num_actives: %u\n", iter, __LINE__, host_id, global_num_actives);//test
+                }
+            }
 		}
     }
 
