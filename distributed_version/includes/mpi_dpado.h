@@ -7,6 +7,7 @@
 
 #include <mpi.h>
 #include <stdio.h>
+#include <string.h>
 #include <iostream>
 #include <type_traits>
 #include <typeinfo>
@@ -40,8 +41,8 @@ class MPI_Instance final {
 private:
     int host_id = 0; // host ID
     int num_hosts = 0; // number of hosts
-    static const uint32_t UNIT_BUFFER_SIZE = 1U << 20U;
-    static char unit_buffer_send[UNIT_BUFFER_SIZE];
+    static const uint32_t UNIT_BUFFER_SIZE = 4U << 20U;
+//    static char unit_buffer_send[UNIT_BUFFER_SIZE];
 
 public:
     MPI_Instance(int argc, char *argv[]) {
@@ -214,10 +215,15 @@ public:
             int dest,
             int message_tag)
     {
+        size_t ETypeSize = sizeof(E_T);
         // Get how many sending needed.
         size_t  bytes_buffer_send = get_sending_size(buffer_send);
-        uint32_t num_unit_buffers = bytes_buffer_send / UNIT_BUFFER_SIZE;
-        std::pair<size_t, uint32_t> size_msg(bytes_buffer_send, num_unit_buffers);
+        uint32_t size_unit_buffer = UNIT_BUFFER_SIZE % ETypeSize
+                                        ? (UNIT_BUFFER_SIZE / ETypeSize) * ETypeSize
+                                        : UNIT_BUFFER_SIZE;
+        uint32_t num_unit_buffers = (bytes_buffer_send + size_unit_buffer - 1) / size_unit_buffer;
+        std::pair<size_t, uint32_t> size_msg(bytes_buffer_send, size_unit_buffer);
+//        std::pair<size_t, uint32_t> size_msg(bytes_buffer_send, num_unit_buffers);
 
         requests_list.resize(num_unit_buffers + 1);
         uint32_t end_requests_list = 0;
@@ -229,16 +235,35 @@ public:
                 SENDING_NUM_UNIT_BUFFERS,
                 MPI_COMM_WORLD,
                 &requests_list[end_requests_list++]);
-
+//        {//test
+//            int host_id;
+//            MPI_Comm_rank(MPI_COMM_WORLD, &host_id);
+//            if (0 == host_id) {
+//                printf("host_id: %u send_buffer_2_dest "
+//                       "bytes_buffer_send: %lu ETypesize: %lu "
+//                       "size_unit_buffer: %u num_unit_buffers: %u\n",
+//                       host_id,
+//                       bytes_buffer_send, ETypeSize,
+//                       size_unit_buffer, num_unit_buffers);
+//            }
+//        }
+        if (!num_unit_buffers) {
+            return;
+        }
         // Send the data.
+        uint8_t *unit_buffer_send = (uint8_t *) malloc(size_unit_buffer * sizeof(uint8_t));
         for (uint32_t b_i = 0; b_i < num_unit_buffers; ++b_i) {
-            size_t offset = b_i * UNIT_BUFFER_SIZE;
-            size_t count = UNIT_BUFFER_SIZE;
+            size_t offset = b_i * size_unit_buffer;
+//            size_t count = b_i == num_unit_buffers - 1
+//                            ? bytes_buffer_send - offset
+//                            : size_unit_buffer;
+            size_t count = size_unit_buffer;
             if (num_unit_buffers - 1 == b_i) {
                 count = bytes_buffer_send - offset;
             }
             // Copy data to the unit buffer.
-            memcpy(unit_buffer_send, buffer_send.data() + offset, count);
+            memcpy(unit_buffer_send, reinterpret_cast<char *>((void *) buffer_send.data()) + offset, count);
+//            memcpy(unit_buffer_send, reinterpret_cast<char *>(buffer_send.data()) + offset, count);
             MPI_Isend(unit_buffer_send,
                     count,
                     MPI_CHAR,
@@ -247,6 +272,7 @@ public:
                     MPI_COMM_WORLD,
                     &requests_list[end_requests_list++]);
         }
+        free(unit_buffer_send);
     }
 
     // Function: receive data (from any host) into large-sized buffer_recv by receiving multiple unit sending.
@@ -257,6 +283,7 @@ public:
         size_t ETypeSize = sizeof(E_T);
         size_t bytes_buffer;
         uint32_t num_unit_buffers;
+        uint32_t size_unit_buffer;
         int source_host_id;
         // Receive the message about size.
         // .first: bytes_buffer_send
@@ -282,26 +309,27 @@ public:
                      &status_recv);
             source_host_id = status_recv.MPI_SOURCE;
             bytes_buffer = size_msg.first;
-            num_unit_buffers = size_msg.second;
+            size_unit_buffer = size_msg.second;
+            num_unit_buffers = (bytes_buffer + size_unit_buffer - 1) / size_unit_buffer;
         }
         assert(0 == bytes_buffer % ETypeSize);
         buffer_recv.resize(bytes_buffer / ETypeSize);
         // Receive the whole data
-        {
+        if (num_unit_buffers) {
             size_t offset = 0;
             // Except for the last one, all unit buffer's size is fixed.
             for (uint32_t b_i = 0; b_i < num_unit_buffers - 1; ++b_i) {
-                MPI_Recv(buffer_recv.data() + offset,
-                        UNIT_BUFFER_SIZE,
+                MPI_Recv(reinterpret_cast<char *>(buffer_recv.data()) + offset,
+                        size_unit_buffer,
                         MPI_CHAR,
                         source_host_id,
                         message_tag,
                         MPI_COMM_WORLD,
                         MPI_STATUS_IGNORE);
-                offset += UNIT_BUFFER_SIZE;
+                offset += size_unit_buffer;
             }
             // The last unit buffer
-            MPI_Recv(buffer_recv.data() + offset,
+            MPI_Recv(reinterpret_cast<char *>(buffer_recv.data()) + offset,
                     bytes_buffer - offset,
                     MPI_CHAR,
                     source_host_id,
@@ -321,6 +349,7 @@ public:
         size_t ETypeSize = sizeof(E_T);
         size_t bytes_buffer;
         uint32_t num_unit_buffers;
+        uint32_t size_unit_buffer;
         // Receive the message about size.
         // .first: bytes_buffer_send
         // .second: num_unit_buffers
@@ -335,26 +364,27 @@ public:
                      MPI_COMM_WORLD,
                      &status_recv);
             bytes_buffer = size_msg.first;
-            num_unit_buffers = size_msg.second;
+            size_unit_buffer = size_msg.second;
+            num_unit_buffers = (bytes_buffer + size_unit_buffer - 1) / size_unit_buffer;
         }
         assert(0 == bytes_buffer % ETypeSize);
         buffer_recv.resize(bytes_buffer / ETypeSize);
         // Receive the whole data
-        {
+        if (num_unit_buffers) {
             size_t offset = 0;
             // Except for the last one, all unit buffer's size is fixed.
             for (uint32_t b_i = 0; b_i < num_unit_buffers - 1; ++b_i) {
-                MPI_Recv(buffer_recv.data() + offset,
-                         UNIT_BUFFER_SIZE,
+                MPI_Recv(reinterpret_cast<char *>(buffer_recv.data()) + offset,
+                         size_unit_buffer,
                          MPI_CHAR,
                          source,
                          message_tag,
                          MPI_COMM_WORLD,
                          MPI_STATUS_IGNORE);
-                offset += UNIT_BUFFER_SIZE;
+                offset += size_unit_buffer;
             }
             // The last unit buffer
-            MPI_Recv(buffer_recv.data() + offset,
+            MPI_Recv(reinterpret_cast<char *>(buffer_recv.data()) + offset,
                      bytes_buffer - offset,
                      MPI_CHAR,
                      source,
@@ -362,9 +392,8 @@ public:
                      MPI_COMM_WORLD,
                      MPI_STATUS_IGNORE);
         }
-
     }
 }; // End class MPI_Instance
-char MPI_Instance::unit_buffer_send[UNIT_BUFFER_SIZE];
+//char MPI_Instance::unit_buffer_send[UNIT_BUFFER_SIZE];
 } // End namespace PADO
 #endif //PADO_MPI_DPADO_H
