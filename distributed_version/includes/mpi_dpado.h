@@ -251,7 +251,7 @@ public:
             return;
         }
         // Send the data.
-        uint8_t *unit_buffer_send = (uint8_t *) malloc(size_unit_buffer * sizeof(uint8_t));
+//        uint8_t *unit_buffer_send = (uint8_t *) malloc(size_unit_buffer * sizeof(uint8_t));
         for (uint32_t b_i = 0; b_i < num_unit_buffers; ++b_i) {
             size_t offset = b_i * size_unit_buffer;
 //            size_t count = b_i == num_unit_buffers - 1
@@ -262,9 +262,15 @@ public:
                 count = bytes_buffer_send - offset;
             }
             // Copy data to the unit buffer.
-            memcpy(unit_buffer_send, reinterpret_cast<char *>((void *) buffer_send.data()) + offset, count);
-//            memcpy(unit_buffer_send, reinterpret_cast<char *>(buffer_send.data()) + offset, count);
-            MPI_Isend(unit_buffer_send,
+//            memcpy(unit_buffer_send, reinterpret_cast<char *>((void *) buffer_send.data()) + offset, count);
+//            MPI_Isend(unit_buffer_send,
+//                    count,
+//                    MPI_CHAR,
+//                    dest,
+//                    message_tag,
+//                    MPI_COMM_WORLD,
+//                    &requests_list[end_requests_list++]);
+            MPI_Isend(reinterpret_cast<char *>((void *) buffer_send.data()) + offset,
                     count,
                     MPI_CHAR,
                     dest,
@@ -272,7 +278,7 @@ public:
                     MPI_COMM_WORLD,
                     &requests_list[end_requests_list++]);
         }
-        free(unit_buffer_send);
+//        free(unit_buffer_send);
     }
 
     // Function: receive data (from any host) into large-sized buffer_recv by receiving multiple unit sending.

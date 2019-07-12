@@ -286,6 +286,24 @@ void test_dynamic_receive()
 //			MPI_STATUS_IGNORE);
 //}
 
+void test_recv()
+{
+    int host_id;
+    int num_hosts;
+    MPI_Comm_rank(MPI_COMM_WORLD, &host_id);
+    MPI_Comm_size(MPI_COMM_WORLD, &num_hosts);
+
+    int a = 0;
+    MPI_Recv(&a,
+            1,
+            MPI_INT,
+            1,
+            0,
+            MPI_COMM_WORLD,
+            MPI_STATUS_IGNORE);
+
+}
+
 void usage_print()
 {
     fprintf(stderr,
@@ -308,6 +326,7 @@ int main(int argc, char *argv[])
     MPI_Instance mpi_instance(argc, argv);
 
     dpado(argv);
+//    test_recv();
 //    test_dynamic_receive();
     return EXIT_SUCCESS;
 }
