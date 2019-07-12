@@ -259,7 +259,8 @@ DistGraph::DistGraph(char *input_filename)
         MPI_Instance::send_buffer_2_dest(buffer_send_list[loc],
                 requests_list[loc],
                 master_host_id,
-                GRAPH_SHUFFLE);
+                GRAPH_SHUFFLE,
+                SIZE_GRAPH_SHUFFLE);
     }
 //	printf("@%u host_id: %u sent\n", __LINE__, host_id);//test
     // Receive the edges
@@ -270,7 +271,8 @@ DistGraph::DistGraph(char *input_filename)
 //		        num_hosts,
 //		        GRAPH_SHUFFLE);
         MPI_Instance::recv_buffer_from_any(buffer_recv,
-                                           GRAPH_SHUFFLE);
+                                           GRAPH_SHUFFLE,
+                                           SIZE_GRAPH_SHUFFLE);
 		if (buffer_recv.empty()) {
 		    continue;
 		}

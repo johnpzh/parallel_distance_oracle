@@ -16,6 +16,7 @@ namespace PADO {
 
 enum MessageTags {
     GRAPH_SHUFFLE,
+    SIZE_GRAPH_SHUFFLE,
     SENDING_NUM_ROOT_MASTERS,
     SENDING_ROOT_ID,
     SENDING_INDEXTYPE_BATCHES,
@@ -23,12 +24,19 @@ enum MessageTags {
     SENDING_INDEXTYPE_VERTICES,
 //    SENDING_PUSHED_LABELS,
     SENDING_MASTERS_TO_MIRRORS,
+    SENDING_SIZE_MASTERS_TO_MIRRORS,
 	SENDING_DIST_TABLE,
+    SENDING_SIZE_DIST_TABLE,
     SYNC_DIST_TABLE,
+    SYNC_SIZE_DIST_TABLE,
     SENDING_QUERY_LABELS,
+    SENDING_SIZE_QUERY_LABELS,
     SENDING_BP_ACTIVES,
+    SENDING_SIZE_BP_ACTIVES,
     SENDING_SETS_UPDATES_BP,
+    SENDING_SIZE_SETS_UPDATES_BP,
     SENDING_ROOT_NEIGHBORS,
+    SENDING_SIZE_ROOT_BP_LABELS,
     SENDING_SELECTED_NEIGHBORS,
     SENDING_ROOT_BP_LABELS,
     SENDING_QUERY_BP_LABELS,
@@ -213,7 +221,8 @@ public:
     static void send_buffer_2_dest(const std::vector<E_T> &buffer_send,
             std::vector<MPI_Request> &requests_list,
             int dest,
-            int message_tag)
+            int message_tag,
+            int size_message_tag)
     {
         size_t ETypeSize = sizeof(E_T);
         // Get how many sending needed.
@@ -224,6 +233,7 @@ public:
         uint32_t num_unit_buffers = (bytes_buffer_send + size_unit_buffer - 1) / size_unit_buffer;
         std::pair<size_t, uint32_t> size_msg(bytes_buffer_send, size_unit_buffer);
 //        std::pair<size_t, uint32_t> size_msg(bytes_buffer_send, num_unit_buffers);
+        assert(0 == bytes_buffer_send % ETypeSize);
 
         requests_list.resize(num_unit_buffers + 1);
         uint32_t end_requests_list = 0;
@@ -232,7 +242,7 @@ public:
                 sizeof(size_msg),
                 MPI_CHAR,
                 dest,
-                SENDING_NUM_UNIT_BUFFERS,
+                size_message_tag,
                 MPI_COMM_WORLD,
                 &requests_list[end_requests_list++]);
 //        {//test
@@ -284,7 +294,8 @@ public:
     // Function: receive data (from any host) into large-sized buffer_recv by receiving multiple unit sending.
     template<typename E_T>
     static int recv_buffer_from_any(std::vector<E_T> &buffer_recv,
-            int message_tag)
+            int message_tag,
+            int size_message_tag)
     {
         size_t ETypeSize = sizeof(E_T);
         size_t bytes_buffer;
@@ -310,7 +321,7 @@ public:
                      sizeof(size_msg),
                      MPI_CHAR,
                      MPI_ANY_SOURCE,
-                     SENDING_NUM_UNIT_BUFFERS,
+                     size_message_tag,
                      MPI_COMM_WORLD,
                      &status_recv);
             source_host_id = status_recv.MPI_SOURCE;
@@ -350,7 +361,8 @@ public:
     template<typename E_T>
     static void recv_buffer_from_source(std::vector<E_T> &buffer_recv,
                                      int source,
-                                     int message_tag)
+                                     int message_tag,
+                                     int size_message_tag)
     {
         size_t ETypeSize = sizeof(E_T);
         size_t bytes_buffer;
@@ -366,7 +378,7 @@ public:
                      sizeof(size_msg),
                      MPI_CHAR,
                      source,
-                     SENDING_NUM_UNIT_BUFFERS,
+                     size_message_tag,
                      MPI_COMM_WORLD,
                      &status_recv);
             bytes_buffer = size_msg.first;
