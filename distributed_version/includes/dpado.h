@@ -270,9 +270,11 @@ DistBVCPLL<BATCH_SIZE, BITPARALLEL_SIZE>::DistBVCPLL(const DistGraph &G)
 
     bit_parallel_labeling(G,
             used_bp_roots);
-//    {
-//        printf("host_id: %u bp_labeling_finished.\n", host_id);
-//    }
+    {//test
+        if (0 == host_id) {
+            printf("host_id: %u bp_labeling_finished.\n", host_id);
+        }
+    }
 
     std::vector<VertexID> active_queue(num_masters); // Any vertex v who is active should be put into this queue.
     VertexID end_active_queue = 0;
@@ -305,9 +307,9 @@ DistBVCPLL<BATCH_SIZE, BITPARALLEL_SIZE>::DistBVCPLL(const DistGraph &G)
 
     //printf("b_i_bound: %u\n", b_i_bound);//test
     for (VertexID b_i = 0; b_i < b_i_bound; ++b_i) {
-//        if (0 == host_id) {
-//            printf("b_i: %u\n", b_i);//test
-//        }
+        if (0 == host_id) {
+            printf("b_i: %u\n", b_i);//test
+        }
 
         batch_process(
                 G,
@@ -332,9 +334,9 @@ DistBVCPLL<BATCH_SIZE, BITPARALLEL_SIZE>::DistBVCPLL(const DistGraph &G)
 //        exit(EXIT_SUCCESS); //test
     }
     if (remainer != 0) {
-//        if (0 == host_id) {
-//            printf("b_i: %u\n", b_i_bound);//test
-//        }
+        if (0 == host_id) {
+            printf("b_i: %u\n", b_i_bound);//test
+        }
         batch_process(
                 G,
                 b_i_bound,
@@ -1840,6 +1842,11 @@ inline void DistBVCPLL<BATCH_SIZE, BITPARALLEL_SIZE>::batch_process(
 
 
     while (global_num_actives) {
+        {//
+           if (0 == host_id) {
+               printf("iter: %u globabl_num_actives: %u\n", iter, global_num_actives);
+           }
+        }
         ++iter;
         // Traverse active vertices to push their labels as candidates
         // Push newly added labels to local masters at first
