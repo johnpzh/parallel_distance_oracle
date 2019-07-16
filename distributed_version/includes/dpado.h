@@ -918,7 +918,6 @@ inline void DistBVCPLL<BATCH_SIZE, BITPARALLEL_SIZE>::bit_parallel_labeling(
 
                 }
                 // Put into the buffer sending to others
-//                std::vector<MPI_Request> requests_send(num_hosts - 1);
                 std::vector< std::pair<VertexID, uint64_t> > buffer_send;
                 std::vector< std::vector<MPI_Request> > requests_list(num_hosts - 1);
                 for (VertexID i = 0; i < num_sibling_es; ++i) {
@@ -928,30 +927,26 @@ inline void DistBVCPLL<BATCH_SIZE, BITPARALLEL_SIZE>::bit_parallel_labeling(
                     buffer_send.emplace_back(w, tmp_s[w].second);
                 }
                 // Send the messages
+                // Lambda for processing every element of received messages.
+                auto process = [&] (std::pair<VertexID, uint64_t> m) {
+                    tmp_s[m.first].second |= m.second;
+                };
+                MPI_Instance::every_host_bcasts_buffer(buffer_send,
+                        num_hosts,
+                        process);
+                /////////////////////////////////////////////////
+                //
                 for (int loc = 0; loc < num_hosts - 1; ++loc) {
                     int dest_host_id = G.buffer_send_list_loc_2_master_host_id(loc);
-//                    MPI_Isend(buffer_send.data(),
-//                              MPI_Instance::get_sending_size(buffer_send),
-//                              MPI_CHAR,
-//                              dest_host_id,
-//                              SENDING_SETS_UPDATES_BP,
-//                              MPI_COMM_WORLD,
-//                              &requests_send[loc]);
                     MPI_Instance::send_buffer_2_dest(buffer_send,
                             requests_list[loc],
                             dest_host_id,
                             SENDING_SETS_UPDATES_BP,
                             SENDING_SIZE_SETS_UPDATES_BP);
                 }
-//                {
-//                    printf("host_id: %u @%u sent\n", host_id, __LINE__);
-//                }
                 // Receive the messages
                 std::vector<std::pair<VertexID, uint64_t> > buffer_recv;
                 for (int loc = 0; loc < num_hosts - 1; ++loc) {
-//                    MPI_Instance::receive_dynamic_buffer_from_any(buffer_recv,
-//                            num_hosts,
-//                            SENDING_SETS_UPDATES_BP);
                     MPI_Instance::recv_buffer_from_any(buffer_recv,
                             SENDING_SETS_UPDATES_BP,
                             SENDING_SIZE_SETS_UPDATES_BP);
@@ -967,17 +962,13 @@ inline void DistBVCPLL<BATCH_SIZE, BITPARALLEL_SIZE>::bit_parallel_labeling(
                         tmp_s[v_global].second |= m.second;
                     }
                 }
-//                {
-//                    printf("host_id: %u @%u received\n", host_id, __LINE__);
-//                }
-//                MPI_Waitall(num_hosts - 1,
-//                        requests_send.data(),
-//                        MPI_STATUSES_IGNORE);
                 for (int loc = 0; loc < num_hosts - 1; ++loc) {
                     MPI_Waitall(requests_list[loc].size(),
                                 requests_list[loc].data(),
                                 MPI_STATUSES_IGNORE);
                 }
+                //
+                /////////////////////////////////////////////////
                 for (VertexID i = 0; i < num_child_es; ++i) {
                     VertexID v = child_es[i].first, c = child_es[i].second;
                     tmp_s[c].first |= tmp_s[v].first;

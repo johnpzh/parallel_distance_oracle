@@ -47,13 +47,15 @@ enum MessageTags {
 // Heavily refer to Gemini (https://github.com/thu-pacman/GeminiGraph/blob/master/core/mpi.hpp)
 class MPI_Instance final {
 private:
-    int host_id = 0; // host ID
-    int num_hosts = 0; // number of hosts
+//    int host_id = 0; // host ID
+//    int num_hosts = 0; // number of hosts
     static const uint32_t UNIT_BUFFER_SIZE = 4U << 20U;
 //    static char unit_buffer_send[UNIT_BUFFER_SIZE];
 
 public:
     MPI_Instance(int argc, char *argv[]) {
+        int host_id = 0; // host ID
+        int num_hosts = 0; // number of hosts
         int provided;
         MPI_Init_thread(&argc, &argv, MPI_THREAD_MULTIPLE, &provided);
         MPI_Comm_rank(MPI_COMM_WORLD, &host_id);
@@ -409,6 +411,23 @@ public:
                      message_tag,
                      MPI_COMM_WORLD,
                      MPI_STATUS_IGNORE);
+        }
+    }
+
+    template <typename E_T, typename F>
+    static void every_host_bcasts_buffer(std::vector<E_T> &buffer_send,
+            int num_hosts,
+            F &fun)
+    {
+        for (int h_i = 0; h_i < num_hosts; ++h_i) {
+            size_t size_buffer_send;
+            // Broadcast the size of buffer_send
+            // Broadcast buffer_send to buffer_recv
+            std::vector<E_T> buffer_recv(size_buffer_send);
+            // Process every element of buffer_recv by fun
+            for (const E_T &e : buffer_recv) {
+                fun(e);
+            }
         }
     }
 }; // End class MPI_Instance
