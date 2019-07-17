@@ -414,22 +414,41 @@ public:
         }
     }
 
-    template <typename E_T, typename F>
-    static void every_host_bcasts_buffer(std::vector<E_T> &buffer_send,
-            int num_hosts,
-            F &fun)
-    {
-        for (int h_i = 0; h_i < num_hosts; ++h_i) {
-            size_t size_buffer_send;
-            // Broadcast the size of buffer_send
-            // Broadcast buffer_send to buffer_recv
-            std::vector<E_T> buffer_recv(size_buffer_send);
-            // Process every element of buffer_recv by fun
-            for (const E_T &e : buffer_recv) {
-                fun(e);
-            }
-        }
-    }
+//    template <typename E_T, typename F>
+//    static void every_host_bcasts_buffer(std::vector<E_T> &buffer_send,
+//            int num_hosts,
+//            F &fun)
+//    {
+//        for (int h_i = 0; h_i < num_hosts; ++h_i) {
+//            uint64_t size_buffer_send = buffer_send.size();
+//            // Sync the size_buffer_send.
+//            MPI_Bcast(&size_buffer_send,
+//                    1,
+//                    MPI_UINT64_T,
+//                    h_i,
+//                    MPI_COMM_WORLD);
+//            uint32_t num_unit_buffers = (size_buffer_send + UNIT_BUFFER_SIZE - 1) / UNIT_BUFFER_SIZE;
+//
+//            for (uint32_t b_i = 0; b_i < num_unit_buffers; ++b_i) {
+//                size_t offset = b_i * UNIT_BUFFER_SIZE;
+//                uint32_t size_unit_buffer = b_i == num_unit_buffers - 1
+//                                            ? size_buffer_send - offset
+//                                            : UNIT_BUFFER_SIZE;
+//                std::vector<E_T> unit_buffer(size_unit_buffer);
+//                if (host_id == h_i) {
+//
+//                }
+//            }
+////            size_t size_unit_buffer;
+////            // Broadcast the size of buffer_send
+////            // Broadcast buffer_send to buffer_recv
+////            std::vector<E_T> unit_buffer(size_unit_buffer);
+////            // Process every element of buffer_recv by fun
+////            for (const E_T &e : unit_buffer) {
+////                fun(e);
+////            }
+//        }
+//    }
 }; // End class MPI_Instance
 //char MPI_Instance::unit_buffer_send[UNIT_BUFFER_SIZE];
 } // End namespace PADO
