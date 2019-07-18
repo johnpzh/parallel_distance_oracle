@@ -145,79 +145,79 @@ public:
         }
     }
 
-    // Function: Receive MPI message with the dynamic buffer size from any source with a certain tag.
-    // 1. Use MPI_Probe to get the message source and size.
-    // 2. Allocate the buffer_recv according to the Status.
-    // 3. Use MPI_Recv to receive the message from the source.
-    template <typename E_T>
-    static int receive_dynamic_buffer_from_any(
-            std::vector<E_T> &buffer_recv,
-            int num_hosts,
-            int message_tag)
-    {
-        size_t ETypeSize = sizeof(E_T);
-        MPI_Status status_prob;
-        MPI_Probe(MPI_ANY_SOURCE,
-                  message_tag,
-                  MPI_COMM_WORLD,
-                  &status_prob);
-        int source_host_id = status_prob.MPI_SOURCE;
-        assert(source_host_id >=0 && source_host_id < num_hosts);
-        int bytes_recv;
-        MPI_Get_count(&status_prob, MPI_CHAR, &bytes_recv);
-        assert(bytes_recv % ETypeSize == 0);
-        int num_e_recv = bytes_recv / ETypeSize;
-        buffer_recv.resize(num_e_recv);
-		MPI_Status status_recv;
-        MPI_Recv(buffer_recv.data(),
-                 bytes_recv,
-                 MPI_CHAR,
-                 source_host_id,
-                 message_tag,
-                 MPI_COMM_WORLD,
-                 &status_recv);
-		assert(status_prob.MPI_SOURCE == status_recv.MPI_SOURCE);
-//		{// test
-//			if (!buffer_recv.empty()) {
-//				printf("@%u host_id: %u receive_dynamic_buffer_from_source: source_host_id: %u buffer_recv[0]: ", __LINE__, host_id, source_host_id);
-//				std::cout << buffer_recv[0] << std::endl;
-//			}
-//		}
-        return source_host_id;
-    }
+//    // DEPRECATED Function: Receive MPI message with the dynamic buffer size from any source with a certain tag.
+//    // 1. Use MPI_Probe to get the message source and size.
+//    // 2. Allocate the buffer_recv according to the Status.
+//    // 3. Use MPI_Recv to receive the message from the source.
+//    template <typename E_T>
+//    static int receive_dynamic_buffer_from_any(
+//            std::vector<E_T> &buffer_recv,
+//            int num_hosts,
+//            int message_tag)
+//    {
+//        size_t ETypeSize = sizeof(E_T);
+//        MPI_Status status_prob;
+//        MPI_Probe(MPI_ANY_SOURCE,
+//                  message_tag,
+//                  MPI_COMM_WORLD,
+//                  &status_prob);
+//        int source_host_id = status_prob.MPI_SOURCE;
+//        assert(source_host_id >=0 && source_host_id < num_hosts);
+//        int bytes_recv;
+//        MPI_Get_count(&status_prob, MPI_CHAR, &bytes_recv);
+//        assert(bytes_recv % ETypeSize == 0);
+//        int num_e_recv = bytes_recv / ETypeSize;
+//        buffer_recv.resize(num_e_recv);
+//		MPI_Status status_recv;
+//        MPI_Recv(buffer_recv.data(),
+//                 bytes_recv,
+//                 MPI_CHAR,
+//                 source_host_id,
+//                 message_tag,
+//                 MPI_COMM_WORLD,
+//                 &status_recv);
+//		assert(status_prob.MPI_SOURCE == status_recv.MPI_SOURCE);
+////		{// test
+////			if (!buffer_recv.empty()) {
+////				printf("@%u host_id: %u receive_dynamic_buffer_from_source: source_host_id: %u buffer_recv[0]: ", __LINE__, host_id, source_host_id);
+////				std::cout << buffer_recv[0] << std::endl;
+////			}
+////		}
+//        return source_host_id;
+//    }
 
-    // Function: Receive MPI message with dynamic buffer size from a certain source with a certain tag.
-    // 1. User MPI_Probe to get the message size.
-    // 2. Allocate the buffer_recv according to the Status.
-    // 3. Use MPI_Recv to receive the message.
-    template <typename E_T>
-    static int receive_dynamic_buffer_from_source(
-            std::vector<E_T> &buffer_recv,
-            int num_hosts,
-            int source,
-            int message_tag)
-    {
-        assert(source >= 0 && source < num_hosts);
-        size_t ETypeSize = sizeof(E_T);
-        MPI_Status status_recv;
-        MPI_Probe(source,
-                  message_tag,
-                  MPI_COMM_WORLD,
-                  &status_recv);
-        int bytes_recv;
-        MPI_Get_count(&status_recv, MPI_CHAR, &bytes_recv);
-        assert(bytes_recv % ETypeSize == 0);
-        int num_e_recv = bytes_recv / ETypeSize;
-        buffer_recv.resize(num_e_recv);
-        MPI_Recv(buffer_recv.data(),
-                 bytes_recv,
-                 MPI_CHAR,
-                 source,
-                 message_tag,
-                 MPI_COMM_WORLD,
-                 MPI_STATUS_IGNORE);
-        return num_e_recv;
-    }
+//    // DEPRECATED Function: Receive MPI message with dynamic buffer size from a certain source with a certain tag.
+//    // 1. User MPI_Probe to get the message size.
+//    // 2. Allocate the buffer_recv according to the Status.
+//    // 3. Use MPI_Recv to receive the message.
+//    template <typename E_T>
+//    static int receive_dynamic_buffer_from_source(
+//            std::vector<E_T> &buffer_recv,
+//            int num_hosts,
+//            int source,
+//            int message_tag)
+//    {
+//        assert(source >= 0 && source < num_hosts);
+//        size_t ETypeSize = sizeof(E_T);
+//        MPI_Status status_recv;
+//        MPI_Probe(source,
+//                  message_tag,
+//                  MPI_COMM_WORLD,
+//                  &status_recv);
+//        int bytes_recv;
+//        MPI_Get_count(&status_recv, MPI_CHAR, &bytes_recv);
+//        assert(bytes_recv % ETypeSize == 0);
+//        int num_e_recv = bytes_recv / ETypeSize;
+//        buffer_recv.resize(num_e_recv);
+//        MPI_Recv(buffer_recv.data(),
+//                 bytes_recv,
+//                 MPI_CHAR,
+//                 source,
+//                 message_tag,
+//                 MPI_COMM_WORLD,
+//                 MPI_STATUS_IGNORE);
+//        return num_e_recv;
+//    }
 
     // Function: return the size (bytes) of the sending buffer.
     // It's equal to the length of the buffer times the size of one element.
