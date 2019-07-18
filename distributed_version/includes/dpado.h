@@ -143,7 +143,7 @@ private:
             VertexID b_id,
             VertexID roots_start,
             VertexID roots_size,
-            std::vector<VertexID> &roots_master_local,
+//            std::vector<VertexID> &roots_master_local,
             const std::vector<uint8_t> &used_bp_roots);
 //    inline void sync_masters_2_mirrors(
 //            const DistGraph &G,
@@ -192,11 +192,10 @@ private:
             VertexID v_id,
             VertexID roots_start,
             VertexID roots_size,
-//            std::vector<IndexType> &L,
             const DistGraph &G,
-            std::vector< std::vector<UnweightedDist> > &dist_table,
-            std::vector< std::pair<VertexID, VertexID> > &buffer_send,
-            UnweightedDist iter);
+//            std::vector< std::vector<UnweightedDist> > &dist_table,
+            std::vector< std::pair<VertexID, VertexID> > &buffer_send);
+//            UnweightedDist iter);
     inline void update_label_indices(
             VertexID v_id,
             VertexID inserted_count,
@@ -205,10 +204,9 @@ private:
             VertexID b_id,
             UnweightedDist iter);
     inline void reset_at_end(
-            const DistGraph &G,
-            VertexID roots_start,
-//            VertexID roots_size,
-            const std::vector<VertexID> &roots_master_local,
+//            const DistGraph &G,
+//            VertexID roots_start,
+//            const std::vector<VertexID> &roots_master_local,
             std::vector< std::vector<UnweightedDist> > &dist_table,
             std::vector< std::vector<VertexID> > &recved_dist_table,
             std::vector<BPLabelType> &bp_labels_table);
@@ -1151,10 +1149,11 @@ initialization(
         VertexID b_id,
         VertexID roots_start,
         VertexID roots_size,
-        std::vector<VertexID> &roots_master_local,
+//        std::vector<VertexID> &roots_master_local,
         const std::vector<uint8_t> &used_bp_roots)
 {
     // Get the roots_master_local, containing all local roots.
+    std::vector<VertexID> roots_master_local;
     VertexID roots_bound = roots_start + roots_size;
     for (VertexID r_global = roots_start; r_global < roots_bound; ++r_global) {
         if (G.get_master_host_id(r_global) == host_id && !used_bp_roots[r_global]) {
@@ -1726,9 +1725,9 @@ insert_label_only(
         VertexID roots_start,
         VertexID roots_size,
         const DistGraph &G,
-        std::vector< std::vector<UnweightedDist> > &dist_table,
-        std::vector< std::pair<VertexID, VertexID> > &buffer_send,
-        UnweightedDist iter)
+//        std::vector< std::vector<UnweightedDist> > &dist_table,
+        std::vector< std::pair<VertexID, VertexID> > &buffer_send)
+//        UnweightedDist iter)
 {
     L[v_id_local].vertices.push_back(cand_root_id);
     // Update the distance buffer if v_id is a root
@@ -1779,9 +1778,9 @@ update_label_indices(
 template <VertexID BATCH_SIZE, VertexID BITPARALLEL_SIZE>
 inline void DistBVCPLL<BATCH_SIZE, BITPARALLEL_SIZE>::
 reset_at_end(
-        const DistGraph &G,
-        VertexID roots_start,
-        const std::vector<VertexID> &roots_master_local,
+//        const DistGraph &G,
+//        VertexID roots_start,
+//        const std::vector<VertexID> &roots_master_local,
         std::vector< std::vector<UnweightedDist> > &dist_table,
         std::vector< std::vector<VertexID> > &recved_dist_table,
         std::vector<BPLabelType> &bp_labels_table)
@@ -1845,7 +1844,7 @@ batch_process(
         std::vector<bool> &once_candidated)
 {
     // At the beginning of a batch, initialize the labels L and distance buffer dist_table;
-    std::vector<VertexID> roots_master_local; // Roots which belongs to this host.
+//    std::vector<VertexID> roots_master_local; // Roots which belongs to this host.
     VertexID global_num_actives = initialization(G,
                                     short_index,
                                     dist_table,
@@ -1859,7 +1858,7 @@ batch_process(
                                     b_id,
                                     roots_start,
                                     roots_size,
-                                    roots_master_local,
+//                                    roots_master_local,
                                     used_bp_roots);
 
     UnweightedDist iter = 0; // The iterator, also the distance for current iteration
@@ -2042,11 +2041,10 @@ batch_process(
                                 v_id_local,
                                 roots_start,
                                 roots_size,
-    //                            L,
                                 G,
-                                dist_table,
-                                buffer_send,
-                                iter);
+//                                dist_table,
+                                buffer_send);
+//                                iter);
                     }
                 }
                 short_index[v_id_local].end_candidates_que = 0;
@@ -2130,9 +2128,9 @@ batch_process(
 
     // Reset the dist_table
     reset_at_end(
-            G,
-            roots_start,
-            roots_master_local,
+//            G,
+//            roots_start,
+//            roots_master_local,
             dist_table,
             recved_dist_table,
             bp_labels_table);
