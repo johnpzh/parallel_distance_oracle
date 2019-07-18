@@ -8,6 +8,7 @@
 #include <mpi.h>
 #include <stdio.h>
 #include <string.h>
+#include <limits.h>
 #include <iostream>
 #include <type_traits>
 #include <typeinfo>
@@ -36,11 +37,15 @@ enum MessageTags {
     SENDING_SETS_UPDATES_BP,
     SENDING_SIZE_SETS_UPDATES_BP,
     SENDING_ROOT_NEIGHBORS,
+    SENDING_SIZE_ROOT_NEIGHBORS,
     SENDING_SIZE_ROOT_BP_LABELS,
     SENDING_SELECTED_NEIGHBORS,
+    SENDING_SIZE_SELETED_NEIGHBORS,
     SENDING_ROOT_BP_LABELS,
     SENDING_QUERY_BP_LABELS,
-    SENDING_NUM_UNIT_BUFFERS
+    SENDING_NUM_UNIT_BUFFERS,
+    SENDING_SIZE_BUFFER_SEND,
+    SENDING_EDGELIST
 };
 
 // MPI_Instance class: for MPI initialization
@@ -145,7 +150,10 @@ public:
     // 2. Allocate the buffer_recv according to the Status.
     // 3. Use MPI_Recv to receive the message from the source.
     template <typename E_T>
-    static int receive_dynamic_buffer_from_any(std::vector<E_T> &buffer_recv, int num_hosts, int message_tag)
+    static int receive_dynamic_buffer_from_any(
+            std::vector<E_T> &buffer_recv,
+            int num_hosts,
+            int message_tag)
     {
         size_t ETypeSize = sizeof(E_T);
         MPI_Status status_prob;
@@ -183,7 +191,8 @@ public:
     // 2. Allocate the buffer_recv according to the Status.
     // 3. Use MPI_Recv to receive the message.
     template <typename E_T>
-    static int receive_dynamic_buffer_from_source(std::vector<E_T> &buffer_recv,
+    static int receive_dynamic_buffer_from_source(
+            std::vector<E_T> &buffer_recv,
             int num_hosts,
             int source,
             int message_tag)
@@ -213,206 +222,321 @@ public:
     // Function: return the size (bytes) of the sending buffer.
     // It's equal to the length of the buffer times the size of one element.
     template <typename EdgeT>
-    static size_t get_sending_size(const std::vector<EdgeT> &buffer_send)
+    static size_t get_sending_size(
+            const std::vector<EdgeT> &buffer_send)
     {
         return buffer_send.size() * sizeof(EdgeT);
     }
 
     // Function: send the large-sized buffer_send by multiple unit sending.
     template <typename E_T>
-    static void send_buffer_2_dest(const std::vector<E_T> &buffer_send,
-            std::vector<MPI_Request> &requests_list,
-            int dest,
+    static void send_buffer_2_dst(
+            const std::vector<E_T> &buffer_send,
+            int dst,
             int message_tag,
             int size_message_tag)
     {
         size_t ETypeSize = sizeof(E_T);
-        // Get how many sending needed.
-        size_t  bytes_buffer_send = get_sending_size(buffer_send);
-        uint32_t size_unit_buffer = UNIT_BUFFER_SIZE % ETypeSize
-                                        ? (UNIT_BUFFER_SIZE / ETypeSize) * ETypeSize
-                                        : UNIT_BUFFER_SIZE;
-        uint32_t num_unit_buffers = (bytes_buffer_send + size_unit_buffer - 1) / size_unit_buffer;
-        std::pair<size_t, uint32_t> size_msg(bytes_buffer_send, size_unit_buffer);
-//        std::pair<size_t, uint32_t> size_msg(bytes_buffer_send, num_unit_buffers);
-        assert(0 == bytes_buffer_send % ETypeSize);
-
-        requests_list.resize(num_unit_buffers + 1);
-        uint32_t end_requests_list = 0;
-        // Send num_unit_buffers at first to tell how many following sending is coming.
-        MPI_Isend(&size_msg,
-                sizeof(size_msg),
-                MPI_CHAR,
-                dest,
-                size_message_tag,
-                MPI_COMM_WORLD,
-                &requests_list[end_requests_list++]);
-//        {//test
-//            int host_id;
-//            MPI_Comm_rank(MPI_COMM_WORLD, &host_id);
-//            if (0 == host_id) {
-//                printf("host_id: %u send_buffer_2_dest "
-//                       "bytes_buffer_send: %lu ETypesize: %lu "
-//                       "size_unit_buffer: %u num_unit_buffers: %u\n",
-//                       host_id,
-//                       bytes_buffer_send, ETypeSize,
-//                       size_unit_buffer, num_unit_buffers);
-//            }
-//        }
-        if (!num_unit_buffers) {
+        size_t size_buffer_send = buffer_send.size();
+        // Send the total size
+        MPI_Send(&size_buffer_send,
+                 1,
+                 MPI_UINT64_T,
+                 dst,
+                 size_message_tag,
+                 MPI_COMM_WORLD);
+        if (!size_buffer_send) {
             return;
         }
-        // Send the data.
-//        uint8_t *unit_buffer_send = (uint8_t *) malloc(size_unit_buffer * sizeof(uint8_t));
+        // Send by multiple unit buffers
+        uint32_t num_unit_buffers = (size_buffer_send + UNIT_BUFFER_SIZE - 1) / UNIT_BUFFER_SIZE;
         for (uint32_t b_i = 0; b_i < num_unit_buffers; ++b_i) {
-            size_t offset = b_i * size_unit_buffer;
-//            size_t count = b_i == num_unit_buffers - 1
-//                            ? bytes_buffer_send - offset
-//                            : size_unit_buffer;
-            size_t count = size_unit_buffer;
-            if (num_unit_buffers - 1 == b_i) {
-                count = bytes_buffer_send - offset;
-            }
-            // Copy data to the unit buffer.
-//            memcpy(unit_buffer_send, reinterpret_cast<char *>((void *) buffer_send.data()) + offset, count);
-//            MPI_Isend(unit_buffer_send,
+            size_t offset = b_i * UNIT_BUFFER_SIZE;
+            size_t size_unit_buffer = b_i == num_unit_buffers - 1
+                                      ? size_buffer_send - offset
+                                      : UNIT_BUFFER_SIZE;
+            assert(size_unit_buffer * ETypeSize <= static_cast<size_t>(INT_MAX));
+            MPI_Send(buffer_send.data() + offset,
+                     size_unit_buffer * ETypeSize,
+                     MPI_CHAR,
+                     dst,
+                     message_tag,
+                     MPI_COMM_WORLD);
+        }
+    }
+    // DEPRECATED version, using MPI_Isend.
+//    template <typename E_T>
+//    static void send_buffer_2_dest(const std::vector<E_T> &buffer_send,
+//            std::vector<MPI_Request> &requests_list,
+//            int dest,
+//            int message_tag,
+//            int size_message_tag)
+//    {
+//        size_t ETypeSize = sizeof(E_T);
+//        // Get how many sending needed.
+//        size_t  bytes_buffer_send = get_sending_size(buffer_send);
+//        uint32_t size_unit_buffer = UNIT_BUFFER_SIZE % ETypeSize
+//                                        ? (UNIT_BUFFER_SIZE / ETypeSize) * ETypeSize
+//                                        : UNIT_BUFFER_SIZE;
+//        uint32_t num_unit_buffers = (bytes_buffer_send + size_unit_buffer - 1) / size_unit_buffer;
+//        std::pair<size_t, uint32_t> size_msg(bytes_buffer_send, size_unit_buffer);
+////        std::pair<size_t, uint32_t> size_msg(bytes_buffer_send, num_unit_buffers);
+//        assert(0 == bytes_buffer_send % ETypeSize);
+//
+//        requests_list.resize(num_unit_buffers + 1);
+//        uint32_t end_requests_list = 0;
+//        // Send num_unit_buffers at first to tell how many following sending is coming.
+//        MPI_Isend(&size_msg,
+//                sizeof(size_msg),
+//                MPI_CHAR,
+//                dest,
+//                size_message_tag,
+//                MPI_COMM_WORLD,
+//                &requests_list[end_requests_list++]);
+////        {//test
+////            int host_id;
+////            MPI_Comm_rank(MPI_COMM_WORLD, &host_id);
+////            if (0 == host_id) {
+////                printf("host_id: %u send_buffer_2_dest "
+////                       "bytes_buffer_send: %lu ETypesize: %lu "
+////                       "size_unit_buffer: %u num_unit_buffers: %u\n",
+////                       host_id,
+////                       bytes_buffer_send, ETypeSize,
+////                       size_unit_buffer, num_unit_buffers);
+////            }
+////        }
+//        if (!num_unit_buffers) {
+//            return;
+//        }
+//        // Send the data.
+////        uint8_t *unit_buffer_send = (uint8_t *) malloc(size_unit_buffer * sizeof(uint8_t));
+//        for (uint32_t b_i = 0; b_i < num_unit_buffers; ++b_i) {
+//            size_t offset = b_i * size_unit_buffer;
+////            size_t count = b_i == num_unit_buffers - 1
+////                            ? bytes_buffer_send - offset
+////                            : size_unit_buffer;
+//            size_t count = size_unit_buffer;
+//            if (num_unit_buffers - 1 == b_i) {
+//                count = bytes_buffer_send - offset;
+//            }
+//            // Copy data to the unit buffer.
+////            memcpy(unit_buffer_send, reinterpret_cast<char *>((void *) buffer_send.data()) + offset, count);
+////            MPI_Isend(unit_buffer_send,
+////                    count,
+////                    MPI_CHAR,
+////                    dest,
+////                    message_tag,
+////                    MPI_COMM_WORLD,
+////                    &requests_list[end_requests_list++]);
+//            MPI_Isend(reinterpret_cast<char *>((void *) buffer_send.data()) + offset,
 //                    count,
 //                    MPI_CHAR,
 //                    dest,
 //                    message_tag,
 //                    MPI_COMM_WORLD,
 //                    &requests_list[end_requests_list++]);
-            MPI_Isend(reinterpret_cast<char *>((void *) buffer_send.data()) + offset,
-                    count,
-                    MPI_CHAR,
-                    dest,
-                    message_tag,
-                    MPI_COMM_WORLD,
-                    &requests_list[end_requests_list++]);
-        }
-//        free(unit_buffer_send);
-    }
+//        }
+////        free(unit_buffer_send);
+//    }
 
-    // Function: receive data (from any host) into large-sized buffer_recv by receiving multiple unit sending.
-    template<typename E_T>
-    static int recv_buffer_from_any(std::vector<E_T> &buffer_recv,
+//    // DEPRECATED Function: receive data (from any host) into large-sized buffer_recv by receiving multiple unit sending.
+//    template<typename E_T>
+//    static int recv_buffer_from_any(std::vector<E_T> &buffer_recv,
+//            int message_tag,
+//            int size_message_tag)
+//    {
+//        size_t ETypeSize = sizeof(E_T);
+//        size_t bytes_buffer;
+//        uint32_t num_unit_buffers;
+//        uint32_t size_unit_buffer;
+//        int source_host_id;
+//        // Receive the message about size.
+//        // .first: bytes_buffer_send
+//        // .second: num_unit_buffers
+//        {
+//            std::pair<size_t, uint32_t> size_msg;
+////            MPI_Status status_prob;
+////            MPI_Probe(MPI_ANY_SOURCE,
+////                      SENDING_NUM_UNIT_BUFFERS,
+////                      MPI_COMM_WORLD,
+////                      &status_prob);
+////            source_host_id = status_prob.MPI_SOURCE;
+////            int bytes_recv;
+////            MPI_Get_count(&status_prob, MPI_CHAR, &bytes_recv);
+////            assert(bytes_recv == sizeof(size_msg));
+//            MPI_Status status_recv;
+//            MPI_Recv(&size_msg,
+//                     sizeof(size_msg),
+//                     MPI_CHAR,
+//                     MPI_ANY_SOURCE,
+//                     size_message_tag,
+//                     MPI_COMM_WORLD,
+//                     &status_recv);
+//            source_host_id = status_recv.MPI_SOURCE;
+//            bytes_buffer = size_msg.first;
+//            size_unit_buffer = size_msg.second;
+//            num_unit_buffers = (bytes_buffer + size_unit_buffer - 1) / size_unit_buffer;
+//        }
+//        assert(0 == bytes_buffer % ETypeSize);
+//        buffer_recv.resize(bytes_buffer / ETypeSize);
+//        // Receive the whole data
+//        if (num_unit_buffers) {
+//            size_t offset = 0;
+//            // Except for the last one, all unit buffer's size is fixed.
+//            for (uint32_t b_i = 0; b_i < num_unit_buffers - 1; ++b_i) {
+//                MPI_Recv(reinterpret_cast<char *>(buffer_recv.data()) + offset,
+//                        size_unit_buffer,
+//                        MPI_CHAR,
+//                        source_host_id,
+//                        message_tag,
+//                        MPI_COMM_WORLD,
+//                        MPI_STATUS_IGNORE);
+//                offset += size_unit_buffer;
+//            }
+//            // The last unit buffer
+//            MPI_Recv(reinterpret_cast<char *>(buffer_recv.data()) + offset,
+//                    bytes_buffer - offset,
+//                    MPI_CHAR,
+//                    source_host_id,
+//                    message_tag,
+//                    MPI_COMM_WORLD,
+//                    MPI_STATUS_IGNORE);
+//        }
+//        return source_host_id;
+//    }
+
+    // Function: receive data (from source) into large-sized buffer_recv by receiving multiple unit sending.
+    template <typename E_T>
+    static void recv_buffer_from_src(
+            std::vector<E_T> &buffer_recv,
+            int src,
             int message_tag,
             int size_message_tag)
     {
         size_t ETypeSize = sizeof(E_T);
-        size_t bytes_buffer;
-        uint32_t num_unit_buffers;
-        uint32_t size_unit_buffer;
-        int source_host_id;
-        // Receive the message about size.
-        // .first: bytes_buffer_send
-        // .second: num_unit_buffers
-        {
-            std::pair<size_t, uint32_t> size_msg;
-//            MPI_Status status_prob;
-//            MPI_Probe(MPI_ANY_SOURCE,
-//                      SENDING_NUM_UNIT_BUFFERS,
-//                      MPI_COMM_WORLD,
-//                      &status_prob);
-//            source_host_id = status_prob.MPI_SOURCE;
-//            int bytes_recv;
-//            MPI_Get_count(&status_prob, MPI_CHAR, &bytes_recv);
-//            assert(bytes_recv == sizeof(size_msg));
-            MPI_Status status_recv;
-            MPI_Recv(&size_msg,
-                     sizeof(size_msg),
-                     MPI_CHAR,
-                     MPI_ANY_SOURCE,
-                     size_message_tag,
-                     MPI_COMM_WORLD,
-                     &status_recv);
-            source_host_id = status_recv.MPI_SOURCE;
-            bytes_buffer = size_msg.first;
-            size_unit_buffer = size_msg.second;
-            num_unit_buffers = (bytes_buffer + size_unit_buffer - 1) / size_unit_buffer;
+        size_t size_buffer_send;
+        MPI_Recv(&size_buffer_send,
+                 1,
+                 MPI_UINT64_T,
+                 src,
+                 size_message_tag,
+                 MPI_COMM_WORLD,
+                 MPI_STATUS_IGNORE);
+        if (!size_buffer_send) {
+            return;
         }
-        assert(0 == bytes_buffer % ETypeSize);
-        buffer_recv.resize(bytes_buffer / ETypeSize);
-        // Receive the whole data
-        if (num_unit_buffers) {
-            size_t offset = 0;
-            // Except for the last one, all unit buffer's size is fixed.
-            for (uint32_t b_i = 0; b_i < num_unit_buffers - 1; ++b_i) {
-                MPI_Recv(reinterpret_cast<char *>(buffer_recv.data()) + offset,
-                        size_unit_buffer,
-                        MPI_CHAR,
-                        source_host_id,
-                        message_tag,
-                        MPI_COMM_WORLD,
-                        MPI_STATUS_IGNORE);
-                offset += size_unit_buffer;
-            }
-            // The last unit buffer
-            MPI_Recv(reinterpret_cast<char *>(buffer_recv.data()) + offset,
-                    bytes_buffer - offset,
-                    MPI_CHAR,
-                    source_host_id,
-                    message_tag,
-                    MPI_COMM_WORLD,
-                    MPI_STATUS_IGNORE);
-        }
-        return source_host_id;
-    }
-
-    // Function: receive data (from source) into large-sized buffer_recv by receiving multiple unit sending.
-    template<typename E_T>
-    static void recv_buffer_from_source(std::vector<E_T> &buffer_recv,
-                                     int source,
-                                     int message_tag,
-                                     int size_message_tag)
-    {
-        size_t ETypeSize = sizeof(E_T);
-        size_t bytes_buffer;
-        uint32_t num_unit_buffers;
-        uint32_t size_unit_buffer;
-        // Receive the message about size.
-        // .first: bytes_buffer_send
-        // .second: num_unit_buffers
-        {
-            std::pair<size_t, uint32_t> size_msg;
-            MPI_Status status_recv;
-            MPI_Recv(&size_msg,
-                     sizeof(size_msg),
+        buffer_recv.resize(size_buffer_send);
+        // Receive multiple unit buffers
+        uint32_t num_unit_buffers = (size_buffer_send + UNIT_BUFFER_SIZE - 1) / UNIT_BUFFER_SIZE;
+        for (uint32_t b_i = 0; b_i < num_unit_buffers; ++b_i) {
+            size_t offset = b_i * UNIT_BUFFER_SIZE;
+            size_t size_unit_buffer = b_i == num_unit_buffers - 1
+                                      ? size_buffer_send - offset
+                                      : UNIT_BUFFER_SIZE;
+            MPI_Recv(buffer_recv.data() + offset,
+                     size_unit_buffer * ETypeSize,
                      MPI_CHAR,
-                     source,
-                     size_message_tag,
-                     MPI_COMM_WORLD,
-                     &status_recv);
-            bytes_buffer = size_msg.first;
-            size_unit_buffer = size_msg.second;
-            num_unit_buffers = (bytes_buffer + size_unit_buffer - 1) / size_unit_buffer;
-        }
-        assert(0 == bytes_buffer % ETypeSize);
-        buffer_recv.resize(bytes_buffer / ETypeSize);
-        // Receive the whole data
-        if (num_unit_buffers) {
-            size_t offset = 0;
-            // Except for the last one, all unit buffer's size is fixed.
-            for (uint32_t b_i = 0; b_i < num_unit_buffers - 1; ++b_i) {
-                MPI_Recv(reinterpret_cast<char *>(buffer_recv.data()) + offset,
-                         size_unit_buffer,
-                         MPI_CHAR,
-                         source,
-                         message_tag,
-                         MPI_COMM_WORLD,
-                         MPI_STATUS_IGNORE);
-                offset += size_unit_buffer;
-            }
-            // The last unit buffer
-            MPI_Recv(reinterpret_cast<char *>(buffer_recv.data()) + offset,
-                     bytes_buffer - offset,
-                     MPI_CHAR,
-                     source,
+                     src,
                      message_tag,
                      MPI_COMM_WORLD,
                      MPI_STATUS_IGNORE);
         }
     }
+
+    // Function: receive data (from any source) into large-sized buffer_recv by receiving multiple unit sending.
+    template <typename E_T>
+    static int recv_buffer_from_any(
+            std::vector<E_T> &buffer_recv,
+            int message_tag,
+            int size_message_tag)
+    {
+        size_t ETypeSize = sizeof(E_T);
+        size_t size_buffer_send;
+        MPI_Status status_recv;
+        MPI_Recv(&size_buffer_send,
+                 1,
+                 MPI_UINT64_T,
+                 MPI_ANY_SOURCE,
+                 size_message_tag,
+                 MPI_COMM_WORLD,
+                 &status_recv);
+        int src = status_recv.MPI_SOURCE;
+        if (!size_buffer_send) {
+            return src;
+        }
+        buffer_recv.resize(size_buffer_send);
+        // Receive multiple unit buffers
+        uint32_t num_unit_buffers = (size_buffer_send + UNIT_BUFFER_SIZE - 1) / UNIT_BUFFER_SIZE;
+        for (uint32_t b_i = 0; b_i < num_unit_buffers; ++b_i) {
+            size_t offset = b_i * UNIT_BUFFER_SIZE;
+            size_t size_unit_buffer = b_i == num_unit_buffers - 1
+                                      ? size_buffer_send - offset
+                                      : UNIT_BUFFER_SIZE;
+            MPI_Recv(buffer_recv.data() + offset,
+                     size_unit_buffer * ETypeSize,
+                     MPI_CHAR,
+                     src,
+                     message_tag,
+                     MPI_COMM_WORLD,
+                     MPI_STATUS_IGNORE);
+        }
+        return src;
+    }
+
+//    // DEPRECATED Function
+//    template<typename E_T>
+//    static void recv_buffer_from_source(std::vector<E_T> &buffer_recv,
+//                                     int source,
+//                                     int message_tag,
+//                                     int size_message_tag)
+//    {
+//        size_t ETypeSize = sizeof(E_T);
+//        size_t bytes_buffer;
+//        uint32_t num_unit_buffers;
+//        uint32_t size_unit_buffer;
+//        // Receive the message about size.
+//        // .first: bytes_buffer_send
+//        // .second: num_unit_buffers
+//        {
+//            std::pair<size_t, uint32_t> size_msg;
+//            MPI_Status status_recv;
+//            MPI_Recv(&size_msg,
+//                     sizeof(size_msg),
+//                     MPI_CHAR,
+//                     source,
+//                     size_message_tag,
+//                     MPI_COMM_WORLD,
+//                     &status_recv);
+//            bytes_buffer = size_msg.first;
+//            size_unit_buffer = size_msg.second;
+//            num_unit_buffers = (bytes_buffer + size_unit_buffer - 1) / size_unit_buffer;
+//        }
+//        assert(0 == bytes_buffer % ETypeSize);
+//        buffer_recv.resize(bytes_buffer / ETypeSize);
+//        // Receive the whole data
+//        if (num_unit_buffers) {
+//            size_t offset = 0;
+//            // Except for the last one, all unit buffer's size is fixed.
+//            for (uint32_t b_i = 0; b_i < num_unit_buffers - 1; ++b_i) {
+//                MPI_Recv(reinterpret_cast<char *>(buffer_recv.data()) + offset,
+//                         size_unit_buffer,
+//                         MPI_CHAR,
+//                         source,
+//                         message_tag,
+//                         MPI_COMM_WORLD,
+//                         MPI_STATUS_IGNORE);
+//                offset += size_unit_buffer;
+//            }
+//            // The last unit buffer
+//            MPI_Recv(reinterpret_cast<char *>(buffer_recv.data()) + offset,
+//                     bytes_buffer - offset,
+//                     MPI_CHAR,
+//                     source,
+//                     message_tag,
+//                     MPI_COMM_WORLD,
+//                     MPI_STATUS_IGNORE);
+//        }
+//    }
 
 //    template <typename E_T, typename F>
 //    static void every_host_bcasts_buffer(std::vector<E_T> &buffer_send,

@@ -153,65 +153,65 @@ void dpado(char *argv[])
 
 }
 
-void test_dynamic_receive()
-{
-    struct MsgBPLabel {
-        VertexID r_root_id;
-        UnweightedDist bp_dist[2];
-        uint64_t bp_sets[2][2];
-
-        MsgBPLabel() = default;
-        MsgBPLabel(VertexID r, UnweightedDist dist[], uint64_t sets[][2])
-                : r_root_id(r)
-        {
-            memcpy(bp_dist, dist, 2 * sizeof(UnweightedDist));
-            memcpy(bp_sets, sets, 2 * 2 * sizeof(uint64_t));
-        }
-    };
-    int host_id;
-    int num_hosts;
-    MPI_Comm_rank(MPI_COMM_WORLD, &host_id);
-    MPI_Comm_size(MPI_COMM_WORLD, &num_hosts);
-    // Send
-    std::vector<MsgBPLabel> send_buffer;
-    UnweightedDist dist0[2] = {1, 2};
-    uint64_t sets0[2][2] = {{1024, 1025},
-                            {1026, 1027}};
-    UnweightedDist dist1[2] = {3, 4};
-    uint64_t sets1[2][2] = {{512, 513},
-                            {514, 515}};
-    send_buffer.emplace_back(0, dist0, sets0);
-    send_buffer.emplace_back(1, dist1, sets1);
-
-    if (0 == host_id) {
-        // Send
-//		MPI_Request request;
-        MPI_Send(send_buffer.data(),
-                 MPI_Instance::get_sending_size(send_buffer),
-                 MPI_CHAR,
-                 1,
-                 GRAPH_SHUFFLE,
-                 MPI_COMM_WORLD);
-//		MPI_Wait(&request,
-//				MPI_STATUS_IGNORE);
-    }
-
-    if (1 == host_id) {
-        // Receive
-        std::vector<MsgBPLabel> recv_buffer;
-//		std::vector< std::pair<int, int> > recv_buffer;
-        int source = MPI_Instance::receive_dynamic_buffer_from_any(recv_buffer, num_hosts, GRAPH_SHUFFLE);
-//        printf("source: %u recv_buffer.size(): %lu\n", source, recv_buffer.size());
-        for (const auto &p : recv_buffer) {
-            for (int i = 0; i < 2; ++i) {
-                printf("source: %u host_id: %u r: %u d[%u]: %u s_n1[%u]: %lu s_0[%u]: %lu\n",
-                       source, host_id, p.r_root_id, i, p.bp_dist[i], i, p.bp_sets[i][0], i, p.bp_sets[i][1]);
-            }
-        }
-//		MPI_Wait(&request,
-//				MPI_STATUS_IGNORE);
-    }
-}
+//void test_dynamic_receive()
+//{
+//    struct MsgBPLabel {
+//        VertexID r_root_id;
+//        UnweightedDist bp_dist[2];
+//        uint64_t bp_sets[2][2];
+//
+//        MsgBPLabel() = default;
+//        MsgBPLabel(VertexID r, UnweightedDist dist[], uint64_t sets[][2])
+//                : r_root_id(r)
+//        {
+//            memcpy(bp_dist, dist, 2 * sizeof(UnweightedDist));
+//            memcpy(bp_sets, sets, 2 * 2 * sizeof(uint64_t));
+//        }
+//    };
+//    int host_id;
+//    int num_hosts;
+//    MPI_Comm_rank(MPI_COMM_WORLD, &host_id);
+//    MPI_Comm_size(MPI_COMM_WORLD, &num_hosts);
+//    // Send
+//    std::vector<MsgBPLabel> send_buffer;
+//    UnweightedDist dist0[2] = {1, 2};
+//    uint64_t sets0[2][2] = {{1024, 1025},
+//                            {1026, 1027}};
+//    UnweightedDist dist1[2] = {3, 4};
+//    uint64_t sets1[2][2] = {{512, 513},
+//                            {514, 515}};
+//    send_buffer.emplace_back(0, dist0, sets0);
+//    send_buffer.emplace_back(1, dist1, sets1);
+//
+//    if (0 == host_id) {
+//        // Send
+////		MPI_Request request;
+//        MPI_Send(send_buffer.data(),
+//                 MPI_Instance::get_sending_size(send_buffer),
+//                 MPI_CHAR,
+//                 1,
+//                 GRAPH_SHUFFLE,
+//                 MPI_COMM_WORLD);
+////		MPI_Wait(&request,
+////				MPI_STATUS_IGNORE);
+//    }
+//
+//    if (1 == host_id) {
+//        // Receive
+//        std::vector<MsgBPLabel> recv_buffer;
+////		std::vector< std::pair<int, int> > recv_buffer;
+//        int source = MPI_Instance::receive_dynamic_buffer_from_any(recv_buffer, num_hosts, GRAPH_SHUFFLE);
+////        printf("source: %u recv_buffer.size(): %lu\n", source, recv_buffer.size());
+//        for (const auto &p : recv_buffer) {
+//            for (int i = 0; i < 2; ++i) {
+//                printf("source: %u host_id: %u r: %u d[%u]: %u s_n1[%u]: %lu s_0[%u]: %lu\n",
+//                       source, host_id, p.r_root_id, i, p.bp_dist[i], i, p.bp_sets[i][0], i, p.bp_sets[i][1]);
+//            }
+//        }
+////		MPI_Wait(&request,
+////				MPI_STATUS_IGNORE);
+//    }
+//}
 
 //void test_dynamic_receive()
 //{

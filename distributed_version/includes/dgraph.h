@@ -116,6 +116,13 @@ public:
         assert(loc >= 0 && loc < num_hosts - 1);
         return (host_id + loc + 1) % num_hosts;
     }
+
+    int hop_2_dest_host_id(int hop, int root) const
+    {
+        assert(hop >= 1 && hop < num_hosts);
+        assert(root >=0 && root < num_hosts);
+        return (root + hop) % num_hosts;
+    }
 };
 
 // Constructor from a input file.
@@ -199,7 +206,6 @@ DistGraph::DistGraph(char *input_filename)
     }
     // Put reordered edges into corresponding buffer_sending
     std::vector< std::vector<VertexID> > edgelist_recv(num_v); // local received edges
-//    std::vector< std::vector<VertexID> > edgelist_recv(num_masters); // local received edges
     EdgeID num_edges_recv = 0;
     using EdgeType = std::pair<VertexID, VertexID>;
     std::vector< std::vector< EdgeType > > buffer_send_list(num_hosts - 1); //
@@ -224,74 +230,134 @@ DistGraph::DistGraph(char *input_filename)
             edgelist_recv[tail_new].push_back(head_new);
             ++num_edges_recv;
         }
-
-//        if (master_host_id_head != host_id) {
-//            int loc_head = master_host_id_2_buffer_send_list_loc(master_host_id_head); // location in the sending buffer list
-//            buffer_send_list[loc_head].emplace_back(head_new, tail_new); // add the edge into the sending buffer.
-//        } else {
-//            // put edge into local edgelist
-//            edgelist_recv[get_local_vertex_id(head_new)].push_back(tail_new);
-//            ++num_edges_recv;
-//        }
-//        if (master_host_id_tail != host_id) {
-//            int loc_tail = master_host_id_2_buffer_send_list_loc(master_host_id_tail);
-//            buffer_send_list[loc_tail].emplace_back(tail_new, head_new);
-//        } else {
-//            // put edge into local edgelist
-//            edgelist_recv[get_local_vertex_id(tail_new)].push_back(head_new);
-//            ++num_edges_recv;
-//        }
     }
 //	printf("@%u host_id: %u buffer_sending\n", __LINE__, host_id);//test
-    // Send the edges in buffer_sending to corresponding hosts.
-//	std::vector<MPI_Request> requests_send(num_hosts - 1);
-    std::vector< std::vector<MPI_Request> > requests_list(num_hosts - 1);
-    for (int loc = 0; loc < num_hosts - 1; ++loc) {
-        int master_host_id = buffer_send_list_loc_2_master_host_id(loc);
-
-//        MPI_Isend(buffer_send_list[loc].data(),
-//                MPI_Instance::get_sending_size(buffer_send_list[loc]),
-//                MPI_CHAR,
-//                master_host_id,
-//                GRAPH_SHUFFLE,
-//                MPI_COMM_WORLD,
-//				&requests_send[loc]);
-        MPI_Instance::send_buffer_2_dest(buffer_send_list[loc],
-                requests_list[loc],
-                master_host_id,
-                GRAPH_SHUFFLE,
-                SIZE_GRAPH_SHUFFLE);
-    }
-//	printf("@%u host_id: %u sent\n", __LINE__, host_id);//test
-    // Receive the edges
-    std::vector<EdgeType> buffer_recv;
-    for (int h_i = 0; h_i < num_hosts - 1; ++h_i) {
-        // Receive into the buffer_recv.
-//		MPI_Instance::receive_dynamic_buffer_from_any(buffer_recv,
-//		        num_hosts,
-//		        GRAPH_SHUFFLE);
-        MPI_Instance::recv_buffer_from_any(buffer_recv,
-                                           GRAPH_SHUFFLE,
-                                           SIZE_GRAPH_SHUFFLE);
-		if (buffer_recv.empty()) {
-		    continue;
-		}
-        num_edges_recv += buffer_recv.size();
-        // Put into edgelist_recv
-        for (const auto &e : buffer_recv) {
-            VertexID head = e.first;
-            VertexID tail = e.second;
-            edgelist_recv[head].push_back(tail);
+    {// Exchange edge lists
+//        const uint32_t UNIT_BUFFER_SIZE = 4U << 20U;
+        for (int h_i = 0; h_i < num_hosts; ++h_i) {
+            // Send from h_i
+            if (host_id == h_i) {
+                for (int loc = 0; loc < num_hosts - 1; ++loc) {
+                    int dst = buffer_send_list_loc_2_master_host_id(loc);
+                    MPI_Instance::send_buffer_2_dst(buffer_send_list[loc],
+                            dst,
+                            SENDING_EDGELIST,
+                            SENDING_SIZE_BUFFER_SEND);
+//                    size_t size_buffer_send = buffer_send_list[loc].size();
+//                    // Send the total size
+//                    MPI_Send(&size_buffer_send,
+//                            1,
+//                            MPI_UINT64_T,
+//                            dest,
+//                            SENDING_SIZE_BUFFER_SEND,
+//                            MPI_COMM_WORLD);
+//                    if (!size_buffer_send) {
+//                        continue;
+//                    }
+//                    // Send by multiple unit buffers
+//                    uint32_t num_unit_buffers = (size_buffer_send + UNIT_BUFFER_SIZE - 1) / UNIT_BUFFER_SIZE;
+//                    for (uint32_t b_i = 0; b_i < num_unit_buffers; ++b_i) {
+//                        size_t offset = b_i * UNIT_BUFFER_SIZE;
+//                        size_t size_unit_buffer = b_i == num_unit_buffers - 1
+//                                                  ? size_buffer_send - offset
+//                                                  : UNIT_BUFFER_SIZE;
+//                        MPI_Send(buffer_send_list[loc].data() + offset,
+//                                size_unit_buffer * sizeof(EdgeType),
+//                                MPI_CHAR,
+//                                dest,
+//                                SENDING_EDGELIST,
+//                                MPI_COMM_WORLD);
+//                    }
+                }
+            } else { // Receive from h_i
+                for (int hop = 1; hop < num_hosts; ++hop) {
+                    int dest = hop_2_dest_host_id(hop, h_i);
+                    if (host_id == dest) {
+                        std::vector<EdgeType> buffer_recv;
+                        MPI_Instance::recv_buffer_from_src(buffer_recv,
+                                h_i,
+                                SENDING_EDGELIST,
+                                SENDING_SIZE_BUFFER_SEND);
+                        num_edges_recv += buffer_recv.size();
+//                        // Receive the total size
+//                        size_t size_buffer_send;
+//                        MPI_Recv(&size_buffer_send,
+//                                1,
+//                                MPI_UINT64_T,
+//                                h_i,
+//                                SENDING_SIZE_BUFFER_SEND,
+//                                MPI_COMM_WORLD,
+//                                MPI_STATUS_IGNORE);
+//                        if (!size_buffer_send) {
+//                            continue;
+//                        }
+//                        num_edges_recv += size_buffer_send;
+//                        std::vector<EdgeType> buffer_recv(size_buffer_send);
+//                        // Receive multiple unit buffers
+//                        uint32_t num_unit_buffers = (size_buffer_send + UNIT_BUFFER_SIZE - 1) / UNIT_BUFFER_SIZE;
+//                        for (uint32_t b_i = 0; b_i < num_unit_buffers; ++b_i) {
+//                            size_t offset = b_i * UNIT_BUFFER_SIZE;
+//                            size_t size_unit_buffer = b_i == num_unit_buffers - 1
+//                                                      ? size_buffer_send - offset
+//                                                      : UNIT_BUFFER_SIZE;
+//                            MPI_Recv(buffer_recv.data() + offset,
+//                                     size_unit_buffer * sizeof(EdgeType),
+//                                     MPI_CHAR,
+//                                     h_i,
+//                                     SENDING_EDGELIST,
+//                                     MPI_COMM_WORLD,
+//                                     MPI_STATUS_IGNORE);
+//                        }
+                        // Process buffer_recv
+                        for (const auto &e : buffer_recv) {
+                            VertexID head = e.first;
+                            VertexID tail = e.second;
+                            edgelist_recv[head].push_back(tail);
+                        }
+                    }
+                }
+            }
         }
     }
-//	MPI_Waitall(num_hosts - 1,
-//			requests_send.data(),
-//			MPI_STATUSES_IGNORE);
-    for (int loc = 0; loc < num_hosts - 1; ++loc) {
-        MPI_Waitall(requests_list[loc].size(),
-                    requests_list[loc].data(),
-                    MPI_STATUSES_IGNORE);
-    }
+
+//    /////////////////////////////////////////////////
+//    //
+//    // Send the edges in buffer_sending to corresponding hosts.
+//    std::vector< std::vector<MPI_Request> > requests_list(num_hosts - 1);
+//    for (int loc = 0; loc < num_hosts - 1; ++loc) {
+//        int master_host_id = buffer_send_list_loc_2_master_host_id(loc);
+//        MPI_Instance::send_buffer_2_dest(buffer_send_list[loc],
+//                requests_list[loc],
+//                master_host_id,
+//                GRAPH_SHUFFLE,
+//                SIZE_GRAPH_SHUFFLE);
+//    }
+////	printf("@%u host_id: %u sent\n", __LINE__, host_id);//test
+//    // Receive the edges
+//    std::vector<EdgeType> buffer_recv;
+//    for (int h_i = 0; h_i < num_hosts - 1; ++h_i) {
+//        // Receive into the buffer_recv.
+//        MPI_Instance::recv_buffer_from_any(buffer_recv,
+//                                           GRAPH_SHUFFLE,
+//                                           SIZE_GRAPH_SHUFFLE);
+//		if (buffer_recv.empty()) {
+//		    continue;
+//		}
+//        num_edges_recv += buffer_recv.size();
+//        // Put into edgelist_recv
+//        for (const auto &e : buffer_recv) {
+//            VertexID head = e.first;
+//            VertexID tail = e.second;
+//            edgelist_recv[head].push_back(tail);
+//        }
+//    }
+//    for (int loc = 0; loc < num_hosts - 1; ++loc) {
+//        MPI_Waitall(requests_list[loc].size(),
+//                    requests_list[loc].data(),
+//                    MPI_STATUSES_IGNORE);
+//    }
+//    //
+//    /////////////////////////////////////////////////
 //	printf("@%u host_id: %u received\n", __LINE__, host_id);//test
     // Build up local graph structure
     num_edges_local = num_edges_recv;
