@@ -422,10 +422,10 @@ public:
                  size_message_tag,
                  MPI_COMM_WORLD,
                  MPI_STATUS_IGNORE);
+        buffer_recv.resize(size_buffer_send);
         if (!size_buffer_send) {
             return;
         }
-        buffer_recv.resize(size_buffer_send);
         // Receive multiple unit buffers
         uint32_t num_unit_buffers = (size_buffer_send + UNIT_BUFFER_SIZE - 1) / UNIT_BUFFER_SIZE;
         for (uint32_t b_i = 0; b_i < num_unit_buffers; ++b_i) {
@@ -460,11 +460,11 @@ public:
                  size_message_tag,
                  MPI_COMM_WORLD,
                  &status_recv);
+        buffer_recv.resize(size_buffer_send);
         int src = status_recv.MPI_SOURCE;
         if (!size_buffer_send) {
             return src;
         }
-        buffer_recv.resize(size_buffer_send);
         // Receive multiple unit buffers
         uint32_t num_unit_buffers = (size_buffer_send + UNIT_BUFFER_SIZE - 1) / UNIT_BUFFER_SIZE;
         for (uint32_t b_i = 0; b_i < num_unit_buffers; ++b_i) {
