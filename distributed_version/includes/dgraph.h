@@ -53,11 +53,11 @@ private:
             num_masters = quotient;
             if (remainder) {
                 if (quotient & 1U) {
-                    if (host_id > num_hosts - 1 - remainder) {
+                    if (static_cast<VertexID>(host_id) > num_hosts - 1 - remainder) {
                         num_masters += 1; // be assigned one more vertex
                     }
                 } else {
-                    if (host_id < remainder) {
+                    if (static_cast<VertexID>(host_id) < remainder) {
                         num_masters += 1; // be assigned one more vertex
                     }
                 }
