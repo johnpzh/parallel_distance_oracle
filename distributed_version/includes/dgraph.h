@@ -16,8 +16,8 @@ namespace PADO {
 
 class DistGraph final {
 private:
-    VertexID vertex_divide = 0; // the (maximum) number of vertices assigned to a host, supposed to be ceiling(num_v / num_hosts).
-    VertexID offset_vertex_id = 0; // The offset for global vertex id to local id.
+//    VertexID vertex_divide = 0; // the (maximum) number of vertices assigned to a host, supposed to be ceiling(num_v / num_hosts).
+//    VertexID offset_vertex_id = 0; // The offset for global vertex id to local id.
     std::vector<VertexID> out_degrees; // out degrees of vertices
 
     // Init function: do some initialization work for the system.
@@ -30,11 +30,38 @@ private:
 //        host_id = 1; // test
 //        num_hosts = 3; // test
 
-        vertex_divide = get_vertex_divide(); // the (maximum) number of vertices a host can be assigned to.
-        offset_vertex_id = host_id * vertex_divide;
-        num_masters = vertex_divide;
-        if (host_id == num_hosts - 1) {
-            num_masters = num_v - offset_vertex_id;
+//        vertex_divide = get_vertex_divide(); // the (maximum) number of vertices a host can be assigned to.
+//        offset_vertex_id = host_id * vertex_divide;
+//        num_masters = vertex_divide;
+//        if (host_id == num_hosts - 1) {
+//            num_masters = num_v - offset_vertex_id;
+//        }
+
+        // Get number of masters
+        /* Example: assume 4 hosts and 15 vertices.
+         *       +---------------+
+         *   Host| 0 | 1 | 2 | 3 |
+         *       +---------------+
+         *       | 0 | 1 | 2 | 3 |
+         *       | 7 | 6 | 5 | 4 |
+         *       | 8 | 9 |10 |11 |
+         *       |   |14 |13 |12 |
+         */
+        {
+            VertexID quotient = num_v / num_hosts;
+            VertexID remainder = num_v % num_hosts;
+            num_masters = quotient;
+            if (remainder) {
+                if (quotient & 1U) {
+                    if (host_id > num_hosts - 1 - remainder) {
+                        num_masters += 1; // be assigned one more vertex
+                    }
+                } else {
+                    if (host_id < remainder) {
+                        num_masters += 1; // be assigned one more vertex
+                    }
+                }
+            }
         }
         rank.resize(num_v);
         vertices_idx.resize(num_v);
@@ -43,20 +70,20 @@ private:
         local_out_degrees.resize(num_v, 0);
     }
 
-    // Function: compute the vertex divide value, which is ceiling(num_v / num_hosts).
-    VertexID get_vertex_divide() const
-    {
-        assert(num_hosts && num_v);
-        VertexID tmp_divide = num_v / num_hosts;
-        if (tmp_divide * num_hosts < num_v) {
-            ++tmp_divide;
-        }
-
-        return tmp_divide;
-    }
+//    // Function: compute the vertex divide value, which is ceiling(num_v / num_hosts).
+//    VertexID get_vertex_divide() const
+//    {
+//        assert(num_hosts && num_v);
+//        VertexID tmp_divide = num_v / num_hosts;
+//        if (tmp_divide * num_hosts < num_v) {
+//            ++tmp_divide;
+//        }
+//
+//        return tmp_divide;
+//    }
 
 public:
-    int num_hosts = 1; // number of hosts
+    int num_hosts = 0; // number of hosts
     int host_id = 0; // host ID
     VertexID num_v = 0; // number of vertices
     EdgeID num_e = 0; // number of edges
@@ -82,23 +109,41 @@ public:
     }
     // Function: convert a vertex ID to its master host ID.
     // For example, vertex v should belong to host v / ceiling(num_v / num_hosts).
-    int get_master_host_id(VertexID v_id) const
+    int get_master_host_id(VertexID v_global) const
     {
-        assert(vertex_divide);
-        return v_id / vertex_divide;
+        assert(num_hosts);
+        return v_global % num_hosts == v_global % (2 * num_hosts)
+                ? v_global % num_hosts
+                : num_hosts - 1 - v_global % num_hosts;
     }
+//    int get_master_host_id(VertexID v_global) const
+//    {
+//        assert(vertex_divide);
+//        return v_global / vertex_divide;
+//    }
 
     // Function: get the local vertex ID from the global ID
     VertexID get_local_vertex_id(VertexID global_id) const
     {
-        return global_id - offset_vertex_id;
+        assert(num_hosts);
+        return global_id / num_hosts;
     }
+//    VertexID get_local_vertex_id(VertexID global_id) const
+//    {
+//        return global_id - offset_vertex_id;
+//    }
 
     // Function: get the global vertex ID from the local ID
     VertexID get_global_vertex_id(VertexID local_id) const
     {
-        return local_id + offset_vertex_id;
+        return local_id & 1U
+                ? local_id * num_hosts + (num_hosts - 1 - host_id)
+                : local_id * num_hosts + host_id;
     }
+//    VertexID get_global_vertex_id(VertexID local_id) const
+//    {
+//        return local_id + offset_vertex_id;
+//    }
 
     // Function: convert the master host id to the location of local sending buffer list.
     // For example, a message belonging to host x should be put into
@@ -117,6 +162,8 @@ public:
         return (host_id + loc + 1) % num_hosts;
     }
 
+    // Function: get the destination host id which is i hop from the root.
+    // For example, 1 hop from host 2 is host 0 (assume total 3 hosts).
     int hop_2_dest_host_id(int hop, int root) const
     {
         assert(hop >= 1 && hop < num_hosts);
@@ -233,7 +280,6 @@ DistGraph::DistGraph(char *input_filename)
     }
 //	printf("@%u host_id: %u buffer_sending\n", __LINE__, host_id);//test
     {// Exchange edge lists
-//        const uint32_t UNIT_BUFFER_SIZE = 4U << 20U;
         for (int h_i = 0; h_i < num_hosts; ++h_i) {
             // Send from h_i
             if (host_id == h_i) {
@@ -243,31 +289,6 @@ DistGraph::DistGraph(char *input_filename)
                             dst,
                             SENDING_EDGELIST,
                             SENDING_SIZE_BUFFER_SEND);
-//                    size_t size_buffer_send = buffer_send_list[loc].size();
-//                    // Send the total size
-//                    MPI_Send(&size_buffer_send,
-//                            1,
-//                            MPI_UINT64_T,
-//                            dest,
-//                            SENDING_SIZE_BUFFER_SEND,
-//                            MPI_COMM_WORLD);
-//                    if (!size_buffer_send) {
-//                        continue;
-//                    }
-//                    // Send by multiple unit buffers
-//                    uint32_t num_unit_buffers = (size_buffer_send + UNIT_BUFFER_SIZE - 1) / UNIT_BUFFER_SIZE;
-//                    for (uint32_t b_i = 0; b_i < num_unit_buffers; ++b_i) {
-//                        size_t offset = b_i * UNIT_BUFFER_SIZE;
-//                        size_t size_unit_buffer = b_i == num_unit_buffers - 1
-//                                                  ? size_buffer_send - offset
-//                                                  : UNIT_BUFFER_SIZE;
-//                        MPI_Send(buffer_send_list[loc].data() + offset,
-//                                size_unit_buffer * sizeof(EdgeType),
-//                                MPI_CHAR,
-//                                dest,
-//                                SENDING_EDGELIST,
-//                                MPI_COMM_WORLD);
-//                    }
                 }
             } else { // Receive from h_i
                 for (int hop = 1; hop < num_hosts; ++hop) {
@@ -279,35 +300,6 @@ DistGraph::DistGraph(char *input_filename)
                                 SENDING_EDGELIST,
                                 SENDING_SIZE_BUFFER_SEND);
                         num_edges_recv += buffer_recv.size();
-//                        // Receive the total size
-//                        size_t size_buffer_send;
-//                        MPI_Recv(&size_buffer_send,
-//                                1,
-//                                MPI_UINT64_T,
-//                                h_i,
-//                                SENDING_SIZE_BUFFER_SEND,
-//                                MPI_COMM_WORLD,
-//                                MPI_STATUS_IGNORE);
-//                        if (!size_buffer_send) {
-//                            continue;
-//                        }
-//                        num_edges_recv += size_buffer_send;
-//                        std::vector<EdgeType> buffer_recv(size_buffer_send);
-//                        // Receive multiple unit buffers
-//                        uint32_t num_unit_buffers = (size_buffer_send + UNIT_BUFFER_SIZE - 1) / UNIT_BUFFER_SIZE;
-//                        for (uint32_t b_i = 0; b_i < num_unit_buffers; ++b_i) {
-//                            size_t offset = b_i * UNIT_BUFFER_SIZE;
-//                            size_t size_unit_buffer = b_i == num_unit_buffers - 1
-//                                                      ? size_buffer_send - offset
-//                                                      : UNIT_BUFFER_SIZE;
-//                            MPI_Recv(buffer_recv.data() + offset,
-//                                     size_unit_buffer * sizeof(EdgeType),
-//                                     MPI_CHAR,
-//                                     h_i,
-//                                     SENDING_EDGELIST,
-//                                     MPI_COMM_WORLD,
-//                                     MPI_STATUS_IGNORE);
-//                        }
                         // Process buffer_recv
                         for (const auto &e : buffer_recv) {
                             VertexID head = e.first;

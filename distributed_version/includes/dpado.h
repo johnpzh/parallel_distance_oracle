@@ -166,20 +166,20 @@ private:
             const std::vector<BPLabelType> &bp_labels_table,
             const std::vector<uint8_t> &used_bp_roots,
             UnweightedDist iter);
-    inline void local_push_labels(
-            VertexID v_head_local,
-            VertexID roots_start,
-            const DistGraph &G,
-            std::vector<ShortIndex> &short_index,
-            std::vector<VertexID> &got_candidates_queue,
-            VertexID &end_got_candidates_queue,
-            std::vector<bool> &got_candidates,
-            std::vector<VertexID> &once_candidated_queue,
-            VertexID &end_once_candidated_queue,
-            std::vector<bool> &once_candidated,
-            const std::vector<BPLabelType> &bp_labels_table,
-            const std::vector<uint8_t> &used_bp_roots,
-            UnweightedDist iter);
+//    inline void local_push_labels(
+//            VertexID v_head_local,
+//            VertexID roots_start,
+//            const DistGraph &G,
+//            std::vector<ShortIndex> &short_index,
+//            std::vector<VertexID> &got_candidates_queue,
+//            VertexID &end_got_candidates_queue,
+//            std::vector<bool> &got_candidates,
+//            std::vector<VertexID> &once_candidated_queue,
+//            VertexID &end_once_candidated_queue,
+//            std::vector<bool> &once_candidated,
+//            const std::vector<BPLabelType> &bp_labels_table,
+//            const std::vector<uint8_t> &used_bp_roots,
+//            UnweightedDist iter);
     inline bool distance_query(
             VertexID cand_root_id,
             VertexID v_id,
@@ -712,6 +712,11 @@ bit_parallel_labeling(
 //            {//test
 //                printf("@%u host_id: %u buffer_send.size(): %lu\n", __LINE__, host_id, buffer_send.size());
 //            }
+//            {//test
+//                for (VertexID i = 0; i < buffer_send[i]; ++i) {
+//                    printf("host_id: %u buffer_send[%u]: %u\n", host_id, i, buffer_send[i]);
+//                }
+//            }
 
 //            std::vector<VertexID> all_nbrs(G.get_global_out_degree(r_global));
             // Get selected neighbors (up to 64)
@@ -742,6 +747,12 @@ bit_parallel_labeling(
                 // Host 0 receives neighbors from others
                 std::vector<VertexID> all_nbrs(buffer_send);
                 std::vector<VertexID > buffer_recv;
+//                {//test
+//                    printf("\nBefore receive:\n");
+//                    for (VertexID i = 0; i < all_nbrs.size(); ++i) {
+//                        printf("host_id: %u @%u all_nbrs[%u]: %u\n", host_id, __LINE__, i, all_nbrs[i]);
+//                    }
+//                }
                 for (int loc = 0; loc < num_hosts - 1; ++loc) {
                     MPI_Instance::recv_buffer_from_any(buffer_recv,
                                                        SENDING_ROOT_NEIGHBORS,
@@ -753,19 +764,44 @@ bit_parallel_labeling(
                         continue;
                     }
 //                    {// test
+//                        printf("\nReceive:\n");
 //                        printf("@%u host_id: %u buffer_recv.size(): %lu\n", __LINE__, host_id, buffer_recv.size());
 //                    }
+//                    {// test
+//                        for (VertexID i = 0; i < buffer_recv.size(); ++i) {
+//                            printf("host_id: %u @%u buffer_recv[%u]: %u\n", host_id, __LINE__, i, buffer_recv[i]);
+//                        }
+//                    }
+
                     buffer_send.resize(buffer_send.size() + buffer_recv.size());
                     std::merge(buffer_recv.begin(), buffer_recv.end(), all_nbrs.begin(), all_nbrs.end(), buffer_send.begin());
 //                    all_nbrs.swap(buffer_send);
+//                    {// test
+//                        printf("\nAfter Merge:\n");
+//                        for (VertexID i = 0; i < buffer_send.size(); ++i) {
+//                            printf("host_id: %u @%u buffer_send[%u]: %u\n", host_id, __LINE__, i, buffer_send[i]);
+//                        }
+//                    }
                     all_nbrs.resize(buffer_send.size());
-                    std::copy(buffer_send.begin(), buffer_send.begin(), all_nbrs.begin());
+                    all_nbrs.assign(buffer_send.begin(), buffer_send.end());
+//                    std::copy(buffer_send.begin(), buffer_send.begin(), all_nbrs.begin());
+//                    {// test
+//                        printf("\nCopied to all_nbrs:\n");
+//                        for (VertexID i = 0; i < all_nbrs.size(); ++i) {
+//                            printf("host_id: %u @%u all_nbrs[%u]: %u\n", host_id, __LINE__, i, all_nbrs[i]);
+//                        }
+//                    }
 //                    {
 //                        printf("@%u host_id: %u loc: %u all_nbrs.size(): %lu buffer_send.size(): %lu\n", __LINE__, host_id, loc, all_nbrs.size(), buffer_send.size());
 //                    }
                 }
 //                {//test
 //                    printf("@%u host_id: %u all_nbrs: %lu global_out_degree: %u\n", __LINE__, host_id, all_nbrs.size(), G.get_global_out_degree(r_global));
+//                }
+//                {//test
+//                    for (VertexID i = 0; i < all_nbrs.size(); ++i) {
+//                        printf("host_id: %u all_nbrs[%u]: %u\n", host_id, i, all_nbrs[i]);
+//                    }
 //                }
                 assert(all_nbrs.size() == G.get_global_out_degree(r_global));
                 // Select 64 (or less) neighbors
@@ -793,6 +829,17 @@ bit_parallel_labeling(
 //                            MPI_COMM_WORLD);
                 }
             }
+//            {//test
+//                if (0 == host_id) {
+//                    printf("r_global: %u\n", r_global);
+//                    for (size_t i = 0; i < selected_nbrs.size(); ++i) {
+//                        printf("selected_nbrs[%lu]: %u\n", i, selected_nbrs[i]);
+//                    }
+//                }
+////                if (0 == r_global) {
+////                    exit(0);
+////                }
+//            }
 
             // Synchronize the used_bp_roots.
             for (VertexID v_global : selected_nbrs) {
@@ -1491,114 +1538,114 @@ push_single_label(
         assert(iter >= iter);
     }
 }
-// Function: pushes v_head's labels to v_head's every (master) neighbor
-template <VertexID BATCH_SIZE, VertexID BITPARALLEL_SIZE>
-inline void DistBVCPLL<BATCH_SIZE, BITPARALLEL_SIZE>::
-local_push_labels(
-        VertexID v_head_local,
-        VertexID roots_start,
-        const DistGraph &G,
-        std::vector<ShortIndex> &short_index,
-        std::vector<VertexID> &got_candidates_queue,
-        VertexID &end_got_candidates_queue,
-        std::vector<bool> &got_candidates,
-        std::vector<VertexID> &once_candidated_queue,
-        VertexID &end_once_candidated_queue,
-        std::vector<bool> &once_candidated,
-        const std::vector<BPLabelType> &bp_labels_table,
-        const std::vector<uint8_t> &used_bp_roots,
-        UnweightedDist iter)
-{
-    // The data structure of a message
-//    std::vector< LabelUnitType > buffer_recv;
-    const IndexType &Lv = L[v_head_local];
-    // These 2 index are used for traversing v_head's last inserted labels
-    VertexID l_i_start = Lv.distances.rbegin() -> start_index;
-    VertexID l_i_bound = l_i_start + Lv.distances.rbegin() -> size;
-    // Traverse v_head's every neighbor v_tail
-    VertexID v_head_global = G.get_global_vertex_id(v_head_local);
-    EdgeID e_i_start = G.vertices_idx[v_head_global];
-    EdgeID e_i_bound = e_i_start + G.local_out_degrees[v_head_global];
-    for (EdgeID e_i = e_i_start; e_i < e_i_bound; ++e_i) {
-        VertexID v_tail_global = G.out_edges[e_i];
-        if (used_bp_roots[v_tail_global]) {
-            continue;
-        }
-        if (v_tail_global < roots_start) { // v_tail_global has higher rank than any roots, then no roots can push new labels to it.
-            return;
-        }
-
-        // Traverse v_head's last inserted labels
-        for (VertexID l_i = l_i_start; l_i < l_i_bound; ++l_i) {
-            VertexID label_root_id = Lv.vertices[l_i];
-            VertexID label_global_id = label_root_id + roots_start;
-            if (v_tail_global <= label_global_id) {
-                // v_tail_global has higher rank than the label
-                continue;
-            }
-            VertexID v_tail_local = G.get_local_vertex_id(v_tail_global);
-            const IndexType &L_tail = L[v_tail_local];
-            ShortIndex &SI_v_tail = short_index[v_tail_local];
-            if (SI_v_tail.indicator[label_root_id]) {
-                // The label is already selected before
-                continue;
-            }
-            // Record label_root_id as once selected by v_tail_global
-            SI_v_tail.indicator.set(label_root_id);
-            // Add into once_candidated_queue
-
-            if (!once_candidated[v_tail_local]) {
-                // If v_tail_global is not in the once_candidated_queue yet, add it in
-                once_candidated[v_tail_local] = true;
-                once_candidated_queue[end_once_candidated_queue++] = v_tail_local;
-            }
-
-            // Bit Parallel Checking: if label_global_id to v_tail_global has shorter distance already
-            //			++total_check_count;
-//            const IndexType &L_label = L[label_global_id];
-//            _mm_prefetch(&L_label.bp_dist[0], _MM_HINT_T0);
-//            _mm_prefetch(&L_label.bp_sets[0][0], _MM_HINT_T0);
-//			bp_checking_ins_count.measure_start();
-            const BPLabelType &L_label = bp_labels_table[label_root_id];
-            bool no_need_add = false;
-            for (VertexID i = 0; i < BITPARALLEL_SIZE; ++i) {
-                VertexID td = L_label.bp_dist[i] + L_tail.bp_dist[i];
-                if (td - 2 <= iter) {
-                    td +=
-                            (L_label.bp_sets[i][0] & L_tail.bp_sets[i][0]) ? -2 :
-                            ((L_label.bp_sets[i][0] & L_tail.bp_sets[i][1]) |
-                             (L_label.bp_sets[i][1] & L_tail.bp_sets[i][0]))
-                            ? -1 : 0;
-                    if (td <= iter) {
-                        no_need_add = true;
-//						++bp_hit_count;
-                        break;
-                    }
-                }
-            }
-            if (no_need_add) {
-//				bp_checking_ins_count.measure_stop();
-                continue;
-            }
-//			bp_checking_ins_count.measure_stop();
-            if (SI_v_tail.is_candidate[label_root_id]) {
-                continue;
-            }
-            SI_v_tail.is_candidate[label_root_id] = true;
-            SI_v_tail.candidates_que[SI_v_tail.end_candidates_que++] = label_root_id;
-
-            if (!got_candidates[v_tail_local]) {
-                // If v_tail_global is not in got_candidates_queue, add it in (prevent duplicate)
-                got_candidates[v_tail_local] = true;
-                got_candidates_queue[end_got_candidates_queue++] = v_tail_local;
-            }
-        }
-    }
-
-    {
-        assert(iter >= iter);
-    }
-}
+//// Function: pushes v_head's labels to v_head's every (master) neighbor
+//template <VertexID BATCH_SIZE, VertexID BITPARALLEL_SIZE>
+//inline void DistBVCPLL<BATCH_SIZE, BITPARALLEL_SIZE>::
+//local_push_labels(
+//        VertexID v_head_local,
+//        VertexID roots_start,
+//        const DistGraph &G,
+//        std::vector<ShortIndex> &short_index,
+//        std::vector<VertexID> &got_candidates_queue,
+//        VertexID &end_got_candidates_queue,
+//        std::vector<bool> &got_candidates,
+//        std::vector<VertexID> &once_candidated_queue,
+//        VertexID &end_once_candidated_queue,
+//        std::vector<bool> &once_candidated,
+//        const std::vector<BPLabelType> &bp_labels_table,
+//        const std::vector<uint8_t> &used_bp_roots,
+//        UnweightedDist iter)
+//{
+//    // The data structure of a message
+////    std::vector< LabelUnitType > buffer_recv;
+//    const IndexType &Lv = L[v_head_local];
+//    // These 2 index are used for traversing v_head's last inserted labels
+//    VertexID l_i_start = Lv.distances.rbegin() -> start_index;
+//    VertexID l_i_bound = l_i_start + Lv.distances.rbegin() -> size;
+//    // Traverse v_head's every neighbor v_tail
+//    VertexID v_head_global = G.get_global_vertex_id(v_head_local);
+//    EdgeID e_i_start = G.vertices_idx[v_head_global];
+//    EdgeID e_i_bound = e_i_start + G.local_out_degrees[v_head_global];
+//    for (EdgeID e_i = e_i_start; e_i < e_i_bound; ++e_i) {
+//        VertexID v_tail_global = G.out_edges[e_i];
+//        if (used_bp_roots[v_tail_global]) {
+//            continue;
+//        }
+//        if (v_tail_global < roots_start) { // v_tail_global has higher rank than any roots, then no roots can push new labels to it.
+//            return;
+//        }
+//
+//        // Traverse v_head's last inserted labels
+//        for (VertexID l_i = l_i_start; l_i < l_i_bound; ++l_i) {
+//            VertexID label_root_id = Lv.vertices[l_i];
+//            VertexID label_global_id = label_root_id + roots_start;
+//            if (v_tail_global <= label_global_id) {
+//                // v_tail_global has higher rank than the label
+//                continue;
+//            }
+//            VertexID v_tail_local = G.get_local_vertex_id(v_tail_global);
+//            const IndexType &L_tail = L[v_tail_local];
+//            ShortIndex &SI_v_tail = short_index[v_tail_local];
+//            if (SI_v_tail.indicator[label_root_id]) {
+//                // The label is already selected before
+//                continue;
+//            }
+//            // Record label_root_id as once selected by v_tail_global
+//            SI_v_tail.indicator.set(label_root_id);
+//            // Add into once_candidated_queue
+//
+//            if (!once_candidated[v_tail_local]) {
+//                // If v_tail_global is not in the once_candidated_queue yet, add it in
+//                once_candidated[v_tail_local] = true;
+//                once_candidated_queue[end_once_candidated_queue++] = v_tail_local;
+//            }
+//
+//            // Bit Parallel Checking: if label_global_id to v_tail_global has shorter distance already
+//            //			++total_check_count;
+////            const IndexType &L_label = L[label_global_id];
+////            _mm_prefetch(&L_label.bp_dist[0], _MM_HINT_T0);
+////            _mm_prefetch(&L_label.bp_sets[0][0], _MM_HINT_T0);
+////			bp_checking_ins_count.measure_start();
+//            const BPLabelType &L_label = bp_labels_table[label_root_id];
+//            bool no_need_add = false;
+//            for (VertexID i = 0; i < BITPARALLEL_SIZE; ++i) {
+//                VertexID td = L_label.bp_dist[i] + L_tail.bp_dist[i];
+//                if (td - 2 <= iter) {
+//                    td +=
+//                            (L_label.bp_sets[i][0] & L_tail.bp_sets[i][0]) ? -2 :
+//                            ((L_label.bp_sets[i][0] & L_tail.bp_sets[i][1]) |
+//                             (L_label.bp_sets[i][1] & L_tail.bp_sets[i][0]))
+//                            ? -1 : 0;
+//                    if (td <= iter) {
+//                        no_need_add = true;
+////						++bp_hit_count;
+//                        break;
+//                    }
+//                }
+//            }
+//            if (no_need_add) {
+////				bp_checking_ins_count.measure_stop();
+//                continue;
+//            }
+////			bp_checking_ins_count.measure_stop();
+//            if (SI_v_tail.is_candidate[label_root_id]) {
+//                continue;
+//            }
+//            SI_v_tail.is_candidate[label_root_id] = true;
+//            SI_v_tail.candidates_que[SI_v_tail.end_candidates_que++] = label_root_id;
+//
+//            if (!got_candidates[v_tail_local]) {
+//                // If v_tail_global is not in got_candidates_queue, add it in (prevent duplicate)
+//                got_candidates[v_tail_local] = true;
+//                got_candidates_queue[end_got_candidates_queue++] = v_tail_local;
+//            }
+//        }
+//    }
+//
+//    {
+//        assert(iter >= iter);
+//    }
+//}
 
 
 //// DEPRECATED Function: in the scatter phase, synchronize local masters to mirrors on other hosts
