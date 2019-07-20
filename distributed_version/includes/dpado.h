@@ -908,6 +908,9 @@ bit_parallel_labeling(
                                              tmp_s[v_global].first, // S_n1
                                              tmp_s[v_global].second); // S_0
                 }
+                {//test
+                    printf("host_id: %u bp_labeling: buffer_send.size(); %lu bytes: %lu\n", host_id, buffer_send.size(), MPI_Instance::get_sending_size(buffer_send));
+                }
                 // Lambda for processing every message
                 auto process = [&] (const MsgUnitBP &m) {
                     VertexID v_global = m.v_global;
@@ -1964,6 +1967,9 @@ batch_process(
 					buffer_send.emplace_back(v_head_global, label_root_id);
 				}
 			}
+            {//test
+                printf("host_id: %u scatter: buffer_send.size(); %lu bytes: %lu\n", host_id, buffer_send.size(), MPI_Instance::get_sending_size(buffer_send));
+            }
 			// Lambda process actives
 			auto process = [&] (const std::pair<VertexID, VertexID> &m) {
                 VertexID v_head_global = m.first;
