@@ -275,23 +275,41 @@ DistBVCPLL(const DistGraph &G)
             used_bp_roots);
     {//test
 //        exit(0);
-        if (0 == host_id) {
+//        if (0 == host_id) {
             printf("host_id: %u bp_labeling_finished.\n", host_id);
-        }
+//        }
     }
 
     std::vector<VertexID> active_queue(num_masters); // Any vertex v who is active should be put into this queue.
     VertexID end_active_queue = 0;
+    {// test
+        printf("host_id: %u @%u active_queue finished\n", host_id, __LINE__);
+    }
     std::vector<bool> is_active(num_masters, false);// is_active[v] is true means vertex v is in the active queue.
+    {// test
+        printf("host_id: %u @%u is_active finished\n", host_id, __LINE__);
+    }
     std::vector<VertexID> got_candidates_queue(num_masters); // Any vertex v who got candidates should be put into this queue.
     VertexID end_got_candidates_queue = 0;
     std::vector<bool> got_candidates(num_masters, false); // got_candidates[v] is true means vertex v is in the queue got_candidates_queue
+    {// test
+        printf("host_id: %u @%u got_candidates_queue & got_candidates finished\n", host_id, __LINE__);
+    }
     std::vector<ShortIndex> short_index(num_masters);
+    {// test
+        printf("host_id: %u @%u short_index finished\n", host_id, __LINE__);
+    }
     std::vector< std::vector<UnweightedDist> > dist_table(BATCH_SIZE, std::vector<UnweightedDist>(num_v, MAX_UNWEIGHTED_DIST));
+    {// test
+        printf("host_id: %u @%u dist_table finished\n", host_id, __LINE__);
+    }
     std::vector<VertexID> once_candidated_queue(num_masters); // if short_index[v].indicator.any() is true, v is in the queue.
         // Used mainly for resetting short_index[v].indicator.
     VertexID end_once_candidated_queue = 0;
     std::vector<bool> once_candidated(num_masters, false);
+    {// test
+        printf("host_id: %u @%u once_candidated_queue & once_candidated finished\n", host_id, __LINE__);
+    }
 
 //    std::vector<VertexID> active_queue(num_v); // Any vertex v who is active should be put into this queue.
 //    VertexID end_active_queue = 0;
@@ -307,7 +325,13 @@ DistBVCPLL(const DistGraph &G)
 //    std::vector<bool> once_candidated(num_v, false);
 
     std::vector< std::vector<VertexID> > recved_dist_table(BATCH_SIZE); // Some distances are from other hosts. This is used to reset the dist_table.
+    {// test
+        printf("host_id: %u @%u recved_dist_table finished\n", host_id, __LINE__);
+    }
     std::vector<BPLabelType> bp_labels_table(BATCH_SIZE); // All roots' bit-parallel labels
+    {// test
+        printf("host_id: %u @%u all declared\n", host_id, __LINE__);
+    }
 
     //printf("b_i_bound: %u\n", b_i_bound);//test
     for (VertexID b_i = 0; b_i < b_i_bound; ++b_i) {
@@ -678,11 +702,9 @@ bit_parallel_labeling(
                 0,
                 MPI_COMM_WORLD);
         used_bp_roots[r_global] = 1;
-//        {//test
-//            if (0 == host_id) {
-//                printf("i: %u r: %u\n", i_bpspt, r_global);
-//            }
-//        }
+        {//test
+            printf("host_id: %u r_global: %u i_bpspt: %u\n", host_id, r_global, i_bpspt);
+        }
 
 //        VertexID que_t0 = 0, que_t1 = 0, que_h = 0;
         fill(tmp_d.begin(), tmp_d.end(), MAX_UNWEIGHTED_DIST);
@@ -693,9 +715,6 @@ bit_parallel_labeling(
             tmp_d[G.get_local_vertex_id(r_global)] = 0;
             que[end_que++] = r_global;
         }
-//        {// test
-//            printf("r: %u @%u host_id: %u G.local_out_degrees[%u]: %u\n", r_global, __LINE__, host_id, r_global, G.local_out_degrees[r_global]);
-//        }
         // Select the r_global's 64 neighbors
         {
             // Get r_global's neighbors into buffer_send, rank from low to high.
@@ -709,16 +728,7 @@ bit_parallel_labeling(
                     buffer_send[v_i++] = G.out_edges[e_i];
                 }
             }
-//            {//test
-//                printf("@%u host_id: %u buffer_send.size(): %lu\n", __LINE__, host_id, buffer_send.size());
-//            }
-//            {//test
-//                for (VertexID i = 0; i < buffer_send[i]; ++i) {
-//                    printf("host_id: %u buffer_send[%u]: %u\n", host_id, i, buffer_send[i]);
-//                }
-//            }
 
-//            std::vector<VertexID> all_nbrs(G.get_global_out_degree(r_global));
             // Get selected neighbors (up to 64)
             std::vector<VertexID> selected_nbrs;
             if (0 != host_id) {
@@ -747,12 +757,6 @@ bit_parallel_labeling(
                 // Host 0 receives neighbors from others
                 std::vector<VertexID> all_nbrs(buffer_send);
                 std::vector<VertexID > buffer_recv;
-//                {//test
-//                    printf("\nBefore receive:\n");
-//                    for (VertexID i = 0; i < all_nbrs.size(); ++i) {
-//                        printf("host_id: %u @%u all_nbrs[%u]: %u\n", host_id, __LINE__, i, all_nbrs[i]);
-//                    }
-//                }
                 for (int loc = 0; loc < num_hosts - 1; ++loc) {
                     MPI_Instance::recv_buffer_from_any(buffer_recv,
                                                        SENDING_ROOT_NEIGHBORS,
@@ -763,47 +767,16 @@ bit_parallel_labeling(
                     if (buffer_recv.empty()) {
                         continue;
                     }
-//                    {// test
-//                        printf("\nReceive:\n");
-//                        printf("@%u host_id: %u buffer_recv.size(): %lu\n", __LINE__, host_id, buffer_recv.size());
-//                    }
-//                    {// test
-//                        for (VertexID i = 0; i < buffer_recv.size(); ++i) {
-//                            printf("host_id: %u @%u buffer_recv[%u]: %u\n", host_id, __LINE__, i, buffer_recv[i]);
-//                        }
-//                    }
 
                     buffer_send.resize(buffer_send.size() + buffer_recv.size());
                     std::merge(buffer_recv.begin(), buffer_recv.end(), all_nbrs.begin(), all_nbrs.end(), buffer_send.begin());
-//                    all_nbrs.swap(buffer_send);
-//                    {// test
-//                        printf("\nAfter Merge:\n");
-//                        for (VertexID i = 0; i < buffer_send.size(); ++i) {
-//                            printf("host_id: %u @%u buffer_send[%u]: %u\n", host_id, __LINE__, i, buffer_send[i]);
-//                        }
-//                    }
                     all_nbrs.resize(buffer_send.size());
                     all_nbrs.assign(buffer_send.begin(), buffer_send.end());
-//                    std::copy(buffer_send.begin(), buffer_send.begin(), all_nbrs.begin());
-//                    {// test
-//                        printf("\nCopied to all_nbrs:\n");
-//                        for (VertexID i = 0; i < all_nbrs.size(); ++i) {
-//                            printf("host_id: %u @%u all_nbrs[%u]: %u\n", host_id, __LINE__, i, all_nbrs[i]);
-//                        }
-//                    }
-//                    {
-//                        printf("@%u host_id: %u loc: %u all_nbrs.size(): %lu buffer_send.size(): %lu\n", __LINE__, host_id, loc, all_nbrs.size(), buffer_send.size());
-//                    }
                 }
-//                {//test
-//                    printf("@%u host_id: %u all_nbrs: %lu global_out_degree: %u\n", __LINE__, host_id, all_nbrs.size(), G.get_global_out_degree(r_global));
-//                }
-//                {//test
-//                    for (VertexID i = 0; i < all_nbrs.size(); ++i) {
-//                        printf("host_id: %u all_nbrs[%u]: %u\n", host_id, i, all_nbrs[i]);
-//                    }
-//                }
                 assert(all_nbrs.size() == G.get_global_out_degree(r_global));
+                {//test
+                    printf("host_id: %u got_all_neighbors: all_nbrs.size(): %lu\n", host_id, all_nbrs.size());
+                }
                 // Select 64 (or less) neighbors
                 VertexID ns = 0; // number of selected neighbor, default 64
                 for (VertexID v_global : all_nbrs) {
@@ -829,17 +802,9 @@ bit_parallel_labeling(
 //                            MPI_COMM_WORLD);
                 }
             }
-//            {//test
-//                if (0 == host_id) {
-//                    printf("r_global: %u\n", r_global);
-//                    for (size_t i = 0; i < selected_nbrs.size(); ++i) {
-//                        printf("selected_nbrs[%lu]: %u\n", i, selected_nbrs[i]);
-//                    }
-//                }
-////                if (0 == r_global) {
-////                    exit(0);
-////                }
-//            }
+            {//test
+                printf("host_id: %u selected_nbrs.size(): %lu\n", host_id, selected_nbrs.size());
+            }
 
             // Synchronize the used_bp_roots.
             for (VertexID v_global : selected_nbrs) {
@@ -860,19 +825,8 @@ bit_parallel_labeling(
 
         // Reduce the global number of active vertices
         VertexID global_num_actives = 1;
-//        MPI_Allreduce(&end_que,
-//                &global_num_actives,
-//                1,
-//                V_ID_Type,
-//                MPI_SUM,
-//                MPI_COMM_WORLD);
         UnweightedDist d = 0;
         while (global_num_actives) {
-//            {//test
-//                if (0 == host_id) {
-//                    printf("host_id: %u @%u globabl_num_actives: %u\n", host_id, __LINE__, global_num_actives);
-//                }
-//            }
 //            for (UnweightedDist d = 0; que_t0 < que_h; ++d) {
             VertexID num_sibling_es = 0, num_child_es = 0;
 
@@ -2111,6 +2065,9 @@ batch_process(
                             b_id,
                             iter);
                 }
+            }
+            {//test
+                printf("host_id: %u gather: buffer_send.size(); %lu bytes: %lu\n", host_id, buffer_send.size(), MPI_Instance::get_sending_size(buffer_send));
             }
             end_got_candidates_queue = 0; // Set the got_candidates_queue empty
             // Lambda for processing

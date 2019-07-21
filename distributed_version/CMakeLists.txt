@@ -16,7 +16,7 @@ add_subdirectory(tools)
 # MPI
 find_package(MPI REQUIRED)
 target_include_directories(dpado PRIVATE "${MPI_CXX_INCLUDE_DIRS}")
-target_compile_options(dpado PRIVATE "${MPI_CXX_LINK_FLAGS}")
+#target_compile_options(dpado PRIVATE "${MPI_CXX_LINK_FLAGS}")
 target_link_libraries(dpado PRIVATE "${MPI_CXX_LIBRARIES}")
 
 ## MPI
