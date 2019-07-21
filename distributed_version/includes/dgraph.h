@@ -11,6 +11,7 @@
 #include <algorithm>
 #include "mpi_dpado.h"
 #include "dglobals.h"
+#include "utils.h"
 
 namespace PADO {
 
@@ -373,6 +374,12 @@ DistGraph::DistGraph(char *input_filename)
         assert(out_degrees[v_global] == test_in_degrees[v_local]); // undirected graph.
     }
 //	printf("@%u host_id: %u built_up\n", __LINE__, host_id);//test
+    {//test
+        double virtual_memory;
+        double resident_memory;
+        Utils::memory_usage(virtual_memory, resident_memory);
+        printf("host_id: %u virtual_memory: %.2fMB resident_memory: %.2fMB\n", host_id, virtual_memory, resident_memory);
+    }
 }
 
 } // End namespace PADO
