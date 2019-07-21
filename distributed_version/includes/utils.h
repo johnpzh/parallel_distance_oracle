@@ -34,8 +34,8 @@ public:
                 >> ignore >> ignore >> ignore >> ignore
                 >> ignore >> ignore >> ignore >> ignore
                 >> ignore >> ignore >> vm >> rsm;
-        virt = vm / 1024.0;
-        res = rsm * (sysconf(_SC_PAGESIZE) / 1024.0);
+        virt = vm / 1024.0 / 1024.0;
+        res = rsm * (sysconf(_SC_PAGESIZE) / 1024.0 / 1024.0);
 
         return 0;
     }

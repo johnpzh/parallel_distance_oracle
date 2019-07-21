@@ -17,7 +17,11 @@ void dpado(char *argv[])
     DistGraph G(argv[1]);
 	printf("host_id: %u num_masters: %u /%u %.2f%% num_edges_local %lu /%lu %.2f%%\n",
 	        G.host_id, G.num_masters, G.num_v, 100.0 * G.num_masters / G.num_v, G.num_edges_local, 2 * G.num_e, 100.0 * G.num_edges_local / (2 * G.num_e));//test
-
+    {//test
+        system("free -h");
+        system("ulimit -a");
+        system("ulimit -s unlimited");
+    }
 
 	DistBVCPLL<1024, 50> dist_bvcpll(G); // batch size 1024, bit-parallel size 0.
 //	DistBVCPLL<8, 50> dist_bvcpll(G); // batch size 1024, bit-parallel size 0.
@@ -305,6 +309,11 @@ void test_recv()
 
 }
 
+void test_system()
+{
+    system("free -h");
+}
+
 void usage_print()
 {
     fprintf(stderr,
@@ -327,6 +336,7 @@ int main(int argc, char *argv[])
     MPI_Instance mpi_instance(argc, argv);
 
     dpado(argv);
+//    test_system();
 //    test_recv();
 //    test_dynamic_receive();
     return EXIT_SUCCESS;

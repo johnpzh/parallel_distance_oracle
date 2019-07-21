@@ -61,7 +61,7 @@ public:
     MPI_Instance(int argc, char *argv[]) {
         int host_id = 0; // host ID
         int num_hosts = 0; // number of hosts
-        int provided;
+        int provided = 0;
         MPI_Init_thread(&argc, &argv, MPI_THREAD_MULTIPLE, &provided);
         MPI_Comm_rank(MPI_COMM_WORLD, &host_id);
         MPI_Comm_size(MPI_COMM_WORLD, &num_hosts);
