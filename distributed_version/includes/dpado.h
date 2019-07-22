@@ -661,6 +661,9 @@ bit_parallel_labeling(
 
         MsgUnitBP() = default;
         MsgUnitBP(MsgUnitBP&& other) = default;
+        MsgUnitBP(MsgUnitBP& other) = default;
+        MsgUnitBP& operator=(const MsgUnitBP& other) = default;
+        MsgUnitBP& operator=(MsgUnitBP&& other) = default;
         MsgUnitBP(VertexID v, uint64_t sn1, uint64_t s0)
             : v_global(v), S_n1(sn1), S_0(s0) { }
     };
