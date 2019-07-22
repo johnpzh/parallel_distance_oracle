@@ -94,7 +94,6 @@ public:
     std::vector<VertexID> rank;
     std::vector<VertexID> vertices_idx; // vertices indices
     std::vector<VertexID> out_edges; // out edges
-
     std::vector<VertexID> local_out_degrees; // out degrees based on local edges.
 
     DistGraph() = default;

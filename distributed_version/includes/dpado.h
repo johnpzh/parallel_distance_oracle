@@ -278,6 +278,7 @@ DistBVCPLL(const DistGraph &G)
 //        if (0 == host_id) {
             printf("host_id: %u bp_labeling_finished.\n", host_id);
 //        }
+        system("free -h");
     }
 
     std::vector<VertexID> active_queue(num_masters); // Any vertex v who is active should be put into this queue.
@@ -659,6 +660,7 @@ bit_parallel_labeling(
         uint64_t S_0;
 
         MsgUnitBP() = default;
+        MsgUnitBP(MsgUnitBP&& other) = default;
         MsgUnitBP(VertexID v, uint64_t sn1, uint64_t s0)
             : v_global(v), S_n1(sn1), S_0(s0) { }
     };
@@ -872,7 +874,7 @@ bit_parallel_labeling(
             // Send active masters to mirrors
             {
 //                std::vector<MPI_Request> requests_send(num_hosts - 1);
-                std::vector< std::vector<MPI_Request> > requests_list(num_hosts - 1);
+//                std::vector< std::vector<MPI_Request> > requests_list(num_hosts - 1);
                 std::vector<MsgUnitBP> buffer_send;
                 for (VertexID que_i = 0; que_i < end_que; ++que_i) {
                     VertexID v_global = que[que_i];
@@ -968,7 +970,7 @@ bit_parallel_labeling(
                 }
                 // Put into the buffer sending to others
                 std::vector< std::pair<VertexID, uint64_t> > buffer_send;
-                std::vector< std::vector<MPI_Request> > requests_list(num_hosts - 1);
+//                std::vector< std::vector<MPI_Request> > requests_list(num_hosts - 1);
                 for (VertexID i = 0; i < num_sibling_es; ++i) {
                     VertexID v = sibling_es[i].first;
                     VertexID w = sibling_es[i].second;

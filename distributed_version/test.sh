@@ -1,12 +1,11 @@
 #! /bin/bash
 
-output=output.txt
 
 set -x
-cd /home/zpeng/pppp/pado/cmake-build-debug-intel-compiler/distributed_version
+cd /home/zpeng/pppp/clion/pado_th107a2/cmake-build-debug/distributed_version
 make
-for ((n = 1; n < 17; n *= 2)); do
-	echo "-------  Number_of_Hosts: ${n} -------" >> ${output}
-	mpiexec -n ${n} ./dpado ~/scratch/dblp/binary.dblp  2>&1 | tee -a ${output}
+for ((n = 2; n < 17; n *= 2)); do
+	echo "-------  Number_of_Hosts: ${n} -------"
+	mpiexec -np ${n} -genv I_MPI_DEBUG +3 ./dpado ~/scratch/indochina/indochina.binary  2>&1 | tee "output${n}.txt"
 done
 set +x

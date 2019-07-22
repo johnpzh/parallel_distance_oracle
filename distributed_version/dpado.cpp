@@ -307,10 +307,6 @@ void test_recv()
 
 }
 
-void test_system()
-{
-    system("free -h");
-}
 
 void usage_print()
 {
