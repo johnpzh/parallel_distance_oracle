@@ -19,8 +19,6 @@ void dpado(char *argv[])
 	        G.host_id, G.num_masters, G.num_v, 100.0 * G.num_masters / G.num_v, G.num_edges_local, 2 * G.num_e, 100.0 * G.num_edges_local / (2 * G.num_e));//test
     {//test
         system("free -h");
-        system("ulimit -a");
-        system("ulimit -s unlimited");
     }
 
 	DistBVCPLL<1024, 50> dist_bvcpll(G); // batch size 1024, bit-parallel size 0.
