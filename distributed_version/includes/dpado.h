@@ -667,13 +667,31 @@ bit_parallel_labeling(
     EdgeID local_num_edges = G.num_edges_local;
 
     std::vector<UnweightedDist> tmp_d(num_masters); // distances from the root to every v
+    {// test
+        printf("host_id: %u @%u tmp_d finished\n", host_id, __LINE__);
+    }
     std::vector<std::pair<uint64_t, uint64_t> > tmp_s(num_v); // first is S_r^{-1}, second is S_r^{0}
+    {// test
+        printf("host_id: %u @%u tmp_s finished\n", host_id, __LINE__);
+    }
     std::vector<VertexID> que(num_masters); // active queue
     VertexID end_que = 0;
+    {// test
+        printf("host_id: %u @%u que finished\n", host_id, __LINE__);
+    }
     std::vector<VertexID> tmp_que(num_masters); // temporary queue, to be swapped with que
+    {// test
+        printf("host_id: %u @%u tmp_que finished\n", host_id, __LINE__);
+    }
     VertexID end_tmp_que = 0;
     std::vector<std::pair<VertexID, VertexID> > sibling_es(local_num_edges); // siblings, their distances to the root are equal (have difference of 0)
+    {// test
+        printf("host_id: %u @%u sibling_es finished\n", host_id, __LINE__);
+    }
     std::vector<std::pair<VertexID, VertexID> > child_es(local_num_edges); // child and father, their distances to the root have difference of 1.
+    {// test
+        printf("host_id: %u @%u child_es finished\n", host_id, __LINE__);
+    }
 
 //    std::vector<UnweightedDist> tmp_d(num_v); // distances from the root to every v
 //    std::vector<std::pair<uint64_t, uint64_t> > tmp_s(num_v); // first is S_r^{-1}, second is S_r^{0}
