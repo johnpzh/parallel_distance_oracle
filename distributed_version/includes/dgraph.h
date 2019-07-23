@@ -175,6 +175,9 @@ public:
 // Constructor from a input file.
 DistGraph::DistGraph(char *input_filename)
 {
+    if (0 == host_id) {
+        printf("Input: %s\n", input_filename);
+    }
     std::ifstream fin(input_filename);
     if (!fin.is_open()) {
         fprintf(stderr, "Error %s(%d): cannot open file %s\n", __FILE__, __LINE__, input_filename);
