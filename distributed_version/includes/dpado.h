@@ -300,6 +300,11 @@ DistBVCPLL(const DistGraph &G)
         if (0 == host_id) {
             printf("host_id: %u bp_labeling_finished.\n", host_id);
         }
+
+        double virtual_memory;
+        double resident_memory;
+        Utils::memory_usage(virtual_memory, resident_memory);
+        printf("host_id: %u virtual_memory: %.2fMB resident_memory: %.2fMB\n", host_id, virtual_memory, resident_memory);
     }
 
     std::vector<VertexID> active_queue(num_masters); // Any vertex v who is active should be put into this queue.
@@ -704,11 +709,11 @@ bit_parallel_labeling(
                 0,
                 MPI_COMM_WORLD);
         used_bp_roots[r_global] = 1;
-        {//test
-            if (0 == host_id) {
-                printf("host_id: %u r_global: %u i_bpspt: %u\n", host_id, r_global, i_bpspt);
-            }
-        }
+//        {//test
+//            if (0 == host_id) {
+//                printf("host_id: %u r_global: %u i_bpspt: %u\n", host_id, r_global, i_bpspt);
+//            }
+//        }
 
 //        VertexID que_t0 = 0, que_t1 = 0, que_h = 0;
         fill(tmp_d.begin(), tmp_d.end(), MAX_UNWEIGHTED_DIST);
@@ -803,9 +808,9 @@ bit_parallel_labeling(
 //                            MPI_COMM_WORLD);
                 }
             }
-            {//test
-                printf("host_id: %u selected_nbrs.size(): %lu\n", host_id, selected_nbrs.size());
-            }
+//            {//test
+//                printf("host_id: %u selected_nbrs.size(): %lu\n", host_id, selected_nbrs.size());
+//            }
 
             // Synchronize the used_bp_roots.
             for (VertexID v_global : selected_nbrs) {
@@ -856,12 +861,13 @@ bit_parallel_labeling(
             {
 //                std::vector<MPI_Request> requests_send(num_hosts - 1);
 //                std::vector< std::vector<MPI_Request> > requests_list(num_hosts - 1);
-                std::vector<MsgUnitBP> buffer_send;
+                std::vector<MsgUnitBP> buffer_send(end_que);
                 for (VertexID que_i = 0; que_i < end_que; ++que_i) {
                     VertexID v_global = que[que_i];
-                    buffer_send.emplace_back(v_global, // v_global
-                                             tmp_s[v_global].first, // S_n1
-                                             tmp_s[v_global].second); // S_0
+//                    buffer_send.emplace_back(v_global, // v_global
+//                                             tmp_s[v_global].first, // S_n1
+//                                             tmp_s[v_global].second); // S_0
+                    buffer_send[que_i] = MsgUnitBP(v_global, tmp_s[v_global].first, tmp_s[v_global].second);
                 }
 //                {//test
 //                    printf("host_id: %u bp_labeling: buffer_send.size(); %lu bytes: %lu\n", host_id, buffer_send.size(), MPI_Instance::get_sending_size(buffer_send));
@@ -950,13 +956,15 @@ bit_parallel_labeling(
 
                 }
                 // Put into the buffer sending to others
-                std::vector< std::pair<VertexID, uint64_t> > buffer_send;
+                std::vector< std::pair<VertexID, uint64_t> > buffer_send(2 * num_sibling_es);
 //                std::vector< std::vector<MPI_Request> > requests_list(num_hosts - 1);
                 for (VertexID i = 0; i < num_sibling_es; ++i) {
                     VertexID v = sibling_es[i].first;
                     VertexID w = sibling_es[i].second;
-                    buffer_send.emplace_back(v, tmp_s[v].second);
-                    buffer_send.emplace_back(w, tmp_s[w].second);
+//                    buffer_send.emplace_back(v, tmp_s[v].second);
+//                    buffer_send.emplace_back(w, tmp_s[w].second);
+                    buffer_send[2 * i] = std::make_pair(v, tmp_s[v].second);
+                    buffer_send[2 * i + 1] = std::make_pair(w, tmp_s[w].second);
                 }
                 // Send the messages
                 // Lambda for processing every element of received messages.
