@@ -2376,8 +2376,8 @@ dist_distance_query_pair(
 
     VertexID a_global = G.rank[a_input];
     VertexID b_global = G.rank[b_input];
-    VertexID a_host_id = G.get_master_host_id(a_global);
-    VertexID b_host_id = G.get_master_host_id(b_global);
+    int a_host_id = G.get_master_host_id(a_global);
+    int b_host_id = G.get_master_host_id(b_global);
     UnweightedDist min_d = MAX_UNWEIGHTED_DIST;
 
     // Both local
