@@ -175,9 +175,6 @@ public:
 // Constructor from a input file.
 DistGraph::DistGraph(char *input_filename)
 {
-    if (0 == host_id) {
-        printf("Input: %s\n", input_filename);
-    }
     std::ifstream fin(input_filename);
     if (!fin.is_open()) {
         fprintf(stderr, "Error %s(%d): cannot open file %s\n", __FILE__, __LINE__, input_filename);
@@ -193,6 +190,9 @@ DistGraph::DistGraph(char *input_filename)
     assert(bytes_size == file_size);
     // Initialize class members.
     initialization();
+    if (0 == host_id) {
+        printf("Input: %s\n", input_filename);
+    }
 
     // Get the offset (in bytes) for reading.
     uint64_t edge_byte_size = 2 * sizeof(VertexID); // the size (in bytes) of one edge

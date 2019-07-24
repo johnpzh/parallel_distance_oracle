@@ -65,7 +65,7 @@ public:
         MPI_Init_thread(&argc, &argv, MPI_THREAD_MULTIPLE, &provided);
         MPI_Comm_rank(MPI_COMM_WORLD, &host_id);
         MPI_Comm_size(MPI_COMM_WORLD, &num_hosts);
-#ifdef DEBUG_MESSAGES_ON
+//#ifdef DEBUG_MESSAGES_ON
         if (0 == host_id) {
             printf("MPI Initialization:\n");
             printf("num_hosts: %d\n", num_hosts);
@@ -87,7 +87,7 @@ public:
                     assert(false);
             }
         }
-#endif
+//#endif
     }
 
     ~MPI_Instance() {
