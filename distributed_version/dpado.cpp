@@ -18,7 +18,8 @@ void dpado(char *argv[])
 	printf("host_id: %u num_masters: %u /%u %.2f%% num_edges_local %lu /%lu %.2f%%\n",
 	        G.host_id, G.num_masters, G.num_v, 100.0 * G.num_masters / G.num_v, G.num_edges_local, 2 * G.num_e, 100.0 * G.num_edges_local / (2 * G.num_e));//test
 
-	DistBVCPLL<1024, 50> dist_bvcpll(G); // batch size 1024, bit-parallel size 0.
+	DistBVCPLL<50> dist_bvcpll(1024, G); // batch size 1024, bit-parallel size 0.
+//	DistBVCPLL<1024, 50> dist_bvcpll(G); // batch size 1024, bit-parallel size 0.
 //	DistBVCPLL<8, 50> dist_bvcpll(G); // batch size 1024, bit-parallel size 0.
 
     {// test the index by distance queries
