@@ -9,6 +9,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <limits.h>
+#include <unistd.h>
 #include <iostream>
 #include <type_traits>
 #include <typeinfo>
@@ -62,13 +63,16 @@ public:
         int host_id = 0; // host ID
         int num_hosts = 0; // number of hosts
         int provided = 0;
+		char hostname[1024];
         MPI_Init_thread(&argc, &argv, MPI_THREAD_MULTIPLE, &provided);
         MPI_Comm_rank(MPI_COMM_WORLD, &host_id);
         MPI_Comm_size(MPI_COMM_WORLD, &num_hosts);
+		gethostname(hostname, sizeof(hostname));
+		printf("This is host %d (/%d) on Host %s PID %d\n", host_id, num_hosts, hostname, getpid());
 //#ifdef DEBUG_MESSAGES_ON
         if (0 == host_id) {
             printf("MPI Initialization:\n");
-            printf("num_hosts: %d\n", num_hosts);
+//            printf("num_hosts: %d\n", num_hosts);
             printf("Thread support level provided by MPI: ");
             switch (provided) {
                 case MPI_THREAD_SINGLE:
