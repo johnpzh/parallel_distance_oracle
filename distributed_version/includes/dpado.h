@@ -328,10 +328,10 @@ DistBVCPLL(
             printf("host_id: %u bp_labeling_finished.\n", host_id);
         }
 
-        double virtual_memory;
-        double resident_memory;
-        Utils::memory_usage(virtual_memory, resident_memory);
-        printf("host_id: %u virtual_memory: %.2fMB resident_memory: %.2fMB\n", host_id, virtual_memory, resident_memory);
+//        double virtual_memory;
+//        double resident_memory;
+//        Utils::memory_usage(virtual_memory, resident_memory);
+//        printf("host_id: %u virtual_memory: %.2fMB resident_memory: %.2fMB\n", host_id, virtual_memory, resident_memory);
     }
 
     std::vector<VertexID> active_queue(num_masters); // Any vertex v who is active should be put into this queue.
@@ -736,11 +736,11 @@ bit_parallel_labeling(
                 0,
                 MPI_COMM_WORLD);
         used_bp_roots[r_global] = 1;
-//        {//test
-//            if (0 == host_id) {
-//                printf("host_id: %u r_global: %u i_bpspt: %u\n", host_id, r_global, i_bpspt);
-//            }
-//        }
+        {//test
+            if (0 == host_id) {
+                printf("r_global: %u i_bpspt: %u\n", r_global, i_bpspt);
+            }
+        }
 
 //        VertexID que_t0 = 0, que_t1 = 0, que_h = 0;
         fill(tmp_d.begin(), tmp_d.end(), MAX_UNWEIGHTED_DIST);
@@ -860,6 +860,11 @@ bit_parallel_labeling(
         VertexID global_num_actives = 1;
         UnweightedDist d = 0;
         while (global_num_actives) {
+            {//test
+                if (0 == host_id) {
+                    printf("d: %u global_num_actives: %u\n", d, global_num_actives);
+                }
+            }
 //            for (UnweightedDist d = 0; que_t0 < que_h; ++d) {
             VertexID num_sibling_es = 0, num_child_es = 0;
 
@@ -1041,6 +1046,7 @@ bit_parallel_labeling(
                     tmp_s[c].second |= tmp_s[v].second;
                 }
             }
+#ifdef DEBUG_MESSAGES_ON
             {// test
                 VertexID global_num_sibling_es;
                 VertexID global_num_child_es;
@@ -1057,7 +1063,7 @@ bit_parallel_labeling(
                               MPI_SUM,
                               MPI_COMM_WORLD);
                 if (0 == host_id) {
-                    printf("iter %u num_sibling_es: %u num_child_es: %u\n", d, global_num_sibling_es, global_num_child_es);
+                    printf("iter: %u num_sibling_es: %u num_child_es: %u\n", d, global_num_sibling_es, global_num_child_es);
                 }
 
 //                printf("iter %u @%u host_id: %u num_sibling_es: %u num_child_es: %u\n", d, __LINE__, host_id, num_sibling_es, num_child_es);
@@ -1065,6 +1071,7 @@ bit_parallel_labeling(
 //                    exit(EXIT_SUCCESS);
 //                }
             }
+#endif
 
             // Swap que and tmp_que
             tmp_que.swap(que);
@@ -2017,7 +2024,7 @@ batch_process(
     while (global_num_actives) {
         {//
            if (0 == host_id) {
-               printf("iter: %u globabl_num_actives: %u\n", iter, global_num_actives);
+               printf("iter: %u global_num_actives: %u\n", iter, global_num_actives);
            }
         }
         ++iter;

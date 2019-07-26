@@ -22,26 +22,26 @@ void dpado(char *argv[])
 //	DistBVCPLL<1024, 50> dist_bvcpll(G); // batch size 1024, bit-parallel size 0.
 //	DistBVCPLL<8, 50> dist_bvcpll(G); // batch size 1024, bit-parallel size 0.
 
-    {// test the index by distance queries
-        std::ifstream fin(argv[2]);
-        if (!fin.is_open()) {
-            fprintf(stderr, "Error: cannot open file %s", argv[2]);
-            exit(EXIT_FAILURE);
-        }
-        VertexID a;
-        VertexID b;
-        while (fin >> a >> b) {
-            UnweightedDist dist = dist_bvcpll.dist_distance_query_pair(a, b, G);
-            MPI_Barrier(MPI_COMM_WORLD);
-            if (0 == G.host_id) {
-                if (dist == 255) {
-                    printf("2147483647\n");
-                } else {
-                    printf("%u\n", dist);
-                }
-            }
-        }
-    }
+//    {// test the index by distance queries
+//        std::ifstream fin(argv[2]);
+//        if (!fin.is_open()) {
+//            fprintf(stderr, "Error: cannot open file %s", argv[2]);
+//            exit(EXIT_FAILURE);
+//        }
+//        VertexID a;
+//        VertexID b;
+//        while (fin >> a >> b) {
+//            UnweightedDist dist = dist_bvcpll.dist_distance_query_pair(a, b, G);
+//            MPI_Barrier(MPI_COMM_WORLD);
+//            if (0 == G.host_id) {
+//                if (dist == 255) {
+//                    printf("2147483647\n");
+//                } else {
+//                    printf("%u\n", dist);
+//                }
+//            }
+//        }
+//    }
 
     /*
      * Global_num_labels: 67727254 average: 213.596065
