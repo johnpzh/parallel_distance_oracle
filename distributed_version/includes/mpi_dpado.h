@@ -55,7 +55,7 @@ class MPI_Instance final {
 private:
 //    int host_id = 0; // host ID
 //    int num_hosts = 0; // number of hosts
-    static const uint32_t UNIT_BUFFER_SIZE = 4U << 20U;
+    static const uint32_t UNIT_BUFFER_SIZE = 16U << 20U;
 //    static char unit_buffer_send[UNIT_BUFFER_SIZE];
 
 public:

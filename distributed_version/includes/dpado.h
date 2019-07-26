@@ -446,7 +446,7 @@ DistBVCPLL(
             MPI_Instance::get_mpi_datatype<EdgeID>(),
             MPI_SUM,
             MPI_COMM_WORLD);
-    printf("host_id: %u local_num_labels: %lu %.2f%%\n", host_id, local_num_labels, 100.0 * local_num_labels / global_num_labels);
+//    printf("host_id: %u local_num_labels: %lu %.2f%%\n", host_id, local_num_labels, 100.0 * local_num_labels / global_num_labels);
     MPI_Barrier(MPI_COMM_WORLD);
     if (0 == host_id) {
         printf("Global_num_labels: %lu average: %f\n", global_num_labels, 1.0 * global_num_labels / num_v);
@@ -482,7 +482,7 @@ DistBVCPLL(
 //	printf("BP_Checking: "); bp_checking_ins_count.print();
 //	printf("distance_query: "); dist_query_ins_count.print();
 
-    printf("host_id: %u Local_labeling_time: %.2f seconds\n", host_id, time_labeling);
+//    printf("host_id: %u Local_labeling_time: %.2f seconds\n", host_id, time_labeling);
     double global_time_labeling;
     MPI_Allreduce(&time_labeling,
             &global_time_labeling,
@@ -2322,7 +2322,7 @@ every_host_bcasts_buffer_and_proc(
         std::vector<E_T> &buffer_send,
         F &fun)
 {
-    const uint32_t UNIT_BUFFER_SIZE = 4U << 20U;
+    const uint32_t UNIT_BUFFER_SIZE = 16U << 20U;
     // Every host h_i broadcast to others
     for (int h_i = 0; h_i < num_hosts; ++h_i) {
         uint64_t size_buffer_send = buffer_send.size();
@@ -2375,7 +2375,7 @@ one_host_bcasts_buffer_to_buffer(
         std::vector<E_T> &buffer_send,
         std::vector<E_T> &buffer_recv)
 {
-    const uint32_t UNIT_BUFFER_SIZE = 4U << 20U;
+    const uint32_t UNIT_BUFFER_SIZE = 16U << 20U;
     uint64_t size_buffer_send = buffer_send.size();
     // Sync the size_buffer_send.
     MPI_Bcast(&size_buffer_send,
