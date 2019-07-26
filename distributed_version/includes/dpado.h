@@ -324,10 +324,11 @@ DistBVCPLL(
             used_bp_roots);
     {//test
 //        exit(0);
+#ifdef DEBUG_MESSAGES_ON
         if (0 == host_id) {
             printf("host_id: %u bp_labeling_finished.\n", host_id);
         }
-
+#endif
 //        double virtual_memory;
 //        double resident_memory;
 //        Utils::memory_usage(virtual_memory, resident_memory);
@@ -365,9 +366,11 @@ DistBVCPLL(
 
     //printf("b_i_bound: %u\n", b_i_bound);//test
     for (VertexID b_i = 0; b_i < b_i_bound; ++b_i) {
+#ifdef DEBUG_MESSAGES_ON
         if (0 == host_id) {
             printf("b_i: %u\n", b_i);//test
         }
+#endif
 
         batch_process(
                 G,
@@ -392,9 +395,11 @@ DistBVCPLL(
 //        exit(EXIT_SUCCESS); //test
     }
     if (remainer != 0) {
+#ifdef DEBUG_MESSAGES_ON
         if (0 == host_id) {
             printf("b_i: %u\n", b_i_bound);//test
         }
+#endif
         batch_process(
                 G,
                 b_i_bound,
@@ -736,11 +741,13 @@ bit_parallel_labeling(
                 0,
                 MPI_COMM_WORLD);
         used_bp_roots[r_global] = 1;
+#ifdef DEBUG_MESSAGES_ON
         {//test
             if (0 == host_id) {
                 printf("r_global: %u i_bpspt: %u\n", r_global, i_bpspt);
             }
         }
+#endif
 
 //        VertexID que_t0 = 0, que_t1 = 0, que_h = 0;
         fill(tmp_d.begin(), tmp_d.end(), MAX_UNWEIGHTED_DIST);
@@ -860,11 +867,13 @@ bit_parallel_labeling(
         VertexID global_num_actives = 1;
         UnweightedDist d = 0;
         while (global_num_actives) {
+#ifdef DEBUG_MESSAGES_ON
             {//test
                 if (0 == host_id) {
                     printf("d: %u global_num_actives: %u\n", d, global_num_actives);
                 }
             }
+#endif
 //            for (UnweightedDist d = 0; que_t0 < que_h; ++d) {
             VertexID num_sibling_es = 0, num_child_es = 0;
 
@@ -2022,11 +2031,13 @@ batch_process(
 
 
     while (global_num_actives) {
+#ifdef DEBUG_MESSAGES_ON
         {//
            if (0 == host_id) {
                printf("iter: %u global_num_actives: %u\n", iter, global_num_actives);
            }
         }
+#endif
         ++iter;
 //        // Traverse active vertices to push their labels as candidates
 //        // Push newly added labels to local masters at first
