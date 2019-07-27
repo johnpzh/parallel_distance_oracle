@@ -18,7 +18,8 @@ void dpado(char *argv[])
 	printf("host_id: %u num_masters: %u /%u %.2f%% num_edges_local %lu /%lu %.2f%%\n",
 	        G.host_id, G.num_masters, G.num_v, 100.0 * G.num_masters / G.num_v, G.num_edges_local, 2 * G.num_e, 100.0 * G.num_edges_local / (2 * G.num_e));//test
 
-	DistBVCPLL<1024, 50> dist_bvcpll(G); // batch size 1024, bit-parallel size 0.
+	DistBVCPLL<50> dist_bvcpll(1024, G); // batch size 1024, bit-parallel size 0.
+//	DistBVCPLL<1024, 50> dist_bvcpll(G); // batch size 1024, bit-parallel size 0.
 //	DistBVCPLL<8, 50> dist_bvcpll(G); // batch size 1024, bit-parallel size 0.
 
 //    {// test the index by distance queries
@@ -75,14 +76,14 @@ void dpado(char *argv[])
 //            for (EdgeID e_i = start_e_i; e_i < bound_e_i; ++e_i) {
 //                VertexID tail = G.out_edges[e_i];
 ////                VertexID tail = rank2id[G.out_edges[e_i]];
-//                tmp_edges_by_dst.emplace_back(head, tail);
-////                tmp_edges_by_dst.emplace_back(tail, head);
+////                tmp_edges_by_dst.emplace_back(head, tail);
+//                tmp_edges_by_dst.emplace_back(tail, head);
 //            }
 //        }
 //        std::sort(tmp_edges_by_dst.begin(), tmp_edges_by_dst.end());
 //        for (const auto &e : tmp_edges_by_dst) {
-//            fprintf(fout, "%u %u\n", e.first, e.second);
-////            fprintf(fout, "%u %u\n", e.second, e.first);
+////            fprintf(fout, "%u %u\n", e.first, e.second);
+//            fprintf(fout, "%u %u\n", e.second, e.first);
 //        }
 ////        // Traverse the local G
 ////        for (VertexID v_i = 0; v_i < G.num_masters; ++v_i) {
@@ -304,6 +305,7 @@ void test_recv()
 
 }
 
+
 void usage_print()
 {
     fprintf(stderr,
@@ -326,6 +328,7 @@ int main(int argc, char *argv[])
     MPI_Instance mpi_instance(argc, argv);
 
     dpado(argv);
+//    test_system();
 //    test_recv();
 //    test_dynamic_receive();
     return EXIT_SUCCESS;

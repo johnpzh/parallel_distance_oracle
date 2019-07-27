@@ -1,5 +1,5 @@
 # dpado
-add_executable(dpado dpado.cpp)
+add_executable(dpado dpado.cpp includes/utils.h)
 
 # test
 message("COMPILE_OPTIONS for dpado: ${COMPILE_OPTIONS}")
@@ -16,7 +16,7 @@ add_subdirectory(tools)
 # MPI
 find_package(MPI REQUIRED)
 target_include_directories(dpado PRIVATE "${MPI_CXX_INCLUDE_DIRS}")
-target_compile_options(dpado PRIVATE "${MPI_CXX_LINK_FLAGS}")
+#target_compile_options(dpado PRIVATE "${MPI_CXX_LINK_FLAGS}")
 target_link_libraries(dpado PRIVATE "${MPI_CXX_LIBRARIES}")
 
 ## MPI

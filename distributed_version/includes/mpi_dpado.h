@@ -9,6 +9,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <limits.h>
+#include <unistd.h>
 #include <iostream>
 #include <type_traits>
 #include <typeinfo>
@@ -16,34 +17,34 @@
 namespace PADO {
 
 enum MessageTags {
-    GRAPH_SHUFFLE,
-    SIZE_GRAPH_SHUFFLE,
-    SENDING_NUM_ROOT_MASTERS,
-    SENDING_ROOT_ID,
-    SENDING_INDEXTYPE_BATCHES,
-    SENDING_INDEXTYPE_DISTANCES,
-    SENDING_INDEXTYPE_VERTICES,
+//    GRAPH_SHUFFLE,
+//    SIZE_GRAPH_SHUFFLE,
+//    SENDING_NUM_ROOT_MASTERS,
+//    SENDING_ROOT_ID,
+//    SENDING_INDEXTYPE_BATCHES,
+//    SENDING_INDEXTYPE_DISTANCES,
+//    SENDING_INDEXTYPE_VERTICES,
 //    SENDING_PUSHED_LABELS,
-    SENDING_MASTERS_TO_MIRRORS,
-    SENDING_SIZE_MASTERS_TO_MIRRORS,
-	SENDING_DIST_TABLE,
-    SENDING_SIZE_DIST_TABLE,
-    SYNC_DIST_TABLE,
-    SYNC_SIZE_DIST_TABLE,
+//    SENDING_MASTERS_TO_MIRRORS,
+//    SENDING_SIZE_MASTERS_TO_MIRRORS,
+//	SENDING_DIST_TABLE,
+//    SENDING_SIZE_DIST_TABLE,
+//    SYNC_DIST_TABLE,
+//    SYNC_SIZE_DIST_TABLE,
     SENDING_QUERY_LABELS,
     SENDING_SIZE_QUERY_LABELS,
-    SENDING_BP_ACTIVES,
-    SENDING_SIZE_BP_ACTIVES,
-    SENDING_SETS_UPDATES_BP,
-    SENDING_SIZE_SETS_UPDATES_BP,
+//    SENDING_BP_ACTIVES,
+//    SENDING_SIZE_BP_ACTIVES,
+//    SENDING_SETS_UPDATES_BP,
+//    SENDING_SIZE_SETS_UPDATES_BP,
     SENDING_ROOT_NEIGHBORS,
     SENDING_SIZE_ROOT_NEIGHBORS,
-    SENDING_SIZE_ROOT_BP_LABELS,
+//    SENDING_SIZE_ROOT_BP_LABELS,
     SENDING_SELECTED_NEIGHBORS,
     SENDING_SIZE_SELETED_NEIGHBORS,
-    SENDING_ROOT_BP_LABELS,
+//    SENDING_ROOT_BP_LABELS,
     SENDING_QUERY_BP_LABELS,
-    SENDING_NUM_UNIT_BUFFERS,
+//    SENDING_NUM_UNIT_BUFFERS,
     SENDING_SIZE_BUFFER_SEND,
     SENDING_EDGELIST
 };
@@ -54,21 +55,24 @@ class MPI_Instance final {
 private:
 //    int host_id = 0; // host ID
 //    int num_hosts = 0; // number of hosts
-    static const uint32_t UNIT_BUFFER_SIZE = 4U << 20U;
+    static const uint32_t UNIT_BUFFER_SIZE = 16U << 20U;
 //    static char unit_buffer_send[UNIT_BUFFER_SIZE];
 
 public:
     MPI_Instance(int argc, char *argv[]) {
         int host_id = 0; // host ID
         int num_hosts = 0; // number of hosts
-        int provided;
+        int provided = 0;
+		char hostname[1024];
         MPI_Init_thread(&argc, &argv, MPI_THREAD_MULTIPLE, &provided);
         MPI_Comm_rank(MPI_COMM_WORLD, &host_id);
         MPI_Comm_size(MPI_COMM_WORLD, &num_hosts);
-#ifdef DEBUG_MESSAGES_ON
+		gethostname(hostname, sizeof(hostname));
+		printf("This is host %d (/%d) on Host %s PID %d\n", host_id, num_hosts, hostname, getpid());
+//#ifdef DEBUG_MESSAGES_ON
         if (0 == host_id) {
             printf("MPI Initialization:\n");
-            printf("num_hosts: %d\n", num_hosts);
+//            printf("num_hosts: %d\n", num_hosts);
             printf("Thread support level provided by MPI: ");
             switch (provided) {
                 case MPI_THREAD_SINGLE:
@@ -87,7 +91,7 @@ public:
                     assert(false);
             }
         }
-#endif
+//#endif
     }
 
     ~MPI_Instance() {
