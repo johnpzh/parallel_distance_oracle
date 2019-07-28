@@ -277,7 +277,8 @@ private:
 //	double init_indicators_time = 0;
     //L2CacheMissRate cache_miss;
     double message_time = 0;
-    double initialization_time = 0;
+    double bp_labeling_time = 0;
+    double initializing_time = 0;
     double scatter_time = 0;
     double gather_time = 0;
     double clearup_time = 0;
@@ -325,8 +326,10 @@ DistBVCPLL(
     //cache_miss.measure_start();
     double time_labeling = -WallTimer::get_time_mark();
 
+    bp_labeling_time -= WallTimer::get_time_mark();
     bit_parallel_labeling(G,
             used_bp_roots);
+    bp_labeling_time += WallTimer::get_time_mark();
     {//test
 //        exit(0);
 #ifdef DEBUG_MESSAGES_ON
@@ -487,18 +490,20 @@ DistBVCPLL(
 //	printf("BP_Checking: "); bp_checking_ins_count.print();
 //	printf("distance_query: "); dist_query_ins_count.print();
 
-    printf("host_id: %u Local_labeling_time: %.2f seconds\n"
-           "\tmessage_time: %.2f %.2f%%\n"
-           "\tinitialization_time: %.2f %.2f%%\n"
-           "\tscatter_time: %.2f %.2f%%\n"
-           "\tgather_time: %.2f %.2f%%\n"
-           "\tclearup_time: %.2f %.2f%%\n",
+    printf("host_id: %u Local_labeling_time:\t%.2f seconds\n"
+           "\tbp_labeling_time:\t%.2f %.2f%%\n"
+           "\tinitializing_time:\t%.2f %.2f%%\n"
+           "\tscatter_time:\t\t%.2f %.2f%%\n"
+           "\tgather_time:\t\t%.2f %.2f%%\n"
+           "\tclearup_time:\t\t%.2f %.2f%%\n"
+           "\tmessage_time:\t\t%.2f %.2f%%\n",
            host_id, time_labeling,
-           message_time, 100.0 * message_time / time_labeling,
-           initialization_time, 100.0 * initialization_time / time_labeling,
+           bp_labeling_time, 100.0 * bp_labeling_time / time_labeling,
+           initializing_time, 100.0 * initializing_time / time_labeling,
            scatter_time, 100.0 * scatter_time / time_labeling,
            gather_time, 100.0 * gather_time / time_labeling,
-           clearup_time, 100.0 * clearup_time / time_labeling);
+           clearup_time, 100.0 * clearup_time / time_labeling,
+           message_time, 100.0 * message_time / time_labeling);
     double global_time_labeling;
     MPI_Allreduce(&time_labeling,
             &global_time_labeling,
@@ -2033,7 +2038,7 @@ batch_process(
         std::vector<bool> &once_candidated)
 {
     // At the beginning of a batch, initialize the labels L and distance buffer dist_table;
-    initialization_time -= WallTimer::get_time_mark();
+    initializing_time -= WallTimer::get_time_mark();
     VertexID global_num_actives = initialization(G,
                                     short_index,
                                     dist_table,
@@ -2049,7 +2054,7 @@ batch_process(
                                     roots_size,
 //                                    roots_master_local,
                                     used_bp_roots);
-    initialization_time += WallTimer::get_time_mark();
+    initializing_time += WallTimer::get_time_mark();
     UnweightedDist iter = 0; // The iterator, also the distance for current iteration
 //    {//test
 //        printf("host_id: %u initialization finished.\n", host_id);
