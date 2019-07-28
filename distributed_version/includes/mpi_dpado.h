@@ -45,8 +45,13 @@ enum MessageTags {
 //    SENDING_ROOT_BP_LABELS,
     SENDING_QUERY_BP_LABELS,
 //    SENDING_NUM_UNIT_BUFFERS,
+    SENDING_BUFFER_SEND,
     SENDING_SIZE_BUFFER_SEND,
-    SENDING_EDGELIST
+    SENDING_EDGELIST,
+    SENDING_INDICES,
+    SENDING_SIZE_INDICES,
+    SENDING_LABELS,
+    SENDING_SIZE_LABELS
 };
 
 // MPI_Instance class: for MPI initialization
@@ -240,7 +245,7 @@ public:
             int message_tag,
             int size_message_tag)
     {
-        size_t ETypeSize = sizeof(E_T);
+        const size_t ETypeSize = sizeof(E_T);
         size_t size_buffer_send = buffer_send.size();
         // Send the total size
         MPI_Send(&size_buffer_send,
@@ -254,6 +259,15 @@ public:
         }
         // Send by multiple unit buffers
         uint32_t num_unit_buffers = (size_buffer_send + UNIT_BUFFER_SIZE - 1) / UNIT_BUFFER_SIZE;
+        if (1 == num_unit_buffers) {
+            MPI_Send(buffer_send.data(),
+                    size_buffer_send * ETypeSize,
+                    MPI_CHAR,
+                    dst,
+                    message_tag,
+                    MPI_COMM_WORLD);
+            return;
+        }
         for (uint32_t b_i = 0; b_i < num_unit_buffers; ++b_i) {
             size_t offset = b_i * UNIT_BUFFER_SIZE;
             size_t size_unit_buffer = b_i == num_unit_buffers - 1
@@ -417,7 +431,7 @@ public:
             int message_tag,
             int size_message_tag)
     {
-        size_t ETypeSize = sizeof(E_T);
+        const size_t ETypeSize = sizeof(E_T);
         size_t size_buffer_send;
         MPI_Recv(&size_buffer_send,
                  1,
@@ -432,6 +446,16 @@ public:
         }
         // Receive multiple unit buffers
         uint32_t num_unit_buffers = (size_buffer_send + UNIT_BUFFER_SIZE - 1) / UNIT_BUFFER_SIZE;
+        if (1 == num_unit_buffers) {
+            MPI_Recv(buffer_recv.data(),
+                    size_buffer_send * ETypeSize,
+                    MPI_CHAR,
+                    src,
+                    message_tag,
+                    MPI_COMM_WORLD,
+                    MPI_STATUS_IGNORE);
+            return;
+        }
         for (uint32_t b_i = 0; b_i < num_unit_buffers; ++b_i) {
             size_t offset = b_i * UNIT_BUFFER_SIZE;
             size_t size_unit_buffer = b_i == num_unit_buffers - 1
@@ -454,7 +478,7 @@ public:
             int message_tag,
             int size_message_tag)
     {
-        size_t ETypeSize = sizeof(E_T);
+        const size_t ETypeSize = sizeof(E_T);
         size_t size_buffer_send;
         MPI_Status status_recv;
         MPI_Recv(&size_buffer_send,
@@ -471,6 +495,16 @@ public:
         }
         // Receive multiple unit buffers
         uint32_t num_unit_buffers = (size_buffer_send + UNIT_BUFFER_SIZE - 1) / UNIT_BUFFER_SIZE;
+        if (1 == num_unit_buffers) {
+            MPI_Recv(buffer_recv.data(),
+                     size_buffer_send * ETypeSize,
+                     MPI_CHAR,
+                     src,
+                     message_tag,
+                     MPI_COMM_WORLD,
+                     MPI_STATUS_IGNORE);
+            return src;
+        }
         for (uint32_t b_i = 0; b_i < num_unit_buffers; ++b_i) {
             size_t offset = b_i * UNIT_BUFFER_SIZE;
             size_t size_unit_buffer = b_i == num_unit_buffers - 1

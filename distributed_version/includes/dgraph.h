@@ -163,12 +163,13 @@ public:
     }
 
     // Function: get the destination host id which is i hop from the root.
-    // For example, 1 hop from host 2 is host 0 (assume total 3 hosts).
+    // For example, 1 hop from host 2 is host 0 (assume total 3 hosts);
+    // -1 hop from host 0 is host 2.
     int hop_2_dest_host_id(int hop, int root) const
     {
-        assert(hop >= 1 && hop < num_hosts);
-        assert(root >=0 && root < num_hosts);
-        return (root + hop) % num_hosts;
+        assert(hop >= -(num_hosts - 1) && hop < num_hosts && hop != 0);
+        assert(root >= 0 && root < num_hosts);
+        return (root + hop + num_hosts) % num_hosts;
     }
 };
 
