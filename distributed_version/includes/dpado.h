@@ -2114,6 +2114,7 @@ batch_process(
                 // If host_id is higher than dst, first send, then receive
                 if (host_id < dst) {
                     // Send
+                    message_time -= WallTimer::get_time_mark();
                     MPI_Instance::send_buffer_2_dst(buffer_send_indices,
                                                     dst,
                                                     SENDING_INDICES,
@@ -2131,11 +2132,14 @@ batch_process(
                                                        src,
                                                        SENDING_INDICES,
                                                        SENDING_SIZE_INDICES);
+                    message_time += WallTimer::get_time_mark();
                     if (!buffer_recv_indices.empty()) {
+                        message_time -= WallTimer::get_time_mark();
                         MPI_Instance::recv_buffer_from_src(buffer_recv_labels,
                                                            src,
                                                            SENDING_LABELS,
                                                            SENDING_SIZE_LABELS);
+                        message_time += WallTimer::get_time_mark();
                         // Push those labels
                         EdgeID start_index = 0;
                         for (const std::pair<VertexID, VertexID> e : buffer_recv_indices) {
@@ -2165,6 +2169,7 @@ batch_process(
                     }
                 } else { // Otherwise, if host_id is lower than dst, first receive, then send
                     // Receive
+                    message_time -= WallTimer::get_time_mark();
                     std::vector<std::pair<VertexID, VertexID> > buffer_recv_indices;
                     std::vector<VertexID> buffer_recv_labels;
                     MPI_Instance::recv_buffer_from_src(buffer_recv_indices,
@@ -2188,6 +2193,7 @@ batch_process(
                                                         SENDING_LABELS,
                                                         SENDING_SIZE_LABELS);
                     }
+                    message_time += WallTimer::get_time_mark();
                     // Push those labels
                     if (!buffer_recv_indices.empty()) {
                         EdgeID start_index = 0;
@@ -2425,6 +2431,7 @@ every_host_bcasts_buffer_and_proc(
         // If host_id is higher than dst, first send, then receive
         if (host_id < dst) {
             // Send
+            message_time -= WallTimer::get_time_mark();
             MPI_Instance::send_buffer_2_dst(buffer_send,
                                             dst,
                                             SENDING_BUFFER_SEND,
@@ -2435,12 +2442,17 @@ every_host_bcasts_buffer_and_proc(
                                                src,
                                                SENDING_BUFFER_SEND,
                                                SENDING_SIZE_BUFFER_SEND);
+            message_time += WallTimer::get_time_mark();
             // Process
+            if (buffer_recv.empty()) {
+                continue;
+            }
             for (const E_T &e : buffer_recv) {
                 fun(e);
             }
         } else { // Otherwise, if host_id is lower than dst, first receive, then send
             // Receive
+            message_time -= WallTimer::get_time_mark();
             std::vector<E_T> buffer_recv;
             MPI_Instance::recv_buffer_from_src(buffer_recv,
                                                src,
@@ -2451,7 +2463,11 @@ every_host_bcasts_buffer_and_proc(
                                             dst,
                                             SENDING_BUFFER_SEND,
                                             SENDING_SIZE_BUFFER_SEND);
+            message_time += WallTimer::get_time_mark();
             // Process
+            if (buffer_recv.empty()) {
+                continue;
+            }
             for (const E_T &e : buffer_recv) {
                 fun(e);
             }

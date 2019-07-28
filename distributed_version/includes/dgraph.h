@@ -316,44 +316,6 @@ DistGraph::DistGraph(char *input_filename)
         }
     }
 
-//    /////////////////////////////////////////////////
-//    //
-//    // Send the edges in buffer_sending to corresponding hosts.
-//    std::vector< std::vector<MPI_Request> > requests_list(num_hosts - 1);
-//    for (int loc = 0; loc < num_hosts - 1; ++loc) {
-//        int master_host_id = buffer_send_list_loc_2_master_host_id(loc);
-//        MPI_Instance::send_buffer_2_dest(buffer_send_list[loc],
-//                requests_list[loc],
-//                master_host_id,
-//                GRAPH_SHUFFLE,
-//                SIZE_GRAPH_SHUFFLE);
-//    }
-////	printf("@%u host_id: %u sent\n", __LINE__, host_id);//test
-//    // Receive the edges
-//    std::vector<EdgeType> buffer_recv;
-//    for (int h_i = 0; h_i < num_hosts - 1; ++h_i) {
-//        // Receive into the buffer_recv.
-//        MPI_Instance::recv_buffer_from_any(buffer_recv,
-//                                           GRAPH_SHUFFLE,
-//                                           SIZE_GRAPH_SHUFFLE);
-//		if (buffer_recv.empty()) {
-//		    continue;
-//		}
-//        num_edges_recv += buffer_recv.size();
-//        // Put into edgelist_recv
-//        for (const auto &e : buffer_recv) {
-//            VertexID head = e.first;
-//            VertexID tail = e.second;
-//            edgelist_recv[head].push_back(tail);
-//        }
-//    }
-//    for (int loc = 0; loc < num_hosts - 1; ++loc) {
-//        MPI_Waitall(requests_list[loc].size(),
-//                    requests_list[loc].data(),
-//                    MPI_STATUSES_IGNORE);
-//    }
-//    //
-//    /////////////////////////////////////////////////
 //	printf("@%u host_id: %u received\n", __LINE__, host_id);//test
     // Build up local graph structure
     num_edges_local = num_edges_recv;
