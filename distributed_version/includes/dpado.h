@@ -277,6 +277,10 @@ private:
 //	double init_indicators_time = 0;
     //L2CacheMissRate cache_miss;
     double message_time = 0;
+    double initialization_time = 0;
+    double scatter_time = 0;
+    double gather_time = 0;
+    double clearup_time = 0;
 
 //	TotalInstructsExe candidating_ins_count;
 //	TotalInstructsExe adding_ins_count;
@@ -483,7 +487,18 @@ DistBVCPLL(
 //	printf("BP_Checking: "); bp_checking_ins_count.print();
 //	printf("distance_query: "); dist_query_ins_count.print();
 
-    printf("host_id: %u Local_labeling_time: %.2f seconds message_time: %.2f %.2f%%\n", host_id, time_labeling, message_time, 100.0 * message_time / time_labeling);
+    printf("host_id: %u Local_labeling_time: %.2f seconds\n"
+           "\tmessage_time: %.2f %.2f%%\n"
+           "\tinitialization_time: %.2f %.2f%%\n"
+           "\tscatter_time: %.2f %.2f%%\n"
+           "\tgather_time: %.2f %.2f%%\n"
+           "\tclearup_time: %.2f %.2f%%\n",
+           host_id, time_labeling,
+           message_time, 100.0 * message_time / time_labeling,
+           initialization_time, 100.0 * initialization_time / time_labeling,
+           scatter_time, 100.0 * scatter_time / time_labeling,
+           gather_time, 100.0 * gather_time / time_labeling,
+           clearup_time, 100.0 * clearup_time / time_labeling);
     double global_time_labeling;
     MPI_Allreduce(&time_labeling,
             &global_time_labeling,
@@ -1453,12 +1468,14 @@ initialization(
             active_queue[end_active_queue++] = r_local;
         }
         // Get the global number of active vertices;
+        message_time -= WallTimer::get_time_mark();
         MPI_Allreduce(&end_active_queue,
                       &global_num_actives,
                       1,
                       V_ID_Type,
                       MPI_SUM,
                       MPI_COMM_WORLD);
+        message_time += WallTimer::get_time_mark();
     }
 
     return global_num_actives;
@@ -2016,7 +2033,7 @@ batch_process(
         std::vector<bool> &once_candidated)
 {
     // At the beginning of a batch, initialize the labels L and distance buffer dist_table;
-//    std::vector<VertexID> roots_master_local; // Roots which belongs to this host.
+    initialization_time -= WallTimer::get_time_mark();
     VertexID global_num_actives = initialization(G,
                                     short_index,
                                     dist_table,
@@ -2032,7 +2049,7 @@ batch_process(
                                     roots_size,
 //                                    roots_master_local,
                                     used_bp_roots);
-
+    initialization_time += WallTimer::get_time_mark();
     UnweightedDist iter = 0; // The iterator, also the distance for current iteration
 //    {//test
 //        printf("host_id: %u initialization finished.\n", host_id);
@@ -2074,6 +2091,7 @@ batch_process(
 
 		// Send masters' newly added labels to other hosts
         {
+            scatter_time -= WallTimer::get_time_mark();
             std::vector<std::pair<VertexID, VertexID > > buffer_send_indices(end_active_queue);
                 //.first: Vertex ID
                 //.second: size of labels
@@ -2147,6 +2165,7 @@ batch_process(
                     start_index = bound_index;
                 }
             }
+            scatter_time += WallTimer::get_time_mark();
         }
 //        /////////////////////////////////////////////////
 //        //
@@ -2200,6 +2219,7 @@ batch_process(
 
         // Traverse vertices in the got_candidates_queue to insert labels
 		{
+		    gather_time -= WallTimer::get_time_mark();
             std::vector< std::pair<VertexID, VertexID> > buffer_send; // For sync elements in the dist_table
                 // pair.first: root id
                 // pair.second: label (global) id of the root
@@ -2311,10 +2331,12 @@ batch_process(
                     V_ID_Type,
                     MPI_SUM,
                     MPI_COMM_WORLD);
+            gather_time += WallTimer::get_time_mark();
 		}
     }
 
     // Reset the dist_table
+    clearup_time -= WallTimer::get_time_mark();
     reset_at_end(
 //            G,
 //            roots_start,
@@ -2322,6 +2344,7 @@ batch_process(
             dist_table,
             recved_dist_table,
             bp_labels_table);
+    clearup_time += WallTimer::get_time_mark();
 }
 
 // Function: every host broadcasts its sending buffer, and does fun for every element it received in the unit buffer.
