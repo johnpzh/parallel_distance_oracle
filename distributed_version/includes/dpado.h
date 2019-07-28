@@ -490,14 +490,16 @@ DistBVCPLL(
 //	printf("BP_Checking: "); bp_checking_ins_count.print();
 //	printf("distance_query: "); dist_query_ins_count.print();
 
-    printf("host_id: %u Local_labeling_time:\t%.2f seconds\n"
-           "\tbp_labeling_time:\t%.2f %.2f%%\n"
-           "\tinitializing_time:\t%.2f %.2f%%\n"
-           "\tscatter_time:\t\t%.2f %.2f%%\n"
-           "\tgather_time:\t\t%.2f %.2f%%\n"
-           "\tclearup_time:\t\t%.2f %.2f%%\n"
-           "\tmessage_time:\t\t%.2f %.2f%%\n",
-           host_id, time_labeling,
+    printf("num_hosts: %u host_id: %u\n"
+           "Local_labeling_time: %.2f seconds\n"
+           "bp_labeling_time: %.2f %.2f%%\n"
+           "initializing_time: %.2f %.2f%%\n"
+           "scatter_time: %.2f %.2f%%\n"
+           "gather_time: %.2f %.2f%%\n"
+           "clearup_time: %.2f %.2f%%\n"
+           "message_time: %.2f %.2f%%\n",
+           num_hosts, host_id,
+           time_labeling,
            bp_labeling_time, 100.0 * bp_labeling_time / time_labeling,
            initializing_time, 100.0 * initializing_time / time_labeling,
            scatter_time, 100.0 * scatter_time / time_labeling,
