@@ -276,6 +276,7 @@ private:
 //	double init_start_reset_time = 0;
 //	double init_indicators_time = 0;
     //L2CacheMissRate cache_miss;
+    double message_time = 0;
 
 //	TotalInstructsExe candidating_ins_count;
 //	TotalInstructsExe adding_ins_count;
@@ -482,7 +483,7 @@ DistBVCPLL(
 //	printf("BP_Checking: "); bp_checking_ins_count.print();
 //	printf("distance_query: "); dist_query_ins_count.print();
 
-//    printf("host_id: %u Local_labeling_time: %.2f seconds\n", host_id, time_labeling);
+    printf("host_id: %u Local_labeling_time: %.2f seconds message_time: %.2f %.2f%%\n", host_id, time_labeling, message_time, 100.0 * message_time / time_labeling);
     double global_time_labeling;
     MPI_Allreduce(&time_labeling,
             &global_time_labeling,
@@ -735,11 +736,13 @@ bit_parallel_labeling(
             }
         }
         // Broadcast the r here.
+        message_time -= WallTimer::get_time_mark();
         MPI_Bcast(&r_global,
                 1,
                 V_ID_Type,
                 0,
                 MPI_COMM_WORLD);
+        message_time += WallTimer::get_time_mark();
         used_bp_roots[r_global] = 1;
 #ifdef DEBUG_MESSAGES_ON
         {//test
@@ -776,6 +779,7 @@ bit_parallel_labeling(
             std::vector<VertexID> selected_nbrs;
             if (0 != host_id) {
                 // Every host other than 0 sends neighbors to host 0
+                message_time -= WallTimer::get_time_mark();
                 MPI_Instance::send_buffer_2_dst(buffer_send,
                         0,
                         SENDING_ROOT_NEIGHBORS,
@@ -795,18 +799,21 @@ bit_parallel_labeling(
 //                        num_hosts,
 //                        0,
 //                        SENDING_SELECTED_NEIGHBORS);
+                message_time += WallTimer::get_time_mark();
             } else {
                 // Host 0
                 // Host 0 receives neighbors from others
                 std::vector<VertexID> all_nbrs(buffer_send);
                 std::vector<VertexID > buffer_recv;
                 for (int loc = 0; loc < num_hosts - 1; ++loc) {
+                    message_time -= WallTimer::get_time_mark();
                     MPI_Instance::recv_buffer_from_any(buffer_recv,
                                                        SENDING_ROOT_NEIGHBORS,
                                                        SENDING_SIZE_ROOT_NEIGHBORS);
 //                    MPI_Instance::receive_dynamic_buffer_from_any(buffer_recv,
 //                            num_hosts,
 //                            SENDING_ROOT_NEIGHBORS);
+                    message_time += WallTimer::get_time_mark();
                     if (buffer_recv.empty()) {
                         continue;
                     }
@@ -829,6 +836,7 @@ bit_parallel_labeling(
                     }
                 }
                 // Send selected neighbors to other hosts
+                message_time -= WallTimer::get_time_mark();
                 for (int dest = 1; dest < num_hosts; ++dest) {
                     MPI_Instance::send_buffer_2_dst(selected_nbrs,
                             dest,
@@ -841,6 +849,7 @@ bit_parallel_labeling(
 //                            SENDING_SELECTED_NEIGHBORS,
 //                            MPI_COMM_WORLD);
                 }
+                message_time += WallTimer::get_time_mark();
             }
 //            {//test
 //                printf("host_id: %u selected_nbrs.size(): %lu\n", host_id, selected_nbrs.size());
@@ -2244,6 +2253,7 @@ batch_process(
 //                printf("host_id: %u gather: buffer_send.size(); %lu bytes: %lu\n", host_id, buffer_send.size(), MPI_Instance::get_sending_size(buffer_send));
 //            }
             end_got_candidates_queue = 0; // Set the got_candidates_queue empty
+            // Sync the dist_table
             // Lambda for processing
             auto process = [&] (const std::pair<VertexID, VertexID> &e) {
                 VertexID root_id = e.first;
@@ -2255,7 +2265,7 @@ batch_process(
             // Broadcast dist_table updates
             every_host_bcasts_buffer_and_proc(buffer_send,
                     process);
-//            // Sync the dist_table
+
 //            /////////////////////////////////////////////////
 //            //
 //            std::vector< std::vector<MPI_Request> > requests_list(num_hosts - 1);
@@ -2327,11 +2337,13 @@ every_host_bcasts_buffer_and_proc(
     for (int h_i = 0; h_i < num_hosts; ++h_i) {
         uint64_t size_buffer_send = buffer_send.size();
         // Sync the size_buffer_send.
+        message_time -= WallTimer::get_time_mark();
         MPI_Bcast(&size_buffer_send,
                   1,
                   MPI_UINT64_T,
                   h_i,
                   MPI_COMM_WORLD);
+        message_time += WallTimer::get_time_mark();
 //        {// test
 //            printf("host_id: %u h_i: %u bcast_buffer_send.size(): %lu\n", host_id, h_i, size_buffer_send);
 //        }
@@ -2343,6 +2355,7 @@ every_host_bcasts_buffer_and_proc(
         // Broadcast the buffer_send
         for (uint32_t b_i = 0; b_i < num_unit_buffers; ++b_i) {
             // Prepare the unit buffer
+            message_time -= WallTimer::get_time_mark();
             size_t offset = b_i * UNIT_BUFFER_SIZE;
             size_t size_unit_buffer = b_i == num_unit_buffers - 1
                                         ? size_buffer_send - offset
@@ -2358,6 +2371,7 @@ every_host_bcasts_buffer_and_proc(
                     MPI_CHAR,
                     h_i,
                     MPI_COMM_WORLD);
+            message_time += WallTimer::get_time_mark();
             // Process every element of unit_buffer
             for (const E_T &e : unit_buffer) {
                 fun(e);
@@ -2378,11 +2392,13 @@ one_host_bcasts_buffer_to_buffer(
     const uint32_t UNIT_BUFFER_SIZE = 16U << 20U;
     uint64_t size_buffer_send = buffer_send.size();
     // Sync the size_buffer_send.
+    message_time -= WallTimer::get_time_mark();
     MPI_Bcast(&size_buffer_send,
               1,
               MPI_UINT64_T,
               root,
               MPI_COMM_WORLD);
+    message_time += WallTimer::get_time_mark();
     buffer_recv.resize(size_buffer_send);
     if (!size_buffer_send) {
         return;
@@ -2390,6 +2406,7 @@ one_host_bcasts_buffer_to_buffer(
     uint32_t num_unit_buffers = (size_buffer_send + UNIT_BUFFER_SIZE - 1) / UNIT_BUFFER_SIZE;
 
     // Broadcast the buffer_send
+    message_time -= WallTimer::get_time_mark();
     for (uint32_t b_i = 0; b_i < num_unit_buffers; ++b_i) {
         // Prepare the unit buffer
         size_t offset = b_i * UNIT_BUFFER_SIZE;
@@ -2410,6 +2427,7 @@ one_host_bcasts_buffer_to_buffer(
         // Copy unit buffer to buffer_recv
         std::copy(unit_buffer.begin(), unit_buffer.end(), buffer_recv.begin() + offset);
     }
+    message_time += WallTimer::get_time_mark();
 }
 
 // Function: Distance query of a pair of vertices, used for distrubuted version.
