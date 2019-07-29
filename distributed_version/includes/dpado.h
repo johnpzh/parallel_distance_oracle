@@ -24,7 +24,7 @@
 
 namespace PADO {
 
-template <VertexID BITPARALLEL_SIZE = 50>
+template <VertexID BATCH_SIZE = 1024, VertexID BITPARALLEL_SIZE = 50>
 class DistBVCPLL {
 private:
     // Structure for the type of label
@@ -61,41 +61,41 @@ private:
     }; //__attribute__((aligned(64)));
 
     // Structure for the type of temporary label
-    struct ShortIndex {
-        // I use BATCH_SIZE + 1 bit for indicator bit array.
-        // The v.indicator[BATCH_SIZE] is set if in current batch v has got any new labels already.
-        // In this way, when do initialization, only initialize those short_index[v] whose indicator[BATCH_SIZE] is set.
-        // It is also used for inserting new labels because the label structure.
-        std::vector<bool> indicator; // Global indicator, indicator[r] (0 <= r < BATCH_SIZE) is set means root r once selected as candidate already
-//		bitset<BATCH_SIZE> candidates; // Candidates one iteration, candidates[r] is set means root r is candidate in this iteration
-
-        // Use a queue to store candidates
-        std::vector<VertexID> candidates_que;
-        VertexID end_candidates_que = 0;
-        std::vector<bool> is_candidate;
-
-//        ShortIndex() = default;
-        explicit ShortIndex(VertexID batch_size) :
-                                indicator(batch_size + 1),
-                                candidates_que(batch_size),
-                                is_candidate(batch_size, false)
-        { }
-
-    }; //__attribute__((aligned(64)));
 //    struct ShortIndex {
 //        // I use BATCH_SIZE + 1 bit for indicator bit array.
 //        // The v.indicator[BATCH_SIZE] is set if in current batch v has got any new labels already.
 //        // In this way, when do initialization, only initialize those short_index[v] whose indicator[BATCH_SIZE] is set.
 //        // It is also used for inserting new labels because the label structure.
-//        std::bitset<BATCH_SIZE + 1> indicator; // Global indicator, indicator[r] (0 <= r < BATCH_SIZE) is set means root r once selected as candidate already
+//        std::vector<bool> indicator; // Global indicator, indicator[r] (0 <= r < BATCH_SIZE) is set means root r once selected as candidate already
 ////		bitset<BATCH_SIZE> candidates; // Candidates one iteration, candidates[r] is set means root r is candidate in this iteration
 //
 //        // Use a queue to store candidates
-//        std::vector<VertexID> candidates_que = std::vector<VertexID>(BATCH_SIZE);
+//        std::vector<VertexID> candidates_que;
 //        VertexID end_candidates_que = 0;
-//        std::vector<bool> is_candidate = std::vector<bool>(BATCH_SIZE, false);
+//        std::vector<bool> is_candidate;
+//
+////        ShortIndex() = default;
+//        explicit ShortIndex(VertexID batch_size) :
+//                                indicator(batch_size + 1),
+//                                candidates_que(batch_size),
+//                                is_candidate(batch_size, false)
+//        { }
 //
 //    }; //__attribute__((aligned(64)));
+    struct ShortIndex {
+        // I use BATCH_SIZE + 1 bit for indicator bit array.
+        // The v.indicator[BATCH_SIZE] is set if in current batch v has got any new labels already.
+        // In this way, when do initialization, only initialize those short_index[v] whose indicator[BATCH_SIZE] is set.
+        // It is also used for inserting new labels because the label structure.
+        std::bitset<BATCH_SIZE + 1> indicator; // Global indicator, indicator[r] (0 <= r < BATCH_SIZE) is set means root r once selected as candidate already
+//		bitset<BATCH_SIZE> candidates; // Candidates one iteration, candidates[r] is set means root r is candidate in this iteration
+
+        // Use a queue to store candidates
+        std::vector<VertexID> candidates_que = std::vector<VertexID>(BATCH_SIZE);
+        VertexID end_candidates_que = 0;
+        std::vector<bool> is_candidate = std::vector<bool>(BATCH_SIZE, false);
+
+    }; //__attribute__((aligned(64)));
 
     // Type of Bit-Parallel Label
     struct BPLabelType {
@@ -105,7 +105,7 @@ private:
 
     VertexID num_v = 0;
     VertexID num_masters = 0;
-    VertexID BATCH_SIZE = 0;
+//    VertexID BATCH_SIZE = 0;
     int host_id = 0;
     int num_hosts = 0;
     MPI_Datatype V_ID_Type;
@@ -305,7 +305,6 @@ public:
 //    std::pair<uint64_t, uint64_t> length_larger_than_16 = std::make_pair(0, 0);
     DistBVCPLL() = default;
     explicit DistBVCPLL(
-            VertexID batch_size,
             const DistGraph &G);
 
     UnweightedDist dist_distance_query_pair(
@@ -314,13 +313,11 @@ public:
             const DistGraph &G);
 }; // class DistBVCPLL
 
-template <VertexID BITPARALLEL_SIZE>
-DistBVCPLL<BITPARALLEL_SIZE>::
+template <VertexID BATCH_SIZE, VertexID BITPARALLEL_SIZE>
+DistBVCPLL<BATCH_SIZE, BITPARALLEL_SIZE>::
 DistBVCPLL(
-        VertexID batch_size,
         const DistGraph &G)
 {
-    BATCH_SIZE = batch_size;
     num_v = G.num_v;
     assert(num_v >= BATCH_SIZE);
     num_masters = G.num_masters;
@@ -358,7 +355,8 @@ DistBVCPLL(
     std::vector<VertexID> got_candidates_queue(num_masters); // Any vertex v who got candidates should be put into this queue.
     VertexID end_got_candidates_queue = 0;
     std::vector<bool> got_candidates(num_masters, false); // got_candidates[v] is true means vertex v is in the queue got_candidates_queue
-    std::vector<ShortIndex> short_index(num_masters, ShortIndex(BATCH_SIZE));
+//    std::vector<ShortIndex> short_index(num_masters, ShortIndex(BATCH_SIZE));
+    std::vector<ShortIndex> short_index(num_masters);
     std::vector< std::vector<UnweightedDist> > dist_table(BATCH_SIZE, std::vector<UnweightedDist>(num_v, MAX_UNWEIGHTED_DIST));
     std::vector<VertexID> once_candidated_queue(num_masters); // if short_index[v].indicator.any() is true, v is in the queue.
         // Used mainly for resetting short_index[v].indicator.
@@ -529,8 +527,8 @@ DistBVCPLL(
     // End test
 }
 
-//template <VertexID BITPARALLEL_SIZE>
-//inline void DistBVCPLL<BITPARALLEL_SIZE>::bit_parallel_labeling(
+//template <VertexID BATCH_SIZE, VertexID BITPARALLEL_SIZE>
+//inline void DistBVCPLL<BATCH_SIZE, BITPARALLEL_SIZE>::bit_parallel_labeling(
 //        const DistGraph &G,
 //        std::vector<uint8_t> &used_bp_roots)
 //{
@@ -664,8 +662,8 @@ DistBVCPLL(
 //}
 
 
-template <VertexID BITPARALLEL_SIZE>
-inline void DistBVCPLL<BITPARALLEL_SIZE>::
+template <VertexID BATCH_SIZE, VertexID BITPARALLEL_SIZE>
+inline void DistBVCPLL<BATCH_SIZE, BITPARALLEL_SIZE>::
 bit_parallel_push_labels(
         const DistGraph &G,
         const VertexID v_global,
@@ -712,8 +710,8 @@ bit_parallel_push_labels(
 
 }
 
-template <VertexID BITPARALLEL_SIZE>
-inline void DistBVCPLL<BITPARALLEL_SIZE>::
+template <VertexID BATCH_SIZE, VertexID BITPARALLEL_SIZE>
+inline void DistBVCPLL<BATCH_SIZE, BITPARALLEL_SIZE>::
 bit_parallel_labeling(
         const DistGraph &G,
 //        std::vector<IndexType> &L,
@@ -1135,8 +1133,8 @@ bit_parallel_labeling(
 
 //// Function bit parallel checking:
 //// return false if shortest distance exits in bp labels, return true if bp labels cannot cover the distance
-//template <VertexID BITPARALLEL_SIZE>
-//inline bool DistBVCPLL<BITPARALLEL_SIZE>::bit_parallel_checking(
+//template <VertexID BATCH_SIZE, VertexID BITPARALLEL_SIZE>
+//inline bool DistBVCPLL<BATCH_SIZE, BITPARALLEL_SIZE>::bit_parallel_checking(
 //        VertexID v_id,
 //        VertexID w_id,
 //        const std::vector<IndexType> &L,
@@ -1172,8 +1170,8 @@ bit_parallel_labeling(
 // For a batch, initialize the temporary labels and real labels of roots;
 // traverse roots' labels to initialize distance buffer;
 // unset flag arrays is_active and got_labels
-template <VertexID BITPARALLEL_SIZE>
-inline VertexID DistBVCPLL<BITPARALLEL_SIZE>::
+template <VertexID BATCH_SIZE, VertexID BITPARALLEL_SIZE>
+inline VertexID DistBVCPLL<BATCH_SIZE, BITPARALLEL_SIZE>::
 initialization(
         const DistGraph &G,
         std::vector<ShortIndex> &short_index,
@@ -1203,16 +1201,16 @@ initialization(
     {
         for (VertexID v_i = 0; v_i < end_once_candidated_queue; ++v_i) {
             VertexID v_local = once_candidated_queue[v_i];
-//            short_index[v_local].indicator.reset();
-            short_index[v_local].indicator.assign(BATCH_SIZE + 1, false); // Reset
+            short_index[v_local].indicator.reset();
+//            short_index[v_local].indicator.assign(BATCH_SIZE + 1, false); // Reset
             once_candidated[v_local] = false;
         }
         end_once_candidated_queue = 0;
         for (VertexID r_local : roots_master_local) {
-            short_index[r_local].indicator[G.get_global_vertex_id(r_local) - roots_start] = true; // v itself
-            short_index[r_local].indicator[BATCH_SIZE] = true; // v got labels
-//            short_index[r_local].indicator.set(G.get_global_vertex_id(r_local) - roots_start); // v itself
-//            short_index[r_local].indicator.set(BATCH_SIZE); // v got labels
+//            short_index[r_local].indicator[G.get_global_vertex_id(r_local) - roots_start] = true; // v itself
+//            short_index[r_local].indicator[BATCH_SIZE] = true; // v got labels
+            short_index[r_local].indicator.set(G.get_global_vertex_id(r_local) - roots_start); // v itself
+            short_index[r_local].indicator.set(BATCH_SIZE); // v got labels
         }
     }
 //
@@ -1441,8 +1439,8 @@ initialization(
 }
 
 // Function: push v_head_global's newly added labels to its all neighbors.
-template <VertexID BITPARALLEL_SIZE>
-inline void DistBVCPLL<BITPARALLEL_SIZE>::
+template <VertexID BATCH_SIZE, VertexID BITPARALLEL_SIZE>
+inline void DistBVCPLL<BATCH_SIZE, BITPARALLEL_SIZE>::
 push_single_label(
         VertexID v_head_global,
         VertexID label_root_id,
@@ -1537,8 +1535,8 @@ push_single_label(
 }
 
 // Function: pushes v_head's labels to v_head's every (master) neighbor
-template <VertexID BITPARALLEL_SIZE>
-inline void DistBVCPLL<BITPARALLEL_SIZE>::
+template <VertexID BATCH_SIZE, VertexID BITPARALLEL_SIZE>
+inline void DistBVCPLL<BATCH_SIZE, BITPARALLEL_SIZE>::
 local_push_labels(
         VertexID v_head_global,
         EdgeID start_index,
@@ -1585,8 +1583,8 @@ local_push_labels(
                 continue;
             }
             // Record label_root_id as once selected by v_tail_global
-            SI_v_tail.indicator[label_root_id] = true;
-//            SI_v_tail.indicator.set(label_root_id);
+//            SI_v_tail.indicator[label_root_id] = true;
+            SI_v_tail.indicator.set(label_root_id);
             // Add into once_candidated_queue
 
             if (!once_candidated[v_tail_local]) {
@@ -1639,8 +1637,8 @@ local_push_labels(
 
 
 //// Function: pushes v_head's labels to v_head's every (master) neighbor
-//template <VertexID BITPARALLEL_SIZE>
-//inline void DistBVCPLL<BITPARALLEL_SIZE>::
+//template <VertexID BATCH_SIZE, VertexID BITPARALLEL_SIZE>
+//inline void DistBVCPLL<BATCH_SIZE, BITPARALLEL_SIZE>::
 //local_push_labels(
 //        VertexID v_head_local,
 //        VertexID roots_start,
@@ -1751,8 +1749,8 @@ local_push_labels(
 //// DEPRECATED Function: in the scatter phase, synchronize local masters to mirrors on other hosts
 //// Has some mysterious problem: when I call this function, some hosts will receive wrong messages; when I copy all
 //// code of this function into the caller, all messages become right.
-//template <VertexID BITPARALLEL_SIZE>
-//inline void DistBVCPLL<BITPARALLEL_SIZE>::
+//template <VertexID BATCH_SIZE, VertexID BITPARALLEL_SIZE>
+//inline void DistBVCPLL<BATCH_SIZE, BITPARALLEL_SIZE>::
 //sync_masters_2_mirrors(
 //        const DistGraph &G,
 //        const std::vector<VertexID> &active_queue,
@@ -1810,8 +1808,8 @@ local_push_labels(
 // Function for distance query;
 // traverse vertex v_id's labels;
 // return false if shorter distance exists already, return true if the cand_root_id can be added into v_id's label.
-template <VertexID BITPARALLEL_SIZE>
-inline bool DistBVCPLL<BITPARALLEL_SIZE>::
+template <VertexID BATCH_SIZE, VertexID BITPARALLEL_SIZE>
+inline bool DistBVCPLL<BATCH_SIZE, BITPARALLEL_SIZE>::
 distance_query(
         VertexID cand_root_id,
         VertexID v_id_local,
@@ -1864,8 +1862,8 @@ distance_query(
 // Function inserts candidate cand_root_id into vertex v_id's labels;
 // update the distance buffer dist_table;
 // but it only update the v_id's labels' vertices array;
-template <VertexID BITPARALLEL_SIZE>
-inline void DistBVCPLL<BITPARALLEL_SIZE>::
+template <VertexID BATCH_SIZE, VertexID BITPARALLEL_SIZE>
+inline void DistBVCPLL<BATCH_SIZE, BITPARALLEL_SIZE>::
 insert_label_only(
         VertexID cand_root_id,
         VertexID v_id_local,
@@ -1889,8 +1887,8 @@ insert_label_only(
 }
 
 // Function updates those index arrays in v_id's label only if v_id has been inserted new labels
-template <VertexID BITPARALLEL_SIZE>
-inline void DistBVCPLL<BITPARALLEL_SIZE>::
+template <VertexID BATCH_SIZE, VertexID BITPARALLEL_SIZE>
+inline void DistBVCPLL<BATCH_SIZE, BITPARALLEL_SIZE>::
 update_label_indices(
         VertexID v_id_local,
         VertexID inserted_count,
@@ -1905,8 +1903,8 @@ update_label_indices(
         // Increase the batches' last element's size because a new distance element need to be added
         ++(Lv.batches.rbegin() -> size);
     } else {
-        short_index[v_id_local].indicator[BATCH_SIZE] = true;
-//        short_index[v_id_local].indicator.set(BATCH_SIZE);
+//        short_index[v_id_local].indicator[BATCH_SIZE] = true;
+        short_index[v_id_local].indicator.set(BATCH_SIZE);
         // Insert a new Batch with batch_id, start_index, and size because a new distance element need to be added
         Lv.batches.emplace_back(
                 b_id, // batch id
@@ -1923,8 +1921,8 @@ update_label_indices(
 // Function to reset dist_table the distance buffer to INF
 // Traverse every root's labels to reset its distance buffer elements to INF.
 // In this way to reduce the cost of initialization of the next batch.
-template <VertexID BITPARALLEL_SIZE>
-inline void DistBVCPLL<BITPARALLEL_SIZE>::
+template <VertexID BATCH_SIZE, VertexID BITPARALLEL_SIZE>
+inline void DistBVCPLL<BATCH_SIZE, BITPARALLEL_SIZE>::
 reset_at_end(
 //        const DistGraph &G,
 //        VertexID roots_start,
@@ -1969,8 +1967,8 @@ reset_at_end(
     }
 }
 
-template <VertexID BITPARALLEL_SIZE>
-inline void DistBVCPLL<BITPARALLEL_SIZE>::
+template <VertexID BATCH_SIZE, VertexID BITPARALLEL_SIZE>
+inline void DistBVCPLL<BATCH_SIZE, BITPARALLEL_SIZE>::
 batch_process(
         const DistGraph &G,
         VertexID b_id,
@@ -2522,9 +2520,9 @@ batch_process(
 }
 
 // Function: every host broadcasts its sending buffer, and does fun for every element it received in the unit buffer.
-template <VertexID BITPARALLEL_SIZE>
+template <VertexID BATCH_SIZE, VertexID BITPARALLEL_SIZE>
 template <typename E_T, typename F>
-inline void DistBVCPLL<BITPARALLEL_SIZE>::
+inline void DistBVCPLL<BATCH_SIZE, BITPARALLEL_SIZE>::
 every_host_bcasts_buffer_and_proc(
         std::vector<E_T> &buffer_send,
         F &fun)
@@ -2631,9 +2629,9 @@ every_host_bcasts_buffer_and_proc(
     }
 }
 //// DEPRECATED version Function: every host broadcasts its sending buffer, and does fun for every element it received in the unit buffer.
-//template <VertexID BITPARALLEL_SIZE>
+//template <VertexID BATCH_SIZE, VertexID BITPARALLEL_SIZE>
 //template <typename E_T, typename F>
-//inline void DistBVCPLL<BITPARALLEL_SIZE>::
+//inline void DistBVCPLL<BATCH_SIZE, BITPARALLEL_SIZE>::
 //every_host_bcasts_buffer_and_proc(
 //        std::vector<E_T> &buffer_send,
 //        F &fun)
@@ -2687,9 +2685,9 @@ every_host_bcasts_buffer_and_proc(
 //}
 
 //// DEPRECATED Function: Host root broadcasts its sending buffer to a receiving buffer.
-//template <VertexID BITPARALLEL_SIZE>
+//template <VertexID BATCH_SIZE, VertexID BITPARALLEL_SIZE>
 //template <typename E_T>
-//inline void DistBVCPLL<BITPARALLEL_SIZE>::
+//inline void DistBVCPLL<BATCH_SIZE, BITPARALLEL_SIZE>::
 //one_host_bcasts_buffer_to_buffer(
 //        int root,
 //        std::vector<E_T> &buffer_send,
@@ -2737,8 +2735,8 @@ every_host_bcasts_buffer_and_proc(
 //}
 
 // Function: Distance query of a pair of vertices, used for distrubuted version.
-template <VertexID BITPARALLEL_SIZE>
-inline UnweightedDist DistBVCPLL<BITPARALLEL_SIZE>::
+template <VertexID BATCH_SIZE, VertexID BITPARALLEL_SIZE>
+inline UnweightedDist DistBVCPLL<BATCH_SIZE, BITPARALLEL_SIZE>::
 dist_distance_query_pair(
         VertexID a_input,
         VertexID b_input,
