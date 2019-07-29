@@ -253,11 +253,11 @@ private:
     inline void every_host_bcasts_buffer_and_proc(
             std::vector<E_T> &buffer_send,
             F &fun);
-    template <typename E_T>
-    inline void one_host_bcasts_buffer_to_buffer(
-            int root,
-            std::vector<E_T> &buffer_send,
-            std::vector<E_T> &buffer_recv);
+//    template <typename E_T>
+//    inline void one_host_bcasts_buffer_to_buffer(
+//            int root,
+//            std::vector<E_T> &buffer_send,
+//            std::vector<E_T> &buffer_recv);
 
     // Function: get the destination host id which is i hop from this host.
     // For example, 1 hop from host 2 is host 0 (assume total 3 hosts);
@@ -940,19 +940,11 @@ bit_parallel_labeling(
 
             // Send active masters to mirrors
             {
-//                std::vector<MPI_Request> requests_send(num_hosts - 1);
-//                std::vector< std::vector<MPI_Request> > requests_list(num_hosts - 1);
                 std::vector<MsgUnitBP> buffer_send(end_que);
                 for (VertexID que_i = 0; que_i < end_que; ++que_i) {
                     VertexID v_global = que[que_i];
-//                    buffer_send.emplace_back(v_global, // v_global
-//                                             tmp_s[v_global].first, // S_n1
-//                                             tmp_s[v_global].second); // S_0
                     buffer_send[que_i] = MsgUnitBP(v_global, tmp_s[v_global].first, tmp_s[v_global].second);
                 }
-//                {//test
-//                    printf("host_id: %u bp_labeling: buffer_send.size(); %lu bytes: %lu\n", host_id, buffer_send.size(), MPI_Instance::get_sending_size(buffer_send));
-//                }
                 // Lambda for processing every message
                 auto process = [&] (const MsgUnitBP &m) {
                     VertexID v_global = m.v_global;
@@ -2530,55 +2522,55 @@ every_host_bcasts_buffer_and_proc(
 //    }
 //}
 
-// Function: Host root broadcasts its sending buffer to a receiving buffer.
-template <VertexID BITPARALLEL_SIZE>
-template <typename E_T>
-inline void DistBVCPLL<BITPARALLEL_SIZE>::
-one_host_bcasts_buffer_to_buffer(
-        int root,
-        std::vector<E_T> &buffer_send,
-        std::vector<E_T> &buffer_recv)
-{
-    const uint32_t UNIT_BUFFER_SIZE = 16U << 20U;
-    uint64_t size_buffer_send = buffer_send.size();
-    // Sync the size_buffer_send.
-    message_time -= WallTimer::get_time_mark();
-    MPI_Bcast(&size_buffer_send,
-              1,
-              MPI_UINT64_T,
-              root,
-              MPI_COMM_WORLD);
-    message_time += WallTimer::get_time_mark();
-    buffer_recv.resize(size_buffer_send);
-    if (!size_buffer_send) {
-        return;
-    }
-    uint32_t num_unit_buffers = (size_buffer_send + UNIT_BUFFER_SIZE - 1) / UNIT_BUFFER_SIZE;
-
-    // Broadcast the buffer_send
-    message_time -= WallTimer::get_time_mark();
-    for (uint32_t b_i = 0; b_i < num_unit_buffers; ++b_i) {
-        // Prepare the unit buffer
-        size_t offset = b_i * UNIT_BUFFER_SIZE;
-        size_t size_unit_buffer = b_i == num_unit_buffers - 1
-                                    ? size_buffer_send - offset
-                                    : UNIT_BUFFER_SIZE;
-        std::vector<E_T> unit_buffer(size_unit_buffer);
-        // Copy the messages from buffer_send to unit buffer.
-        if (host_id == root) {
-            unit_buffer.assign(buffer_send.begin() + offset, buffer_send.begin() + offset + size_unit_buffer);
-        }
-        // Broadcast the unit buffer
-        MPI_Bcast(unit_buffer.data(),
-                  MPI_Instance::get_sending_size(unit_buffer),
-                  MPI_CHAR,
-                  root,
-                  MPI_COMM_WORLD);
-        // Copy unit buffer to buffer_recv
-        std::copy(unit_buffer.begin(), unit_buffer.end(), buffer_recv.begin() + offset);
-    }
-    message_time += WallTimer::get_time_mark();
-}
+//// DEPRECATED Function: Host root broadcasts its sending buffer to a receiving buffer.
+//template <VertexID BITPARALLEL_SIZE>
+//template <typename E_T>
+//inline void DistBVCPLL<BITPARALLEL_SIZE>::
+//one_host_bcasts_buffer_to_buffer(
+//        int root,
+//        std::vector<E_T> &buffer_send,
+//        std::vector<E_T> &buffer_recv)
+//{
+//    const uint32_t UNIT_BUFFER_SIZE = 16U << 20U;
+//    uint64_t size_buffer_send = buffer_send.size();
+//    // Sync the size_buffer_send.
+//    message_time -= WallTimer::get_time_mark();
+//    MPI_Bcast(&size_buffer_send,
+//              1,
+//              MPI_UINT64_T,
+//              root,
+//              MPI_COMM_WORLD);
+//    message_time += WallTimer::get_time_mark();
+//    buffer_recv.resize(size_buffer_send);
+//    if (!size_buffer_send) {
+//        return;
+//    }
+//    uint32_t num_unit_buffers = (size_buffer_send + UNIT_BUFFER_SIZE - 1) / UNIT_BUFFER_SIZE;
+//
+//    // Broadcast the buffer_send
+//    message_time -= WallTimer::get_time_mark();
+//    for (uint32_t b_i = 0; b_i < num_unit_buffers; ++b_i) {
+//        // Prepare the unit buffer
+//        size_t offset = b_i * UNIT_BUFFER_SIZE;
+//        size_t size_unit_buffer = b_i == num_unit_buffers - 1
+//                                    ? size_buffer_send - offset
+//                                    : UNIT_BUFFER_SIZE;
+//        std::vector<E_T> unit_buffer(size_unit_buffer);
+//        // Copy the messages from buffer_send to unit buffer.
+//        if (host_id == root) {
+//            unit_buffer.assign(buffer_send.begin() + offset, buffer_send.begin() + offset + size_unit_buffer);
+//        }
+//        // Broadcast the unit buffer
+//        MPI_Bcast(unit_buffer.data(),
+//                  MPI_Instance::get_sending_size(unit_buffer),
+//                  MPI_CHAR,
+//                  root,
+//                  MPI_COMM_WORLD);
+//        // Copy unit buffer to buffer_recv
+//        std::copy(unit_buffer.begin(), unit_buffer.end(), buffer_recv.begin() + offset);
+//    }
+//    message_time += WallTimer::get_time_mark();
+//}
 
 // Function: Distance query of a pair of vertices, used for distrubuted version.
 template <VertexID BITPARALLEL_SIZE>

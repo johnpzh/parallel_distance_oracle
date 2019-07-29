@@ -284,36 +284,91 @@ DistGraph::DistGraph(char *input_filename)
     }
 //	printf("@%u host_id: %u buffer_sending\n", __LINE__, host_id);//test
     {// Exchange edge lists
-        for (int h_i = 0; h_i < num_hosts; ++h_i) {
-            // Send from h_i
-            if (host_id == h_i) {
-                for (int loc = 0; loc < num_hosts - 1; ++loc) {
-                    int dst = buffer_send_list_loc_2_master_host_id(loc);
-                    MPI_Instance::send_buffer_2_dst(buffer_send_list[loc],
-                            dst,
-                            SENDING_EDGELIST,
-                            SENDING_SIZE_BUFFER_SEND);
+        for (int hop = 1; hop < num_hosts; ++hop) {
+            int src = hop_2_dest_host_id(-hop, host_id);
+            int dst = hop_2_dest_host_id(hop, host_id);
+
+            // If host_id is higher than dst, first send, then receive
+            if (host_id < dst) {
+                // Send
+                MPI_Instance::send_buffer_2_dst(buffer_send_list[hop - 1],
+                                                dst,
+                                                SENDING_EDGELIST,
+                                                SENDING_SIZE_BUFFER_SEND);
+                // Receive
+                std::vector<EdgeType> buffer_recv;
+                MPI_Instance::recv_buffer_from_src(buffer_recv,
+                                                   src,
+                                                   SENDING_EDGELIST,
+                                                   SENDING_SIZE_BUFFER_SEND);
+                num_edges_recv += buffer_recv.size();
+                // Process
+                if (buffer_recv.empty()) {
+                    continue;
                 }
-            } else { // Receive from h_i
-                for (int hop = 1; hop < num_hosts; ++hop) {
-                    int dest = hop_2_dest_host_id(hop, h_i);
-                    if (host_id == dest) {
-                        std::vector<EdgeType> buffer_recv;
-                        MPI_Instance::recv_buffer_from_src(buffer_recv,
-                                h_i,
-                                SENDING_EDGELIST,
-                                SENDING_SIZE_BUFFER_SEND);
-                        num_edges_recv += buffer_recv.size();
-                        // Process buffer_recv
-                        for (const auto &e : buffer_recv) {
-                            VertexID head = e.first;
-                            VertexID tail = e.second;
-                            edgelist_recv[head].push_back(tail);
-                        }
-                    }
+                for (const auto &e : buffer_recv) {
+                    VertexID head = e.first;
+                    VertexID tail = e.second;
+                    edgelist_recv[head].push_back(tail);
+                }
+            } else { // Otherwise, if host_id is lower than dst, first receive, then send
+                // Receive
+                std::vector<EdgeType> buffer_recv;
+                MPI_Instance::recv_buffer_from_src(buffer_recv,
+                                                   src,
+                                                   SENDING_EDGELIST,
+                                                   SENDING_SIZE_BUFFER_SEND);
+                num_edges_recv += buffer_recv.size();
+                // Send
+                MPI_Instance::send_buffer_2_dst(buffer_send_list[hop - 1],
+                                                dst,
+                                                SENDING_EDGELIST,
+                                                SENDING_SIZE_BUFFER_SEND);
+                // Process
+                if (buffer_recv.empty()) {
+                    continue;
+                }
+                for (const auto &e : buffer_recv) {
+                    VertexID head = e.first;
+                    VertexID tail = e.second;
+                    edgelist_recv[head].push_back(tail);
                 }
             }
         }
+//        /////////////////////////////////////////////////
+//        //
+//        for (int h_i = 0; h_i < num_hosts; ++h_i) {
+//            // Send from h_i
+//            if (host_id == h_i) {
+//                for (int loc = 0; loc < num_hosts - 1; ++loc) {
+//                    int dst = buffer_send_list_loc_2_master_host_id(loc);
+//                    MPI_Instance::send_buffer_2_dst(buffer_send_list[loc],
+//                            dst,
+//                            SENDING_EDGELIST,
+//                            SENDING_SIZE_BUFFER_SEND);
+//                }
+//            } else { // Receive from h_i
+//                for (int hop = 1; hop < num_hosts; ++hop) {
+//                    int dest = hop_2_dest_host_id(hop, h_i);
+//                    if (host_id == dest) {
+//                        std::vector<EdgeType> buffer_recv;
+//                        MPI_Instance::recv_buffer_from_src(buffer_recv,
+//                                h_i,
+//                                SENDING_EDGELIST,
+//                                SENDING_SIZE_BUFFER_SEND);
+//                        num_edges_recv += buffer_recv.size();
+//                        // Process buffer_recv
+//                        for (const auto &e : buffer_recv) {
+//                            VertexID head = e.first;
+//                            VertexID tail = e.second;
+//                            edgelist_recv[head].push_back(tail);
+//                        }
+//                    }
+//                }
+//            }
+//        }
+//        //
+//        /////////////////////////////////////////////////
     }
 
 //	printf("@%u host_id: %u received\n", __LINE__, host_id);//test
