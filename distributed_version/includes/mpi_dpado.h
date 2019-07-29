@@ -60,7 +60,7 @@ class MPI_Instance final {
 private:
 //    int host_id = 0; // host ID
 //    int num_hosts = 0; // number of hosts
-    static const uint32_t UNIT_BUFFER_SIZE = 16U << 20U;
+//    static const uint32_t UNIT_BUFFER_SIZE = 16U << 20U;
 //    static char unit_buffer_send[UNIT_BUFFER_SIZE];
 
 public:
@@ -267,7 +267,7 @@ public:
                      message_tag,
                      MPI_COMM_WORLD);
         } else {
-            const uint32_t num_unit_buffers = ((bytes_buffer_send - 1) / static_cast<size_t >(INT_MAX)) + 1;
+            const uint32_t num_unit_buffers = ((bytes_buffer_send - 1) / static_cast<size_t>(INT_MAX)) + 1;
             const uint64_t unit_buffer_size = ((size_buffer_send - 1) / num_unit_buffers) + 1;
             for (uint64_t b_i = 0; b_i < num_unit_buffers; ++b_i) {
                 size_t offset = b_i * unit_buffer_size;
@@ -344,7 +344,7 @@ public:
                      MPI_COMM_WORLD,
                      MPI_STATUS_IGNORE);
         } else {
-            const uint32_t num_unit_buffers = ((bytes_buffer_send - 1) / static_cast<size_t >(INT_MAX)) + 1;
+            const uint32_t num_unit_buffers = ((bytes_buffer_send - 1) / static_cast<size_t>(INT_MAX)) + 1;
             const uint64_t unit_buffer_size = ((size_buffer_send - 1) / num_unit_buffers) + 1;
             for (uint64_t b_i = 0; b_i < num_unit_buffers; ++b_i) {
                 size_t offset = b_i * unit_buffer_size;
@@ -425,7 +425,7 @@ public:
                      MPI_STATUS_IGNORE);
             return src;
         } else {
-            const uint32_t num_unit_buffers = ((bytes_buffer_send - 1) / static_cast<size_t >(INT_MAX)) + 1;
+            const uint32_t num_unit_buffers = ((bytes_buffer_send - 1) / static_cast<size_t>(INT_MAX)) + 1;
             const uint64_t unit_buffer_size = ((size_buffer_send - 1) / num_unit_buffers) + 1;
             for (uint64_t b_i = 0; b_i < num_unit_buffers; ++b_i) {
                 size_t offset = b_i * unit_buffer_size;
