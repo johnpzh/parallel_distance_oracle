@@ -774,11 +774,11 @@ bit_parallel_labeling(
         message_time += WallTimer::get_time_mark();
         used_bp_roots[r_global] = 1;
 #ifdef DEBUG_MESSAGES_ON
-//        {//test
-//            if (0 == host_id) {
-//                printf("r_global: %u i_bpspt: %u\n", r_global, i_bpspt);
-//            }
-//        }
+        {//test
+            if (0 == host_id) {
+                printf("r_global: %u i_bpspt: %u\n", r_global, i_bpspt);
+            }
+        }
 #endif
 
 //        VertexID que_t0 = 0, que_t1 = 0, que_h = 0;
@@ -797,10 +797,9 @@ bit_parallel_labeling(
             std::vector<VertexID> buffer_send(local_degree);
             if (local_degree) {
                 EdgeID e_i_start = G.vertices_idx[r_global] + local_degree - 1;
-                VertexID v_i = 0;
                 for (VertexID d_i = 0; d_i < local_degree; ++d_i) {
                     EdgeID e_i = e_i_start - d_i;
-                    buffer_send[v_i++] = G.out_edges[e_i];
+                    buffer_send[d_i] = G.out_edges[e_i];
                 }
             }
 
@@ -859,6 +858,7 @@ bit_parallel_labeling(
                     if (used_bp_roots[v_global]) {
                         continue;
                     }
+                    used_bp_roots[v_global] = 1;
                     selected_nbrs.push_back(v_global);
                     if (++ns == 64) {
                         break;
@@ -906,11 +906,11 @@ bit_parallel_labeling(
         UnweightedDist d = 0;
         while (global_num_actives) {
 #ifdef DEBUG_MESSAGES_ON
-//            {//test
-//                if (0 == host_id) {
-//                    printf("d: %u global_num_actives: %u\n", d, global_num_actives);
-//                }
-//            }
+            {//test
+                if (0 == host_id) {
+                    printf("d: %u que_size: %u\n", d, global_num_actives);
+                }
+            }
 #endif
 //            for (UnweightedDist d = 0; que_t0 < que_h; ++d) {
             VertexID num_sibling_es = 0, num_child_es = 0;
