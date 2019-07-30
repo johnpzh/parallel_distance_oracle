@@ -259,13 +259,22 @@ private:
 //            std::vector<E_T> &buffer_send,
 //            std::vector<E_T> &buffer_recv);
 
-    // Function: get the destination host id which is i hop from this host.
+//    // Function: get the destination host id which is i hop from this host.
+//    // For example, 1 hop from host 2 is host 0 (assume total 3 hosts);
+//    // -1 hop from host 0 is host 2.
+//    int hop_2_me_host_id(int hop) const
+//    {
+//        assert(hop >= -(num_hosts - 1) && hop < num_hosts && hop != 0);
+//        return (host_id + hop + num_hosts) % num_hosts;
+//    }
+    // Function: get the destination host id which is i hop from the root.
     // For example, 1 hop from host 2 is host 0 (assume total 3 hosts);
     // -1 hop from host 0 is host 2.
-    int hop_2_me_host_id(int hop) const
+    int hop_2_root_host_id(int hop, int root) const
     {
         assert(hop >= -(num_hosts - 1) && hop < num_hosts && hop != 0);
-        return (host_id + hop + num_hosts) % num_hosts;
+        assert(root >= 0 && root < num_hosts);
+        return (root + hop + num_hosts) % num_hosts;
     }
 
 
@@ -337,16 +346,11 @@ DistBVCPLL(
             used_bp_roots);
     bp_labeling_time += WallTimer::get_time_mark();
     {//test
-//        exit(0);
 #ifdef DEBUG_MESSAGES_ON
         if (0 == host_id) {
             printf("host_id: %u bp_labeling_finished.\n", host_id);
         }
 #endif
-//        double virtual_memory;
-//        double resident_memory;
-//        Utils::memory_usage(virtual_memory, resident_memory);
-//        printf("host_id: %u virtual_memory: %.2fMB resident_memory: %.2fMB\n", host_id, virtual_memory, resident_memory);
     }
 
     std::vector<VertexID> active_queue(num_masters); // Any vertex v who is active should be put into this queue.
@@ -2099,28 +2103,14 @@ batch_process(
                     start_index = bound_index;
                 }
             }
-            // Every host sends its labels (num_hosts - 1) times.
-            for (int hop = 1; hop < num_hosts; ++hop) {
-                int src = hop_2_me_host_id(-hop);
-                int dst = hop_2_me_host_id(hop);
-                if (src != dst) { // Normal case.
-                    // When host_id is odd, first receive, then send.
-                    if (static_cast<uint32_t>(host_id) & 1U) {
-                        // Receive
-                        message_time -= WallTimer::get_time_mark();
-                        std::vector<std::pair<VertexID, VertexID> > buffer_recv_indices;
-                        std::vector<VertexID> buffer_recv_labels;
-                        MPI_Instance::recv_buffer_from_src(buffer_recv_indices,
-                                                           src,
-                                                           SENDING_INDICES,
-                                                           SENDING_SIZE_INDICES);
-                        if (!buffer_recv_indices.empty()) {
-                            MPI_Instance::recv_buffer_from_src(buffer_recv_labels,
-                                                               src,
-                                                               SENDING_LABELS,
-                                                               SENDING_SIZE_LABELS);
-                        }
-                        // Send
+
+            // Every host sends to others
+            for (int src = 0; src < num_hosts; ++src) {
+                if (host_id == src) {
+                    // Send from src
+                    message_time -= WallTimer::get_time_mark();
+                    for (int hop = 1; hop < num_hosts; ++hop) {
+                        int dst = hop_2_root_host_id(hop, host_id);
                         MPI_Instance::send_buffer_2_dst(buffer_send_indices,
                                                         dst,
                                                         SENDING_INDICES,
@@ -2130,207 +2120,298 @@ batch_process(
                                                             dst,
                                                             SENDING_LABELS,
                                                             SENDING_SIZE_LABELS);
-                        }
-                        message_time += WallTimer::get_time_mark();
-                        // Push those labels
-                        if (!buffer_recv_indices.empty()) {
-                            EdgeID start_index = 0;
-                            for (const std::pair<VertexID, VertexID> e : buffer_recv_indices) {
-                                VertexID v_head_global = e.first;
-                                EdgeID bound_index = start_index + e.second;
-                                if (G.local_out_degrees[v_head_global]) {
-                                    local_push_labels(
-                                            v_head_global,
-                                            start_index,
-                                            bound_index,
-                                            roots_start,
-                                            buffer_recv_labels,
-                                            G,
-                                            short_index,
-                                            got_candidates_queue,
-                                            end_got_candidates_queue,
-                                            got_candidates,
-                                            once_candidated_queue,
-                                            end_once_candidated_queue,
-                                            once_candidated,
-                                            bp_labels_table,
-                                            used_bp_roots,
-                                            iter);
-                                }
-                                start_index = bound_index;
-                            }
-                        }
-                    } else { // When host_id is even, first send, then receive.
-                        // Send
-                        message_time -= WallTimer::get_time_mark();
-                        MPI_Instance::send_buffer_2_dst(buffer_send_indices,
-                                                        dst,
-                                                        SENDING_INDICES,
-                                                        SENDING_SIZE_INDICES);
-                        if (!buffer_send_indices.empty()) {
-                            MPI_Instance::send_buffer_2_dst(buffer_send_labels,
-                                                            dst,
-                                                            SENDING_LABELS,
-                                                            SENDING_SIZE_LABELS);
-                        }
-                        // Receive
-                        std::vector<std::pair<VertexID, VertexID> > buffer_recv_indices;
-                        std::vector<VertexID> buffer_recv_labels;
-                        MPI_Instance::recv_buffer_from_src(buffer_recv_indices,
-                                                           src,
-                                                           SENDING_INDICES,
-                                                           SENDING_SIZE_INDICES);
-                        message_time += WallTimer::get_time_mark();
-                        if (!buffer_recv_indices.empty()) {
-                            message_time -= WallTimer::get_time_mark();
-                            MPI_Instance::recv_buffer_from_src(buffer_recv_labels,
-                                                               src,
-                                                               SENDING_LABELS,
-                                                               SENDING_SIZE_LABELS);
-                            message_time += WallTimer::get_time_mark();
-                            // Push those labels
-                            EdgeID start_index = 0;
-                            for (const std::pair<VertexID, VertexID> e : buffer_recv_indices) {
-                                VertexID v_head_global = e.first;
-                                EdgeID bound_index = start_index + e.second;
-                                if (G.local_out_degrees[v_head_global]) {
-                                    local_push_labels(
-                                            v_head_global,
-                                            start_index,
-                                            bound_index,
-                                            roots_start,
-                                            buffer_recv_labels,
-                                            G,
-                                            short_index,
-                                            got_candidates_queue,
-                                            end_got_candidates_queue,
-                                            got_candidates,
-                                            once_candidated_queue,
-                                            end_once_candidated_queue,
-                                            once_candidated,
-                                            bp_labels_table,
-                                            used_bp_roots,
-                                            iter);
-                                }
-                                start_index = bound_index;
-                            }
                         }
                     }
-                } else { // This is a special case. It only happens when the num_hosts is even and hop equals to num_hosts/2.
-                    // If host_id is higher than dst, first send, then receive
-                    if (host_id < dst) {
-                        // Send
-                        message_time -= WallTimer::get_time_mark();
-                        MPI_Instance::send_buffer_2_dst(buffer_send_indices,
-                                                        dst,
-                                                        SENDING_INDICES,
-                                                        SENDING_SIZE_INDICES);
-                        if (!buffer_send_indices.empty()) {
-                            MPI_Instance::send_buffer_2_dst(buffer_send_labels,
-                                                            dst,
-                                                            SENDING_LABELS,
-                                                            SENDING_SIZE_LABELS);
-                        }
-                        // Receive
-                        std::vector<std::pair<VertexID, VertexID> > buffer_recv_indices;
-                        std::vector<VertexID> buffer_recv_labels;
-                        MPI_Instance::recv_buffer_from_src(buffer_recv_indices,
-                                                           src,
-                                                           SENDING_INDICES,
-                                                           SENDING_SIZE_INDICES);
-                        message_time += WallTimer::get_time_mark();
-                        if (!buffer_recv_indices.empty()) {
+                    message_time += WallTimer::get_time_mark();
+                } else {
+                    // Receive from src
+                    for (int hop = 1; hop < num_hosts; ++hop) {
+                        int dst = hop_2_root_host_id(hop, src);
+                        if (host_id == dst) {
                             message_time -= WallTimer::get_time_mark();
-                            MPI_Instance::recv_buffer_from_src(buffer_recv_labels,
+                            std::vector<std::pair<VertexID, VertexID> > buffer_recv_indices;
+                            std::vector<VertexID> buffer_recv_labels;
+                            MPI_Instance::recv_buffer_from_src(buffer_recv_indices,
                                                                src,
-                                                               SENDING_LABELS,
-                                                               SENDING_SIZE_LABELS);
+                                                               SENDING_INDICES,
+                                                               SENDING_SIZE_INDICES);
                             message_time += WallTimer::get_time_mark();
-                            // Push those labels
-                            EdgeID start_index = 0;
-                            for (const std::pair<VertexID, VertexID> e : buffer_recv_indices) {
-                                VertexID v_head_global = e.first;
-                                EdgeID bound_index = start_index + e.second;
-                                if (G.local_out_degrees[v_head_global]) {
-                                    local_push_labels(
-                                            v_head_global,
-                                            start_index,
-                                            bound_index,
-                                            roots_start,
-                                            buffer_recv_labels,
-                                            G,
-                                            short_index,
-                                            got_candidates_queue,
-                                            end_got_candidates_queue,
-                                            got_candidates,
-                                            once_candidated_queue,
-                                            end_once_candidated_queue,
-                                            once_candidated,
-                                            bp_labels_table,
-                                            used_bp_roots,
-                                            iter);
+                            if (!buffer_recv_indices.empty()) {
+                                message_time -= WallTimer::get_time_mark();
+                                MPI_Instance::recv_buffer_from_src(buffer_recv_labels,
+                                                                   src,
+                                                                   SENDING_LABELS,
+                                                                   SENDING_SIZE_LABELS);
+                                message_time += WallTimer::get_time_mark();
+                                // Push those labels
+                                EdgeID start_index = 0;
+                                for (const std::pair<VertexID, VertexID> e : buffer_recv_indices) {
+                                    VertexID v_head_global = e.first;
+                                    EdgeID bound_index = start_index + e.second;
+                                    if (G.local_out_degrees[v_head_global]) {
+                                        local_push_labels(
+                                                v_head_global,
+                                                start_index,
+                                                bound_index,
+                                                roots_start,
+                                                buffer_recv_labels,
+                                                G,
+                                                short_index,
+                                                got_candidates_queue,
+                                                end_got_candidates_queue,
+                                                got_candidates,
+                                                once_candidated_queue,
+                                                end_once_candidated_queue,
+                                                once_candidated,
+                                                bp_labels_table,
+                                                used_bp_roots,
+                                                iter);
+                                    }
+                                    start_index = bound_index;
                                 }
-                                start_index = bound_index;
-                            }
-                        }
-                    } else { // Otherwise, if host_id is lower than dst, first receive, then send
-                        // Receive
-                        message_time -= WallTimer::get_time_mark();
-                        std::vector<std::pair<VertexID, VertexID> > buffer_recv_indices;
-                        std::vector<VertexID> buffer_recv_labels;
-                        MPI_Instance::recv_buffer_from_src(buffer_recv_indices,
-                                                           src,
-                                                           SENDING_INDICES,
-                                                           SENDING_SIZE_INDICES);
-                        if (!buffer_recv_indices.empty()) {
-                            MPI_Instance::recv_buffer_from_src(buffer_recv_labels,
-                                                               src,
-                                                               SENDING_LABELS,
-                                                               SENDING_SIZE_LABELS);
-                        }
-                        // Send
-                        MPI_Instance::send_buffer_2_dst(buffer_send_indices,
-                                                        dst,
-                                                        SENDING_INDICES,
-                                                        SENDING_SIZE_INDICES);
-                        if (!buffer_send_indices.empty()) {
-                            MPI_Instance::send_buffer_2_dst(buffer_send_labels,
-                                                            dst,
-                                                            SENDING_LABELS,
-                                                            SENDING_SIZE_LABELS);
-                        }
-                        message_time += WallTimer::get_time_mark();
-                        // Push those labels
-                        if (!buffer_recv_indices.empty()) {
-                            EdgeID start_index = 0;
-                            for (const std::pair<VertexID, VertexID> e : buffer_recv_indices) {
-                                VertexID v_head_global = e.first;
-                                EdgeID bound_index = start_index + e.second;
-                                if (G.local_out_degrees[v_head_global]) {
-                                    local_push_labels(
-                                            v_head_global,
-                                            start_index,
-                                            bound_index,
-                                            roots_start,
-                                            buffer_recv_labels,
-                                            G,
-                                            short_index,
-                                            got_candidates_queue,
-                                            end_got_candidates_queue,
-                                            got_candidates,
-                                            once_candidated_queue,
-                                            end_once_candidated_queue,
-                                            once_candidated,
-                                            bp_labels_table,
-                                            used_bp_roots,
-                                            iter);
-                                }
-                                start_index = bound_index;
                             }
                         }
                     }
                 }
             }
+
+//            /////////////////////////////////////////////////
+//            //
+//            // Every host sends its labels (num_hosts - 1) times.
+//            for (int hop = 1; hop < num_hosts; ++hop) {
+//                int src = hop_2_me_host_id(-hop);
+//                int dst = hop_2_me_host_id(hop);
+//                if (src != dst) { // Normal case.
+//                    // When host_id is odd, first receive, then send.
+//                    if (static_cast<uint32_t>(host_id) & 1U) {
+//                        // Receive
+//                        message_time -= WallTimer::get_time_mark();
+//                        std::vector<std::pair<VertexID, VertexID> > buffer_recv_indices;
+//                        std::vector<VertexID> buffer_recv_labels;
+//                        MPI_Instance::recv_buffer_from_src(buffer_recv_indices,
+//                                                           src,
+//                                                           SENDING_INDICES,
+//                                                           SENDING_SIZE_INDICES);
+//                        if (!buffer_recv_indices.empty()) {
+//                            MPI_Instance::recv_buffer_from_src(buffer_recv_labels,
+//                                                               src,
+//                                                               SENDING_LABELS,
+//                                                               SENDING_SIZE_LABELS);
+//                        }
+//                        // Send
+//                        MPI_Instance::send_buffer_2_dst(buffer_send_indices,
+//                                                        dst,
+//                                                        SENDING_INDICES,
+//                                                        SENDING_SIZE_INDICES);
+//                        if (!buffer_send_indices.empty()) {
+//                            MPI_Instance::send_buffer_2_dst(buffer_send_labels,
+//                                                            dst,
+//                                                            SENDING_LABELS,
+//                                                            SENDING_SIZE_LABELS);
+//                        }
+//                        message_time += WallTimer::get_time_mark();
+//                        // Push those labels
+//                        if (!buffer_recv_indices.empty()) {
+//                            EdgeID start_index = 0;
+//                            for (const std::pair<VertexID, VertexID> e : buffer_recv_indices) {
+//                                VertexID v_head_global = e.first;
+//                                EdgeID bound_index = start_index + e.second;
+//                                if (G.local_out_degrees[v_head_global]) {
+//                                    local_push_labels(
+//                                            v_head_global,
+//                                            start_index,
+//                                            bound_index,
+//                                            roots_start,
+//                                            buffer_recv_labels,
+//                                            G,
+//                                            short_index,
+//                                            got_candidates_queue,
+//                                            end_got_candidates_queue,
+//                                            got_candidates,
+//                                            once_candidated_queue,
+//                                            end_once_candidated_queue,
+//                                            once_candidated,
+//                                            bp_labels_table,
+//                                            used_bp_roots,
+//                                            iter);
+//                                }
+//                                start_index = bound_index;
+//                            }
+//                        }
+//                    } else { // When host_id is even, first send, then receive.
+//                        // Send
+//                        message_time -= WallTimer::get_time_mark();
+//                        MPI_Instance::send_buffer_2_dst(buffer_send_indices,
+//                                                        dst,
+//                                                        SENDING_INDICES,
+//                                                        SENDING_SIZE_INDICES);
+//                        if (!buffer_send_indices.empty()) {
+//                            MPI_Instance::send_buffer_2_dst(buffer_send_labels,
+//                                                            dst,
+//                                                            SENDING_LABELS,
+//                                                            SENDING_SIZE_LABELS);
+//                        }
+//                        // Receive
+//                        std::vector<std::pair<VertexID, VertexID> > buffer_recv_indices;
+//                        std::vector<VertexID> buffer_recv_labels;
+//                        MPI_Instance::recv_buffer_from_src(buffer_recv_indices,
+//                                                           src,
+//                                                           SENDING_INDICES,
+//                                                           SENDING_SIZE_INDICES);
+//                        message_time += WallTimer::get_time_mark();
+//                        if (!buffer_recv_indices.empty()) {
+//                            message_time -= WallTimer::get_time_mark();
+//                            MPI_Instance::recv_buffer_from_src(buffer_recv_labels,
+//                                                               src,
+//                                                               SENDING_LABELS,
+//                                                               SENDING_SIZE_LABELS);
+//                            message_time += WallTimer::get_time_mark();
+//                            // Push those labels
+//                            EdgeID start_index = 0;
+//                            for (const std::pair<VertexID, VertexID> e : buffer_recv_indices) {
+//                                VertexID v_head_global = e.first;
+//                                EdgeID bound_index = start_index + e.second;
+//                                if (G.local_out_degrees[v_head_global]) {
+//                                    local_push_labels(
+//                                            v_head_global,
+//                                            start_index,
+//                                            bound_index,
+//                                            roots_start,
+//                                            buffer_recv_labels,
+//                                            G,
+//                                            short_index,
+//                                            got_candidates_queue,
+//                                            end_got_candidates_queue,
+//                                            got_candidates,
+//                                            once_candidated_queue,
+//                                            end_once_candidated_queue,
+//                                            once_candidated,
+//                                            bp_labels_table,
+//                                            used_bp_roots,
+//                                            iter);
+//                                }
+//                                start_index = bound_index;
+//                            }
+//                        }
+//                    }
+//                } else { // This is a special case. It only happens when the num_hosts is even and hop equals to num_hosts/2.
+//                    // If host_id is higher than dst, first send, then receive
+//                    if (host_id < dst) {
+//                        // Send
+//                        message_time -= WallTimer::get_time_mark();
+//                        MPI_Instance::send_buffer_2_dst(buffer_send_indices,
+//                                                        dst,
+//                                                        SENDING_INDICES,
+//                                                        SENDING_SIZE_INDICES);
+//                        if (!buffer_send_indices.empty()) {
+//                            MPI_Instance::send_buffer_2_dst(buffer_send_labels,
+//                                                            dst,
+//                                                            SENDING_LABELS,
+//                                                            SENDING_SIZE_LABELS);
+//                        }
+//                        // Receive
+//                        std::vector<std::pair<VertexID, VertexID> > buffer_recv_indices;
+//                        std::vector<VertexID> buffer_recv_labels;
+//                        MPI_Instance::recv_buffer_from_src(buffer_recv_indices,
+//                                                           src,
+//                                                           SENDING_INDICES,
+//                                                           SENDING_SIZE_INDICES);
+//                        message_time += WallTimer::get_time_mark();
+//                        if (!buffer_recv_indices.empty()) {
+//                            message_time -= WallTimer::get_time_mark();
+//                            MPI_Instance::recv_buffer_from_src(buffer_recv_labels,
+//                                                               src,
+//                                                               SENDING_LABELS,
+//                                                               SENDING_SIZE_LABELS);
+//                            message_time += WallTimer::get_time_mark();
+//                            // Push those labels
+//                            EdgeID start_index = 0;
+//                            for (const std::pair<VertexID, VertexID> e : buffer_recv_indices) {
+//                                VertexID v_head_global = e.first;
+//                                EdgeID bound_index = start_index + e.second;
+//                                if (G.local_out_degrees[v_head_global]) {
+//                                    local_push_labels(
+//                                            v_head_global,
+//                                            start_index,
+//                                            bound_index,
+//                                            roots_start,
+//                                            buffer_recv_labels,
+//                                            G,
+//                                            short_index,
+//                                            got_candidates_queue,
+//                                            end_got_candidates_queue,
+//                                            got_candidates,
+//                                            once_candidated_queue,
+//                                            end_once_candidated_queue,
+//                                            once_candidated,
+//                                            bp_labels_table,
+//                                            used_bp_roots,
+//                                            iter);
+//                                }
+//                                start_index = bound_index;
+//                            }
+//                        }
+//                    } else { // Otherwise, if host_id is lower than dst, first receive, then send
+//                        // Receive
+//                        message_time -= WallTimer::get_time_mark();
+//                        std::vector<std::pair<VertexID, VertexID> > buffer_recv_indices;
+//                        std::vector<VertexID> buffer_recv_labels;
+//                        MPI_Instance::recv_buffer_from_src(buffer_recv_indices,
+//                                                           src,
+//                                                           SENDING_INDICES,
+//                                                           SENDING_SIZE_INDICES);
+//                        if (!buffer_recv_indices.empty()) {
+//                            MPI_Instance::recv_buffer_from_src(buffer_recv_labels,
+//                                                               src,
+//                                                               SENDING_LABELS,
+//                                                               SENDING_SIZE_LABELS);
+//                        }
+//                        // Send
+//                        MPI_Instance::send_buffer_2_dst(buffer_send_indices,
+//                                                        dst,
+//                                                        SENDING_INDICES,
+//                                                        SENDING_SIZE_INDICES);
+//                        if (!buffer_send_indices.empty()) {
+//                            MPI_Instance::send_buffer_2_dst(buffer_send_labels,
+//                                                            dst,
+//                                                            SENDING_LABELS,
+//                                                            SENDING_SIZE_LABELS);
+//                        }
+//                        message_time += WallTimer::get_time_mark();
+//                        // Push those labels
+//                        if (!buffer_recv_indices.empty()) {
+//                            EdgeID start_index = 0;
+//                            for (const std::pair<VertexID, VertexID> e : buffer_recv_indices) {
+//                                VertexID v_head_global = e.first;
+//                                EdgeID bound_index = start_index + e.second;
+//                                if (G.local_out_degrees[v_head_global]) {
+//                                    local_push_labels(
+//                                            v_head_global,
+//                                            start_index,
+//                                            bound_index,
+//                                            roots_start,
+//                                            buffer_recv_labels,
+//                                            G,
+//                                            short_index,
+//                                            got_candidates_queue,
+//                                            end_got_candidates_queue,
+//                                            got_candidates,
+//                                            once_candidated_queue,
+//                                            end_once_candidated_queue,
+//                                            once_candidated,
+//                                            bp_labels_table,
+//                                            used_bp_roots,
+//                                            iter);
+//                                }
+//                                start_index = bound_index;
+//                            }
+//                        }
+//                    }
+//                }
+//            }
+//            //
+//            /////////////////////////////////////////////////
+
 //            /////////////////////////////////////////////////
 //            //
 //            for (int h_i = 0; h_i < num_hosts; ++h_i) {
@@ -2531,103 +2612,162 @@ every_host_bcasts_buffer_and_proc(
     for (const E_T &e : buffer_send) {
         fun(e);
     }
-    // Every host sends (num_hosts - 1) times
-    for (int hop = 1; hop < num_hosts; ++hop) {
-        int src = hop_2_me_host_id(-hop);
-        int dst = hop_2_me_host_id(hop);
-        if (src != dst) { // Normal case
-            // When host_id is odd, first receive, then send.
-            if (static_cast<uint32_t>(host_id) & 1U) {
-                message_time -= WallTimer::get_time_mark();
-                // Receive first.
-                std::vector<E_T> buffer_recv;
-                MPI_Instance::recv_buffer_from_src(buffer_recv,
-                                                   src,
-                                                   SENDING_BUFFER_SEND,
-                                                   SENDING_SIZE_BUFFER_SEND);
-                // Send then.
+
+    // Every host sends to others
+    for (int src = 0; src < num_hosts; ++src) {
+        if (host_id == src) {
+            // Send from src
+            message_time -= WallTimer::get_time_mark();
+            for (int hop = 1; hop < num_hosts; ++hop) {
+                int dst = hop_2_root_host_id(hop, host_id);
                 MPI_Instance::send_buffer_2_dst(buffer_send,
-                                                dst,
-                                                SENDING_BUFFER_SEND,
-                                                SENDING_SIZE_BUFFER_SEND);
-                message_time += WallTimer::get_time_mark();
-                // Process
-                if (buffer_recv.empty()) {
-                    continue;
-                }
-                for (const E_T &e : buffer_recv) {
-                    fun(e);
-                }
-            } else { // When host_id is even, first send, then receive.
-                // Send first.
-                message_time -= WallTimer::get_time_mark();
-                MPI_Instance::send_buffer_2_dst(buffer_send,
-                                                dst,
-                                                SENDING_BUFFER_SEND,
-                                                SENDING_SIZE_BUFFER_SEND);
-                // Receive then.
-                std::vector<E_T> buffer_recv;
-                MPI_Instance::recv_buffer_from_src(buffer_recv,
-                                                   src,
-                                                   SENDING_BUFFER_SEND,
-                                                   SENDING_SIZE_BUFFER_SEND);
-                message_time += WallTimer::get_time_mark();
-                // Process
-                if (buffer_recv.empty()) {
-                    continue;
-                }
-                for (const E_T &e : buffer_recv) {
-                    fun(e);
-                }
+                        dst,
+                        SENDING_BUFFER_SEND,
+                        SENDING_SIZE_BUFFER_SEND);
             }
-        } else { // If host_id is higher than dst, first send, then receive
-            // This is a special case. It only happens when the num_hosts is even and hop equals to num_hosts/2.
-            if (host_id < dst) {
-                // Send
-                message_time -= WallTimer::get_time_mark();
-                MPI_Instance::send_buffer_2_dst(buffer_send,
-                                                dst,
-                                                SENDING_BUFFER_SEND,
-                                                SENDING_SIZE_BUFFER_SEND);
-                // Receive
-                std::vector<E_T> buffer_recv;
-                MPI_Instance::recv_buffer_from_src(buffer_recv,
-                                                   src,
-                                                   SENDING_BUFFER_SEND,
-                                                   SENDING_SIZE_BUFFER_SEND);
-                message_time += WallTimer::get_time_mark();
-                // Process
-                if (buffer_recv.empty()) {
-                    continue;
-                }
-                for (const E_T &e : buffer_recv) {
-                    fun(e);
-                }
-            } else { // Otherwise, if host_id is lower than dst, first receive, then send
-                // Receive
-                message_time -= WallTimer::get_time_mark();
-                std::vector<E_T> buffer_recv;
-                MPI_Instance::recv_buffer_from_src(buffer_recv,
-                                                   src,
-                                                   SENDING_BUFFER_SEND,
-                                                   SENDING_SIZE_BUFFER_SEND);
-                // Send
-                MPI_Instance::send_buffer_2_dst(buffer_send,
-                                                dst,
-                                                SENDING_BUFFER_SEND,
-                                                SENDING_SIZE_BUFFER_SEND);
-                message_time += WallTimer::get_time_mark();
-                // Process
-                if (buffer_recv.empty()) {
-                    continue;
-                }
-                for (const E_T &e : buffer_recv) {
-                    fun(e);
+            message_time += WallTimer::get_time_mark();
+        } else {
+            // Receive from src
+            for (int hop = 1; hop < num_hosts; ++hop) {
+                int dst = hop_2_root_host_id(hop, src);
+                if (host_id == dst) {
+                    message_time -= WallTimer::get_time_mark();
+                    std::vector<E_T> buffer_recv;
+                    MPI_Instance::recv_buffer_from_src(buffer_recv,
+                            src,
+                            SENDING_BUFFER_SEND,
+                            SENDING_SIZE_BUFFER_SEND);
+                    message_time += WallTimer::get_time_mark();
+                    // Process
+                    for (const E_T &e : buffer_recv) {
+                        fun(e);
+                    }
                 }
             }
         }
     }
 }
+//// Function: every host broadcasts its sending buffer, and does fun for every element it received in the unit buffer.
+//template <VertexID BATCH_SIZE, VertexID BITPARALLEL_SIZE>
+//template <typename E_T, typename F>
+//inline void DistBVCPLL<BATCH_SIZE, BITPARALLEL_SIZE>::
+//every_host_bcasts_buffer_and_proc(
+//        std::vector<E_T> &buffer_send,
+//        F &fun)
+//{
+//    // Host processes locally.
+//    for (const E_T &e : buffer_send) {
+//        fun(e);
+//    }
+//    // Every host sends (num_hosts - 1) times
+//    for (int hop = 1; hop < num_hosts; ++hop) {
+//        int src = hop_2_me_host_id(-hop);
+//        int dst = hop_2_me_host_id(hop);
+//        if (src != dst) { // Normal case
+//            // When host_id is odd, first receive, then send.
+//            if (static_cast<uint32_t>(host_id) & 1U) {
+//                message_time -= WallTimer::get_time_mark();
+//                // Receive first.
+//                std::vector<E_T> buffer_recv;
+//                MPI_Instance::recv_buffer_from_src(buffer_recv,
+//                                                   src,
+//                                                   SENDING_BUFFER_SEND,
+//                                                   SENDING_SIZE_BUFFER_SEND);
+//                {//test
+//                    printf("host_id: %u recved_from: %u\n", host_id, src);
+//                }
+//                // Send then.
+//                MPI_Instance::send_buffer_2_dst(buffer_send,
+//                                                dst,
+//                                                SENDING_BUFFER_SEND,
+//                                                SENDING_SIZE_BUFFER_SEND);
+//                {//test
+//                    printf("host_id: %u send_to: %u\n", host_id, dst);
+//                }
+//                message_time += WallTimer::get_time_mark();
+//                // Process
+//                if (buffer_recv.empty()) {
+//                    continue;
+//                }
+//                for (const E_T &e : buffer_recv) {
+//                    fun(e);
+//                }
+//            } else { // When host_id is even, first send, then receive.
+//                // Send first.
+//                message_time -= WallTimer::get_time_mark();
+//                MPI_Instance::send_buffer_2_dst(buffer_send,
+//                                                dst,
+//                                                SENDING_BUFFER_SEND,
+//                                                SENDING_SIZE_BUFFER_SEND);
+//                {//test
+//                    printf("host_id: %u send_to: %u\n", host_id, dst);
+//                }
+//                // Receive then.
+//                std::vector<E_T> buffer_recv;
+//                MPI_Instance::recv_buffer_from_src(buffer_recv,
+//                                                   src,
+//                                                   SENDING_BUFFER_SEND,
+//                                                   SENDING_SIZE_BUFFER_SEND);
+//                {//test
+//                    printf("host_id: %u recved_from: %u\n", host_id, src);
+//                }
+//                message_time += WallTimer::get_time_mark();
+//                // Process
+//                if (buffer_recv.empty()) {
+//                    continue;
+//                }
+//                for (const E_T &e : buffer_recv) {
+//                    fun(e);
+//                }
+//            }
+//        } else { // If host_id is higher than dst, first send, then receive
+//            // This is a special case. It only happens when the num_hosts is even and hop equals to num_hosts/2.
+//            if (host_id < dst) {
+//                // Send
+//                message_time -= WallTimer::get_time_mark();
+//                MPI_Instance::send_buffer_2_dst(buffer_send,
+//                                                dst,
+//                                                SENDING_BUFFER_SEND,
+//                                                SENDING_SIZE_BUFFER_SEND);
+//                // Receive
+//                std::vector<E_T> buffer_recv;
+//                MPI_Instance::recv_buffer_from_src(buffer_recv,
+//                                                   src,
+//                                                   SENDING_BUFFER_SEND,
+//                                                   SENDING_SIZE_BUFFER_SEND);
+//                message_time += WallTimer::get_time_mark();
+//                // Process
+//                if (buffer_recv.empty()) {
+//                    continue;
+//                }
+//                for (const E_T &e : buffer_recv) {
+//                    fun(e);
+//                }
+//            } else { // Otherwise, if host_id is lower than dst, first receive, then send
+//                // Receive
+//                message_time -= WallTimer::get_time_mark();
+//                std::vector<E_T> buffer_recv;
+//                MPI_Instance::recv_buffer_from_src(buffer_recv,
+//                                                   src,
+//                                                   SENDING_BUFFER_SEND,
+//                                                   SENDING_SIZE_BUFFER_SEND);
+//                // Send
+//                MPI_Instance::send_buffer_2_dst(buffer_send,
+//                                                dst,
+//                                                SENDING_BUFFER_SEND,
+//                                                SENDING_SIZE_BUFFER_SEND);
+//                message_time += WallTimer::get_time_mark();
+//                // Process
+//                if (buffer_recv.empty()) {
+//                    continue;
+//                }
+//                for (const E_T &e : buffer_recv) {
+//                    fun(e);
+//                }
+//            }
+//        }
+//    }
+//}
 //// DEPRECATED version Function: every host broadcasts its sending buffer, and does fun for every element it received in the unit buffer.
 //template <VertexID BATCH_SIZE, VertexID BITPARALLEL_SIZE>
 //template <typename E_T, typename F>
