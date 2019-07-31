@@ -728,10 +728,10 @@ bit_parallel_labeling(
         uint64_t S_0;
 
         MsgUnitBP() = default;
-        MsgUnitBP(MsgUnitBP&& other) = default;
-        MsgUnitBP(MsgUnitBP& other) = default;
-        MsgUnitBP& operator=(const MsgUnitBP& other) = default;
-        MsgUnitBP& operator=(MsgUnitBP&& other) = default;
+//        MsgUnitBP(MsgUnitBP&& other) = default;
+//        MsgUnitBP(MsgUnitBP& other) = default;
+//        MsgUnitBP& operator=(const MsgUnitBP& other) = default;
+//        MsgUnitBP& operator=(MsgUnitBP&& other) = default;
         MsgUnitBP(VertexID v, uint64_t sn1, uint64_t s0)
             : v_global(v), S_n1(sn1), S_0(s0) { }
     };
@@ -947,29 +947,79 @@ bit_parallel_labeling(
                     VertexID v_global = que[que_i];
                     buffer_send[que_i] = MsgUnitBP(v_global, tmp_s[v_global].first, tmp_s[v_global].second);
                 }
-                // Lambda for processing every message
-                auto process = [&] (const MsgUnitBP &m) {
-                    VertexID v_global = m.v_global;
-                    if (!G.local_out_degrees[v_global]) {
-                        return;
+//                {// test
+//                    printf("host_id: %u buffer_send.size(): %lu\n", host_id, buffer_send.size());
+//                }
+
+                for (int root = 0; root < num_hosts; ++root) {
+                    std::vector<MsgUnitBP> buffer_recv;
+                    one_host_bcasts_buffer_to_buffer(root,
+                            buffer_send,
+                            buffer_recv);
+//                    {// test
+//                        printf("host_id: %u root: %u buffer_recv.size(): %lu\n", host_id, root, buffer_recv.size());
+//                    }
+                    if (buffer_recv.empty()) {
+                        continue;
                     }
-                    tmp_s[v_global].first = m.S_n1;
-                    tmp_s[v_global].second = m.S_0;
-                    // Push labels
-                    bit_parallel_push_labels(G,
-                                             v_global,
-                                             tmp_que,
-                                             end_tmp_que,
-                                             sibling_es,
-                                             num_sibling_es,
-                                             child_es,
-                                             num_child_es,
-                                             tmp_d,
-                                             d);
-                };
-                // Broadcast processing actives
-                every_host_bcasts_buffer_and_proc(buffer_send,
-                        process);
+//                    {// test
+//                        printf("host_id: %u root: %u pushing...\n", host_id, root);
+//                        if (host_id == 1 && root == 0 && d == 1) {
+//                            int i = 0;
+//                            while (i == 0)
+//                                sleep(5);
+//                        }
+//                    }
+                    for (const MsgUnitBP &m : buffer_recv) {
+                        VertexID v_global = m.v_global;
+                        if (!G.local_out_degrees[v_global]) {
+                            continue;
+                        }
+                        tmp_s[v_global].first = m.S_n1;
+                        tmp_s[v_global].second = m.S_0;
+                        // Push labels
+                        bit_parallel_push_labels(G,
+                                                 v_global,
+                                                 tmp_que,
+                                                 end_tmp_que,
+                                                 sibling_es,
+                                                 num_sibling_es,
+                                                 child_es,
+                                                 num_child_es,
+                                                 tmp_d,
+                                                 d);
+                    }
+//                    {// test
+//                        printf("host_id: %u root: %u done push.\n", host_id, root);
+//                    }
+                }
+//                /////////////////////////////////////////////////
+//                //
+//                // Lambda for processing every message
+//                auto process = [&] (const MsgUnitBP &m) {
+//                    VertexID v_global = m.v_global;
+//                    if (!G.local_out_degrees[v_global]) {
+//                        return;
+//                    }
+//                    tmp_s[v_global].first = m.S_n1;
+//                    tmp_s[v_global].second = m.S_0;
+//                    // Push labels
+//                    bit_parallel_push_labels(G,
+//                                             v_global,
+//                                             tmp_que,
+//                                             end_tmp_que,
+//                                             sibling_es,
+//                                             num_sibling_es,
+//                                             child_es,
+//                                             num_child_es,
+//                                             tmp_d,
+//                                             d);
+//                };
+//                // Broadcast processing actives
+//                every_host_bcasts_buffer_and_proc(buffer_send,
+//                        process);
+//                //
+//                ////////////////////////////////////////////////
             }
 
             // Update the sets in tmp_s
@@ -993,12 +1043,29 @@ bit_parallel_labeling(
                     buffer_send[2 * i + 1] = std::make_pair(w, tmp_s[w].second);
                 }
                 // Send the messages
-                // Lambda for processing every element of received messages.
-                auto process = [&] (const std::pair<VertexID, uint64_t> &m) {
-                    tmp_s[m.first].second |= m.second;
-                };
-                every_host_bcasts_buffer_and_proc(buffer_send,
-                        process);
+                for (int root = 0; root < num_hosts; ++root) {
+                    std::vector< std::pair<VertexID, uint64_t> > buffer_recv;
+                    one_host_bcasts_buffer_to_buffer(root,
+                                                     buffer_send,
+                                                     buffer_recv);
+                    if (buffer_recv.empty()) {
+                        continue;
+                    }
+                    for (const std::pair<VertexID, uint64_t> &m : buffer_recv) {
+                        tmp_s[m.first].second |= m.second;
+                    }
+                }
+//                /////////////////////////////////////////////////
+//                //
+//                // Lambda for processing every element of received messages.
+//                auto process = [&] (const std::pair<VertexID, uint64_t> &m) {
+//                    tmp_s[m.first].second |= m.second;
+//                };
+//                every_host_bcasts_buffer_and_proc(buffer_send,
+//                        process);
+//                //
+//                /////////////////////////////////////////////////
+
 //                /////////////////////////////////////////////////
 //                //
 //                for (int loc = 0; loc < num_hosts - 1; ++loc) {
@@ -1280,16 +1347,38 @@ initialization(
             }
         }
         // Broadcast local roots labels
-        auto process = [&] (const LabelTableUnit &l) {
-            VertexID root_id = l.root_id;
-            VertexID label_global_id = l.label_global_id;
-            UnweightedDist dist = l.dist;
-            dist_table[root_id][label_global_id] = dist;
-            // Record the received label in recved_dist_table, for later reset
-            recved_dist_table[root_id].push_back(label_global_id);
-        };
-        every_host_bcasts_buffer_and_proc(buffer_send,
-                process);
+        for (int root = 0; root < num_hosts; ++root) {
+            std::vector<LabelTableUnit> buffer_recv;
+            one_host_bcasts_buffer_to_buffer(root,
+                                             buffer_send,
+                                             buffer_recv);
+            if (buffer_recv.empty()) {
+                continue;
+            }
+            for (const LabelTableUnit &l : buffer_recv) {
+                VertexID root_id = l.root_id;
+                VertexID label_global_id = l.label_global_id;
+                UnweightedDist dist = l.dist;
+                dist_table[root_id][label_global_id] = dist;
+                // Record the received label in recved_dist_table, for later reset
+                recved_dist_table[root_id].push_back(label_global_id);
+            }
+        }
+//        /////////////////////////////////////////////////
+//        //
+//        auto process = [&] (const LabelTableUnit &l) {
+//            VertexID root_id = l.root_id;
+//            VertexID label_global_id = l.label_global_id;
+//            UnweightedDist dist = l.dist;
+//            dist_table[root_id][label_global_id] = dist;
+//            // Record the received label in recved_dist_table, for later reset
+//            recved_dist_table[root_id].push_back(label_global_id);
+//        };
+//        every_host_bcasts_buffer_and_proc(buffer_send,
+//                process);
+//        //
+//        /////////////////////////////////////////////////
+
 //        /////////////////////////////////////////////////
 //        //
 //        std::vector< std::vector<MPI_Request> > requests_list(num_hosts - 1);
@@ -1362,15 +1451,35 @@ initialization(
             // Prepare for sending
             buffer_send.emplace_back(r_root, L[r_local].bp_dist, L[r_local].bp_sets);
         }
-        // Lambda process
-        auto process = [&] (const MsgBPLabel &m) {
-            VertexID r_root = m.r_root_id;
-            memcpy(bp_labels_table[r_root].bp_dist, m.bp_dist, sizeof(bp_labels_table[r_root].bp_dist));
-            memcpy(bp_labels_table[r_root].bp_sets, m.bp_sets, sizeof(bp_labels_table[r_root].bp_sets));
-        };
-        // Broadcast for bp_labels_table
-        every_host_bcasts_buffer_and_proc(buffer_send,
-                process);
+
+        for (int root = 0; root < num_hosts; ++root) {
+            std::vector<MsgBPLabel> buffer_recv;
+            one_host_bcasts_buffer_to_buffer(root,
+                                             buffer_send,
+                                             buffer_recv);
+            if (buffer_recv.empty()) {
+                continue;
+            }
+            for (const MsgBPLabel &m : buffer_recv) {
+                VertexID r_root = m.r_root_id;
+                memcpy(bp_labels_table[r_root].bp_dist, m.bp_dist, sizeof(bp_labels_table[r_root].bp_dist));
+                memcpy(bp_labels_table[r_root].bp_sets, m.bp_sets, sizeof(bp_labels_table[r_root].bp_sets));
+            }
+        }
+//        /////////////////////////////////////////////////
+//        //
+//        // Lambda process
+//        auto process = [&] (const MsgBPLabel &m) {
+//            VertexID r_root = m.r_root_id;
+//            memcpy(bp_labels_table[r_root].bp_dist, m.bp_dist, sizeof(bp_labels_table[r_root].bp_dist));
+//            memcpy(bp_labels_table[r_root].bp_sets, m.bp_sets, sizeof(bp_labels_table[r_root].bp_sets));
+//        };
+//        // Broadcast for bp_labels_table
+//        every_host_bcasts_buffer_and_proc(buffer_send,
+//                process);
+//        //
+//        /////////////////////////////////////////////////
+
 //        /////////////////////////////////////////////////
 //        //
 //        // Send
@@ -2573,17 +2682,37 @@ batch_process(
 //            }
             end_got_candidates_queue = 0; // Set the got_candidates_queue empty
             // Sync the dist_table
-            // Lambda for processing
-            auto process = [&] (const std::pair<VertexID, VertexID> &e) {
-                VertexID root_id = e.first;
-                VertexID cand_real_id = e.second;
-                dist_table[root_id][cand_real_id] = iter;
-                // Record the received element, for future reset
-                recved_dist_table[root_id].push_back(cand_real_id);
-            };
-            // Broadcast dist_table updates
-            every_host_bcasts_buffer_and_proc(buffer_send,
-                    process);
+            for (int root = 0; root < num_hosts; ++root) {
+                std::vector<std::pair<VertexID, VertexID>> buffer_recv;
+                one_host_bcasts_buffer_to_buffer(root,
+                                                 buffer_send,
+                                                 buffer_recv);
+                if (buffer_recv.empty()) {
+                    continue;
+                }
+                for (const std::pair<VertexID, VertexID> &e : buffer_recv) {
+                    VertexID root_id = e.first;
+                    VertexID cand_real_id = e.second;
+                    dist_table[root_id][cand_real_id] = iter;
+                    // Record the received element, for future reset
+                    recved_dist_table[root_id].push_back(cand_real_id);
+                }
+            }
+//            /////////////////////////////////////////////////
+//            //
+//            // Lambda for processing
+//            auto process = [&] (const std::pair<VertexID, VertexID> &e) {
+//                VertexID root_id = e.first;
+//                VertexID cand_real_id = e.second;
+//                dist_table[root_id][cand_real_id] = iter;
+//                // Record the received element, for future reset
+//                recved_dist_table[root_id].push_back(cand_real_id);
+//            };
+//            // Broadcast dist_table updates
+//            every_host_bcasts_buffer_and_proc(buffer_send,
+//                    process);
+//            //
+//            /////////////////////////////////////////////////
 
 //            /////////////////////////////////////////////////
 //            //
