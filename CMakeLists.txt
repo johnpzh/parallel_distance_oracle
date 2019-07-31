@@ -16,7 +16,7 @@ if (${CMAKE_BUILD_TYPE} MATCHES "Debug")
         add_compile_options(-trace -traceback -debug all)
     endif()
 else()
-    add_compile_options(-O3)
+#    add_compile_options(-O3)
     message("DEBUG OFF")
 endif()
 
