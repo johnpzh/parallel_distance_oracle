@@ -3093,12 +3093,11 @@ one_host_bcasts_buffer_to_buffer(
     }
     // Broadcast the buffer_send
     message_time -= WallTimer::get_time_mark();
-    buffer_recv.resize(size_buffer_send);
     if (host_id == root) {
         buffer_recv.assign(buffer_send.begin(), buffer_send.end());
     }
     uint64_t bytes_buffer_send = size_buffer_send * ETypeSize;
-    if (bytes_buffer_send < static_cast<size_t>(INT_MAX)) {
+    if (bytes_buffer_send <= static_cast<size_t>(INT_MAX)) {
         // Only need 1 broadcast
         MPI_Bcast(buffer_recv.data(),
                   bytes_buffer_send,
