@@ -2654,7 +2654,6 @@ every_host_bcasts_buffer_and_proc(
         std::vector<E_T> &buffer_send,
         F &fun)
 {
-    const size_t ETypeSize = sizeof(E_T);
     // Every host h_i broadcast to others
     for (int root = 0; root < num_hosts; ++root) {
         std::vector<E_T> buffer_recv;
