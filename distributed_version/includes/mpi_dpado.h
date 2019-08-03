@@ -68,13 +68,16 @@ public:
         int host_id = 0; // host ID
         int num_hosts = 0; // number of hosts
         int provided = 0;
-		char hostname[1024];
         MPI_Init_thread(&argc, &argv, MPI_THREAD_MULTIPLE, &provided);
+		//printf("MPI_Init_thread\n");
         MPI_Comm_rank(MPI_COMM_WORLD, &host_id);
+		//printf("MPI_Comm_rank\n");
         MPI_Comm_size(MPI_COMM_WORLD, &num_hosts);
+		//printf("MPI_Comm_size\n");
+//#ifdef DEBUG_MESSAGES_ON
+		char hostname[256];
 		gethostname(hostname, sizeof(hostname));
 		printf("host_id: %d num_hosts: %d HostName: %s PID: %d\n", host_id, num_hosts, hostname, getpid());
-//#ifdef DEBUG_MESSAGES_ON
         if (0 == host_id) {
             printf("MPI Initialization:\n");
 //            printf("num_hosts: %d\n", num_hosts);
@@ -97,6 +100,9 @@ public:
             }
         }
 //#endif
+		if (0 == host_id) {
+			printf("MPI initialized.\n");
+		}
     }
 
     ~MPI_Instance() {

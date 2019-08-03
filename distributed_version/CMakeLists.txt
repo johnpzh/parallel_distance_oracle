@@ -1,5 +1,5 @@
 # dpado
-add_executable(dpado dpado.cpp includes/utils.h)
+add_executable(dpado dpado.cpp)
 
 # test
 message("COMPILE_OPTIONS for dpado: ${COMPILE_OPTIONS}")

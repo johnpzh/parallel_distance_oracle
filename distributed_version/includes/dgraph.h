@@ -99,7 +99,7 @@ public:
     DistGraph() = default;
     ~DistGraph() = default;
 
-    explicit DistGraph(char *input_filename);
+    explicit DistGraph(const char *input_filename);
 
     // Function: return the global out degree of a vertex
     VertexID get_global_out_degree(VertexID v_global) const
@@ -174,7 +174,7 @@ public:
 };
 
 // Constructor from a input file.
-DistGraph::DistGraph(char *input_filename)
+DistGraph::DistGraph(const char *input_filename)
 {
     std::ifstream fin(input_filename);
     if (!fin.is_open()) {

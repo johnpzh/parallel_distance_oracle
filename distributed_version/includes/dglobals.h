@@ -18,7 +18,7 @@ typedef uint8_t UnweightedDist;
 const UnweightedDist MAX_UNWEIGHTED_DIST = UCHAR_MAX;
 
 // Get the file size
-unsigned long get_file_size(char *filename)
+unsigned long get_file_size(const char *filename)
 {
     struct stat file_stat;
     assert(stat(filename, &file_stat) == 0);
