@@ -264,7 +264,7 @@ public:
             return;
         }
         uint64_t bytes_buffer_send = size_buffer_send * ETypeSize;
-        if (bytes_buffer_send < static_cast<size_t>(INT_MAX)) {
+        if (bytes_buffer_send <= static_cast<size_t>(INT_MAX)) {
             // Only need 1 send
             MPI_Send(buffer_send.data(),
                      size_buffer_send * ETypeSize,
