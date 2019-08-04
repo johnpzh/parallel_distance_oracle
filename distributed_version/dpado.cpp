@@ -5,6 +5,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string>
+#include <fstream>
 #include "dglobals.h"
 #include "dgraph.h"
 #include "dpado.h"
@@ -18,44 +19,56 @@ void dpado(char *argv[])
 	printf("host_id: %u num_masters: %u /%u %.2f%% num_edges_local %lu /%lu %.2f%%\n",
 	        G.host_id, G.num_masters, G.num_v, 100.0 * G.num_masters / G.num_v, G.num_edges_local, 2 * G.num_e, 100.0 * G.num_edges_local / (2 * G.num_e));//test
 
-//	DistBVCPLL<50> dist_bvcpll(1024, G); // batch size 1024, bit-parallel size 0.
-	for (int i = 0; i < 4; ++i) {
-		DistBVCPLL<1024, 50> dist_bvcpll(G); // batch size 1024, bit-parallel size 0.
+//	DistBVCPLL<50> dist_bvcpll(1024, G); // batch size 1024, bit-parallel size 50.
+    int num_runs = 4;
+	for (int i = 0; i < num_runs; ++i) {
+		DistBVCPLL<1024, 50> dist_bvcpll(G); // batch size 1024, bit-parallel size 50.
 		{// Clear cache
-			std::string filename = "/home/zpeng01/Data/indochina/indochina.binary." + std::to_string(i % 3);
-			DistGraph tmp_G(filename.c_str());
-			printf("host_id: %u num_masters: %u /%u %.2f%% num_edges_local %lu /%lu %.2f%%\n",
-					tmp_G.host_id, tmp_G.num_masters, tmp_G.num_v, 100.0 * tmp_G.num_masters / tmp_G.num_v, tmp_G.num_edges_local, 2 * tmp_G.num_e, 100.0 * tmp_G.num_edges_local / (2 * tmp_G.num_e));//test
-			if (0 == tmp_G.host_id) {
-				printf("========================================\n");
-			}
+		    if (num_runs - 1 == i) {
+		        continue;
+		    }
+            std::ifstream fin(argv[2]);
+            if (!fin.is_open()) {
+                fprintf(stderr, "Error: cannot open file %s\n", argv[2]);
+                exit(EXIT_FAILURE);
+            }
+            std::vector< std::pair<VertexID, VertexID> > buffer;
+            VertexID head;
+            VertexID tail;
+            while (fin.read(reinterpret_cast<char *>(&head), sizeof(head))) {
+                fin.read(reinterpret_cast<char *>(&tail), sizeof(tail));
+                buffer.emplace_back(head, tail);
+                printf("head: %u tail: %u\n", head, tail);
+            }
+            printf("host_id: %u input_buffer.size(): %lu\n", G.host_id, buffer.size());
+            printf("========================================\n");
 		}
 	}
 //	DistBVCPLL<1024, 50> dist_bvcpll(G); // batch size 1024, bit-parallel size 0.
 //	DistBVCPLL<8, 50> dist_bvcpll(G); // batch size 1024, bit-parallel size 0.
 
-#ifdef DEBUG_MESSAGES_ON
-    {// test the index by distance queries
-        std::ifstream fin(argv[2]);
-        if (!fin.is_open()) {
-            fprintf(stderr, "Error: cannot open file %s", argv[2]);
-            exit(EXIT_FAILURE);
-        }
-        VertexID a;
-        VertexID b;
-        while (fin >> a >> b) {
-            UnweightedDist dist = dist_bvcpll.dist_distance_query_pair(a, b, G);
-            MPI_Barrier(MPI_COMM_WORLD);
-            if (0 == G.host_id) {
-                if (dist == 255) {
-                    printf("2147483647\n");
-                } else {
-                    printf("%u\n", dist);
-                }
-            }
-        }
-    }
-#endif
+//#ifdef DEBUG_MESSAGES_ON
+//    {// test the index by distance queries
+//        std::ifstream fin(argv[2]);
+//        if (!fin.is_open()) {
+//            fprintf(stderr, "Error: cannot open file %s", argv[2]);
+//            exit(EXIT_FAILURE);
+//        }
+//        VertexID a;
+//        VertexID b;
+//        while (fin >> a >> b) {
+//            UnweightedDist dist = dist_bvcpll.dist_distance_query_pair(a, b, G);
+//            MPI_Barrier(MPI_COMM_WORLD);
+//            if (0 == G.host_id) {
+//                if (dist == 255) {
+//                    printf("2147483647\n");
+//                } else {
+//                    printf("%u\n", dist);
+//                }
+//            }
+//        }
+//    }
+//#endif
 
     /*
      * Global_num_labels: 67727254 average: 213.596065
