@@ -19,7 +19,19 @@ void dpado(char *argv[])
 	        G.host_id, G.num_masters, G.num_v, 100.0 * G.num_masters / G.num_v, G.num_edges_local, 2 * G.num_e, 100.0 * G.num_edges_local / (2 * G.num_e));//test
 
 //	DistBVCPLL<50> dist_bvcpll(1024, G); // batch size 1024, bit-parallel size 0.
-	DistBVCPLL<1024, 50> dist_bvcpll(G); // batch size 1024, bit-parallel size 0.
+	for (int i = 0; i < 4; ++i) {
+		DistBVCPLL<1024, 50> dist_bvcpll(G); // batch size 1024, bit-parallel size 0.
+		{// Clear cache
+			std::string filename = "/home/zpeng01/Data/indochina/indochina.binary." + std::to_string(i % 3);
+			DistGraph tmp_G(filename.c_str());
+			printf("host_id: %u num_masters: %u /%u %.2f%% num_edges_local %lu /%lu %.2f%%\n",
+					tmp_G.host_id, tmp_G.num_masters, tmp_G.num_v, 100.0 * tmp_G.num_masters / tmp_G.num_v, tmp_G.num_edges_local, 2 * tmp_G.num_e, 100.0 * tmp_G.num_edges_local / (2 * tmp_G.num_e));//test
+			if (0 == tmp_G.host_id) {
+				printf("========================================\n");
+			}
+		}
+	}
+//	DistBVCPLL<1024, 50> dist_bvcpll(G); // batch size 1024, bit-parallel size 0.
 //	DistBVCPLL<8, 50> dist_bvcpll(G); // batch size 1024, bit-parallel size 0.
 
 #ifdef DEBUG_MESSAGES_ON

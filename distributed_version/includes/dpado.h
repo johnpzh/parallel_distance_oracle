@@ -953,23 +953,58 @@ bit_parallel_labeling(
 
                 for (int root = 0; root < num_hosts; ++root) {
                     std::vector<MsgUnitBP> buffer_recv;
+//					{
+//						const size_t ETypeSize = sizeof(MsgUnitBP);
+//						uint64_t size_buffer_send = buffer_send.size();
+//						// Sync the size_buffer_send.
+//						message_time -= WallTimer::get_time_mark();
+//						MPI_Bcast(&size_buffer_send,
+//								1,
+//								MPI_UINT64_T,
+//								root,
+//								MPI_COMM_WORLD);
+//						message_time += WallTimer::get_time_mark();
+//						buffer_recv.resize(size_buffer_send);
+////						if (!size_buffer_send) {
+////							continue;
+////						}
+//						// Broadcast the buffer_send
+//						message_time -= WallTimer::get_time_mark();
+//						if (host_id == root) {
+//							buffer_recv.assign(buffer_send.begin(), buffer_send.end());
+//						}
+//						uint64_t bytes_buffer_send = size_buffer_send * ETypeSize;
+//						if (bytes_buffer_send <= static_cast<size_t>(INT_MAX)) {
+//							// Only need 1 broadcast
+//							MPI_Bcast(buffer_recv.data(),
+//									bytes_buffer_send,
+//									MPI_CHAR,
+//									root,
+//									MPI_COMM_WORLD);
+//						} else {
+//							const uint32_t num_unit_buffers = ((bytes_buffer_send - 1) / static_cast<size_t>(INT_MAX)) + 1;
+//							const uint64_t unit_buffer_size = ((size_buffer_send - 1) / num_unit_buffers) + 1;
+//							size_t offset = 0;
+//							for (uint64_t b_i = 0; b_i < num_unit_buffers; ++b_i) {
+//								size_t size_unit_buffer = b_i == num_unit_buffers - 1
+//									? size_buffer_send - offset
+//									: unit_buffer_size;
+//								MPI_Bcast(buffer_recv.data() + offset,
+//										size_unit_buffer * ETypeSize,
+//										MPI_CHAR,
+//										root,
+//										MPI_COMM_WORLD);
+//								offset += unit_buffer_size;
+//							}
+//						}
+//						message_time += WallTimer::get_time_mark();
+//					}
                     one_host_bcasts_buffer_to_buffer(root,
                             buffer_send,
                             buffer_recv);
-//                    {// test
-//                        printf("host_id: %u root: %u buffer_recv.size(): %lu\n", host_id, root, buffer_recv.size());
-//                    }
                     if (buffer_recv.empty()) {
                         continue;
                     }
-//                    {// test
-//                        printf("host_id: %u root: %u pushing...\n", host_id, root);
-//                        if (host_id == 1 && root == 0 && d == 1) {
-//                            int i = 0;
-//                            while (i == 0)
-//                                sleep(5);
-//                        }
-//                    }
                     for (const MsgUnitBP &m : buffer_recv) {
                         VertexID v_global = m.v_global;
                         if (!G.local_out_degrees[v_global]) {
