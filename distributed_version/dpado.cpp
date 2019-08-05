@@ -27,21 +27,31 @@ void dpado(char *argv[])
 		    if (num_runs - 1 == i) {
 		        continue;
 		    }
-            std::ifstream fin(argv[2]);
-            if (!fin.is_open()) {
-                fprintf(stderr, "Error: cannot open file %s\n", argv[2]);
-                exit(EXIT_FAILURE);
-            }
-            std::vector< std::pair<VertexID, VertexID> > buffer;
-            VertexID head;
-            VertexID tail;
-            while (fin.read(reinterpret_cast<char *>(&head), sizeof(head))) {
-                fin.read(reinterpret_cast<char *>(&tail), sizeof(tail));
-                buffer.emplace_back(head, tail);
-                printf("head: %u tail: %u\n", head, tail);
-            }
-            printf("host_id: %u input_buffer.size(): %lu\n", G.host_id, buffer.size());
-            printf("========================================\n");
+//            std::ifstream fin(argv[2]);
+//            if (!fin.is_open()) {
+//                fprintf(stderr, "Error: cannot open file %s\n", argv[2]);
+//                exit(EXIT_FAILURE);
+//            }
+//            std::vector< std::pair<VertexID, VertexID> > buffer;
+//            VertexID head;
+//            VertexID tail;
+//            while (fin.read(reinterpret_cast<char *>(&head), sizeof(head))) {
+//                fin.read(reinterpret_cast<char *>(&tail), sizeof(tail));
+//                buffer.emplace_back(head, tail);
+//            }
+//            printf("host_id: %u input_buffer.size(): %lu\n", G.host_id, buffer.size());
+//            printf("========================================\n");
+            uint64_t bytes_chunk = 100ULL * (1ULL << 30ULL);
+            std::vector<uint64_t> chunk(bytes_chunk / 8ULL, 0);
+		    printf("host_id: %u chunk_bytes: %luGB\n", G.host_id, chunk.size() * 8ULL / (1ULL << 30ULL));
+            double virmem;
+            double resmem;
+		    double memtotal;
+		    double memfree;
+            Utils::memory_usage(virmem, resmem);
+		    Utils::system_memory(memtotal, memfree);
+		    printf("host_id: %u virtmem: %.2fGB resmem: %.2fGB memtotal: %.2fGB memfree: %.2fGB\n",
+		            G.host_id, virmem / (1 << 10), resmem / (1 << 10), memtotal / (1 << 10), memfree / (1 << 10));
 		}
 	}
 //	DistBVCPLL<1024, 50> dist_bvcpll(G); // batch size 1024, bit-parallel size 0.
