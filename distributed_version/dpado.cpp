@@ -42,7 +42,7 @@ void dpado(char *argv[])
             Utils::system_memory(memtotal, memfree);
             printf("host_id: %u chunk_bytes: %luGB virtmem: %.2fGB resmem: %.2fGB memtotal: %.2fGB memfree: %.2fGB\n",
                    G.host_id, chunk.size() * 8ULL / (1ULL << 30ULL), virtmen / (1 << 10), resmem / (1 << 10), memtotal / (1 << 10), memfree / (1 << 10));
-            
+            printf("========================================\n");
 //            uint64_t bytes_chunk = 100ULL * (1ULL << 30ULL);
 //            std::vector<uint64_t> chunk(bytes_chunk / 8ULL, 0);
 //		    printf("host_id: %u chunk_bytes: %luGB\n", G.host_id, chunk.size() * 8ULL / (1ULL << 30ULL));
