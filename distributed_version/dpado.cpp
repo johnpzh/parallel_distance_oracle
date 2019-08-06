@@ -19,21 +19,30 @@ void dpado(char *argv[])
 	printf("host_id: %u num_masters: %u /%u %.2f%% num_edges_local %lu /%lu %.2f%%\n",
 	        G.host_id, G.num_masters, G.num_v, 100.0 * G.num_masters / G.num_v, G.num_edges_local, 2 * G.num_e, 100.0 * G.num_edges_local / (2 * G.num_e));//test
 
-//	DistBVCPLL<50> dist_bvcpll(1024, G); // batch size 1024, bit-parallel size 50.
     int num_runs = 4;
 	for (int i = 0; i < num_runs; ++i) {
-        DistBVCPLL<1024, 50> *dist_bvcpll = new DistBVCPLL<1024, 50>(G); // batch size 1024, bit-parallel size 50.
-        delete dist_bvcpll;
-//		DistBVCPLL<1024, 50> dist_bvcpll(G); // batch size 1024, bit-parallel size 50.
+//        DistBVCPLL<1024, 50> *dist_bvcpll = new DistBVCPLL<1024, 50>(G); // batch size 1024, bit-parallel size 50.
+//        delete dist_bvcpll;
+		double mem_for_graph;
+		double memtotal;
+		{// Get the memory foot print.
+			double memfree;
+			Utils::system_memory(memtotal, memfree);
+			mem_for_graph = memtotal - memfree;
+		}
+		{
+			DistBVCPLL<1024, 50> dist_bvcpll(G); // batch size 1024, bit-parallel size 50.
+		}
 		{// Clear cache
 		    if (num_runs - 1 == i) {
 		        continue;
 		    }
             // Adaptively clean up memory
-            double memtotal;
+//            double memtotal;
             double memfree;
             Utils::system_memory(memtotal, memfree);
-            uint64_t bytes_chunk = static_cast<uint64_t>(memtotal * 0.9 / (1 << 10)) * (1ULL << 30ULL);
+            uint64_t bytes_chunk = static_cast<uint64_t>((memtotal - mem_for_graph) / (1 << 10) - 2) * (1ULL << 30ULL);
+//            uint64_t bytes_chunk = static_cast<uint64_t>(memtotal * 0.8 / (1 << 10)) * (1ULL << 30ULL);
             std::vector<uint64_t> chunk(bytes_chunk / 8ULL, 0);
 
             double virtmen;
