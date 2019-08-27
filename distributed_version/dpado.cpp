@@ -41,7 +41,7 @@ void dpado(char *argv[])
 //            double memtotal;
             double memfree;
             Utils::system_memory(memtotal, memfree);
-            uint64_t bytes_chunk = static_cast<uint64_t>((memtotal - mem_for_graph) / (1 << 10) - 2) * (1ULL << 30ULL);
+            uint64_t bytes_chunk = ((static_cast<uint64_t>(memtotal - mem_for_graph) >> 10ULL) - 5ULL) << 30ULL;
 //            uint64_t bytes_chunk = static_cast<uint64_t>(memtotal * 0.8 / (1 << 10)) * (1ULL << 30ULL);
             std::vector<uint64_t> chunk(bytes_chunk / 8ULL, 0);
 
