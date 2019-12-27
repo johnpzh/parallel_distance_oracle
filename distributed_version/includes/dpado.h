@@ -346,11 +346,11 @@ DistBVCPLL(
             used_bp_roots);
     bp_labeling_time += WallTimer::get_time_mark();
     {//test
-#ifdef DEBUG_MESSAGES_ON
+//#ifdef DEBUG_MESSAGES_ON
         if (0 == host_id) {
             printf("host_id: %u bp_labeling_finished.\n", host_id);
         }
-#endif
+//#endif
     }
 
     std::vector<VertexID> active_queue(num_masters); // Any vertex v who is active should be put into this queue.
