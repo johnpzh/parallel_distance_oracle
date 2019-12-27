@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.10)
-project(pado LANGUAGES CXX)
+project(pado LANGUAGES CXX C)
 
 set(CMAKE_CXX_STANDARD 14)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -19,6 +19,8 @@ else()
 #    add_compile_options(-O3)
     message("DEBUG OFF")
 endif()
+
+add_compile_options(-march=native)
 
 # PADO
 add_executable(pado pado.cpp)

@@ -5,13 +5,13 @@
 #include "graph.h"
 
 #include "pado_unw_unv_unp.h"
-#include "pado_unw_vec_unp.h"
-#include "pado_unw_unv_para.h"
-#include "pado_unw_vec_para.h"
+//#include "pado_unw_vec_unp.h"
+//#include "pado_unw_unv_para.h"
+//#include "pado_unw_vec_para.h"
 #include "pado_weighted_unv_unp.h"
-#include "pado_weighted_vec_unp.h"
-#include "pado_weighted_unv_para.h"
-#include "pado_weighted_vec_para.h"
+//#include "pado_weighted_vec_unp.h"
+//#include "pado_weighted_unv_para.h"
+//#include "pado_weighted_vec_para.h"
 
 using namespace PADO;
 

@@ -2162,13 +2162,13 @@ batch_process(
 
 
     while (global_num_actives) {
-#ifdef DEBUG_MESSAGES_ON
+//#ifdef DEBUG_MESSAGES_ON
         {//
            if (0 == host_id) {
                printf("iter: %u global_num_actives: %u\n", iter, global_num_actives);
            }
         }
-#endif
+//#endif
         ++iter;
 //        // Traverse active vertices to push their labels as candidates
 //        // Push newly added labels to local masters at first

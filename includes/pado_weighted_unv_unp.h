@@ -1919,7 +1919,7 @@ void WeightedVertexCentricPLL<BATCH_SIZE>::switch_labels_to_old_id(
 		for (idi l_i = 0; l_i < l_i_bound; ++l_i) {
 			idi tail = Lv.vertices[l_i];
 			weightiLarge dist = Lv.distances[l_i];
-			new_L[new_v].push_back(make_pair(rank2id[tail], dist));
+			new_L[new_v].push_back(std::make_pair(rank2id[tail], dist));
 			++test_label_sum;
 		}
 	}

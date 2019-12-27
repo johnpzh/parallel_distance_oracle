@@ -14,7 +14,7 @@
 #include <algorithm>
 #include <iostream>
 #include <climits>
-#include <xmmintrin.h>
+//#include <xmmintrin.h>
 #include <immintrin.h>
 #include <bitset>
 #include <cmath>
@@ -1121,7 +1121,8 @@ inline bool VertexCentricPLLVec<BATCH_SIZE>::distance_check_vec_core(
 	for (idi v_i = 0; v_i < bound_v_i; v_i += NUM_P_INT) {
 //		++simd_full_count.first;
 //		++simd_full_count.second;
-		__m512i v_v = _mm512_loadu_epi32(&ids_buffer[v_i]); // @suppress("Function cannot be resolved")
+		__m512i v_v = _mm512_loadu_epi32(&ids_buffer[v_i]);
+//		__m512i v_v = _mm512_loadu_epi32(&ids_buffer[v_i]); // @suppress("Function cannot be resolved")
 //		v_v = _mm512_add_epi32(v_v, id_offset_v);
 		__mmask16 is_r_higher_ranked_m = _mm512_cmplt_epi32_mask(v_v, cand_real_id_v);
 		if (!is_r_higher_ranked_m) {
@@ -1771,7 +1772,7 @@ template <inti BATCH_SIZE>
 void VertexCentricPLLVec<BATCH_SIZE>::load_index_from_file(
 								const char *filename)
 {
-	ifstream fin(filename);
+	std::ifstream fin(filename);
 	if (!fin.is_open()) {
 		fprintf(stderr, "Error: cannot open file %s\n", filename);
 		exit(EXIT_FAILURE);

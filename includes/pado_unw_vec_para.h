@@ -2021,7 +2021,7 @@ template <inti BATCH_SIZE>
 void ParaVertexCentricPLLVec<BATCH_SIZE>::load_index_from_file(
 								const char *filename)
 {
-	ifstream fin(filename);
+	std::ifstream fin(filename);
 	if (!fin.is_open()) {
 		fprintf(stderr, "Error: cannot open file %s\n", filename);
 		exit(EXIT_FAILURE);

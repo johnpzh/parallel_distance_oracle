@@ -1486,7 +1486,7 @@ void VertexCentricPLL<BATCH_SIZE>::switch_labels_to_old_id(
 					idi tail = Lv.vertices[v_i] + id_offset;
 //					idi new_tail = rank2id[tail];
 //					new_L[new_v].push_back(make_pair(new_tail, dist));
-					new_L[new_v].push_back(make_pair(tail, dist));
+					new_L[new_v].push_back(std::make_pair(tail, dist));
 					++test_label_sum;
 				}
 			}

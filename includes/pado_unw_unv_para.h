@@ -1939,7 +1939,7 @@ template <inti BATCH_SIZE>
 void ParaVertexCentricPLL<BATCH_SIZE>::load_index_from_file(
 								const char *filename)
 {
-	ifstream fin(filename);
+	std::ifstream fin(filename);
 	if (!fin.is_open()) {
 		fprintf(stderr, "Error: cannot open file %s\n", filename);
 		exit(EXIT_FAILURE);
@@ -2017,7 +2017,7 @@ void ParaVertexCentricPLL<BATCH_SIZE>::order_labels(
 					idi tail = Lv.vertices[v_i] + id_offset;
 //					idi new_tail = rank2id[tail];
 //					new_L[new_v].push_back(make_pair(new_tail, dist));
-					OLv.push_back(make_pair(tail, dist));
+					OLv.push_back(std::make_pair(tail, dist));
 				}
 			}
 		}
@@ -2242,7 +2242,7 @@ void ParaVertexCentricPLL<BATCH_SIZE>::switch_labels_to_old_id(
 					idi tail = Lv.vertices[v_i] + id_offset;
 //					idi new_tail = rank2id[tail];
 //					new_L[new_v].push_back(make_pair(new_tail, dist));
-					new_L[new_v].push_back(make_pair(tail, dist));
+					new_L[new_v].push_back(std::make_pair(tail, dist));
 					++test_label_sum;
 				}
 			}
