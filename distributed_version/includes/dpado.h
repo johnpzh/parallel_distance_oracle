@@ -756,6 +756,11 @@ bit_parallel_labeling(
 
     VertexID r_global = 0; // root r
     for (VertexID i_bpspt = 0; i_bpspt < BITPARALLEL_SIZE; ++i_bpspt) {
+        {// test
+            if (0 == host_id) {
+                printf("i_bpsp: %u\n", i_bpspt);
+            }
+        }
         // Select the root r_global
         if (0 == host_id) {
             while (r_global < num_v && used_bp_roots[r_global]) {
@@ -909,13 +914,13 @@ bit_parallel_labeling(
         VertexID global_num_actives = 1;
         UnweightedDist d = 0;
         while (global_num_actives) {
-#ifdef DEBUG_MESSAGES_ON
+//#ifdef DEBUG_MESSAGES_ON
             {//test
                 if (0 == host_id) {
                     printf("d: %u que_size: %u\n", d, global_num_actives);
                 }
             }
-#endif
+//#endif
 //            for (UnweightedDist d = 0; que_t0 < que_h; ++d) {
             VertexID num_sibling_es = 0, num_child_es = 0;
 

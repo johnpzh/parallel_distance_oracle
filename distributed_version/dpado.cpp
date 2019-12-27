@@ -33,52 +33,52 @@ void dpado(char *argv[])
 		{
 			DistBVCPLL<1024, 50> dist_bvcpll(G); // batch size 1024, bit-parallel size 50.
 		}
-		{// Clear cache
-		    if (num_runs - 1 == i) {
-		        continue;
-		    }
-            // Adaptively clean up memory
-//            double memtotal;
-            double memfree;
-            Utils::system_memory(memtotal, memfree);
-            uint64_t bytes_chunk = ((static_cast<uint64_t>(memtotal - mem_for_graph) >> 10ULL) - 5ULL) << 30ULL;
-//            uint64_t bytes_chunk = static_cast<uint64_t>(memtotal * 0.8 / (1 << 10)) * (1ULL << 30ULL);
-            std::vector<uint64_t> chunk(bytes_chunk / 8ULL, 0);
-
-            double virtmen;
-            double resmem;
-            Utils::memory_usage(virtmen, resmem);
-            Utils::system_memory(memtotal, memfree);
-            printf("host_id: %u chunk_bytes: %luGB virtmem: %.2fGB resmem: %.2fGB memtotal: %.2fGB memfree: %.2fGB\n",
-                   G.host_id, chunk.size() * 8ULL / (1ULL << 30ULL), virtmen / (1 << 10), resmem / (1 << 10), memtotal / (1 << 10), memfree / (1 << 10));
-            printf("========================================\n");
-//            uint64_t bytes_chunk = 100ULL * (1ULL << 30ULL);
+//		{// Clear cache
+//		    if (num_runs - 1 == i) {
+//		        continue;
+//		    }
+//            // Adaptively clean up memory
+////            double memtotal;
+//            double memfree;
+//            Utils::system_memory(memtotal, memfree);
+//            uint64_t bytes_chunk = ((static_cast<uint64_t>(memtotal - mem_for_graph) >> 10ULL) - 5ULL) << 30ULL;
+////            uint64_t bytes_chunk = static_cast<uint64_t>(memtotal * 0.8 / (1 << 10)) * (1ULL << 30ULL);
 //            std::vector<uint64_t> chunk(bytes_chunk / 8ULL, 0);
-//		    printf("host_id: %u chunk_bytes: %luGB\n", G.host_id, chunk.size() * 8ULL / (1ULL << 30ULL));
+//
 //            double virtmen;
 //            double resmem;
-//		    double memtotal;
-//		    double memfree;
 //            Utils::memory_usage(virtmen, resmem);
-//		    Utils::system_memory(memtotal, memfree);
-//		    printf("host_id: %u virtmem: %.2fGB resmem: %.2fGB memtotal: %.2fGB memfree: %.2fGB\n",
-//		            G.host_id, virtmen / (1 << 10), resmem / (1 << 10), memtotal / (1 << 10), memfree / (1 << 10));
-
-//            std::ifstream fin(argv[2]);
-//            if (!fin.is_open()) {
-//                fprintf(stderr, "Error: cannot open file %s\n", argv[2]);
-//                exit(EXIT_FAILURE);
-//            }
-//            std::vector< std::pair<VertexID, VertexID> > buffer;
-//            VertexID head;
-//            VertexID tail;
-//            while (fin.read(reinterpret_cast<char *>(&head), sizeof(head))) {
-//                fin.read(reinterpret_cast<char *>(&tail), sizeof(tail));
-//                buffer.emplace_back(head, tail);
-//            }
-//            printf("host_id: %u input_buffer.size(): %lu\n", G.host_id, buffer.size());
+//            Utils::system_memory(memtotal, memfree);
+//            printf("host_id: %u chunk_bytes: %luGB virtmem: %.2fGB resmem: %.2fGB memtotal: %.2fGB memfree: %.2fGB\n",
+//                   G.host_id, chunk.size() * 8ULL / (1ULL << 30ULL), virtmen / (1 << 10), resmem / (1 << 10), memtotal / (1 << 10), memfree / (1 << 10));
 //            printf("========================================\n");
-		}
+////            uint64_t bytes_chunk = 100ULL * (1ULL << 30ULL);
+////            std::vector<uint64_t> chunk(bytes_chunk / 8ULL, 0);
+////		    printf("host_id: %u chunk_bytes: %luGB\n", G.host_id, chunk.size() * 8ULL / (1ULL << 30ULL));
+////            double virtmen;
+////            double resmem;
+////		    double memtotal;
+////		    double memfree;
+////            Utils::memory_usage(virtmen, resmem);
+////		    Utils::system_memory(memtotal, memfree);
+////		    printf("host_id: %u virtmem: %.2fGB resmem: %.2fGB memtotal: %.2fGB memfree: %.2fGB\n",
+////		            G.host_id, virtmen / (1 << 10), resmem / (1 << 10), memtotal / (1 << 10), memfree / (1 << 10));
+//
+////            std::ifstream fin(argv[2]);
+////            if (!fin.is_open()) {
+////                fprintf(stderr, "Error: cannot open file %s\n", argv[2]);
+////                exit(EXIT_FAILURE);
+////            }
+////            std::vector< std::pair<VertexID, VertexID> > buffer;
+////            VertexID head;
+////            VertexID tail;
+////            while (fin.read(reinterpret_cast<char *>(&head), sizeof(head))) {
+////                fin.read(reinterpret_cast<char *>(&tail), sizeof(tail));
+////                buffer.emplace_back(head, tail);
+////            }
+////            printf("host_id: %u input_buffer.size(): %lu\n", G.host_id, buffer.size());
+////            printf("========================================\n");
+//		}
 	}
 //	DistBVCPLL<1024, 50> dist_bvcpll(G); // batch size 1024, bit-parallel size 0.
 //	DistBVCPLL<8, 50> dist_bvcpll(G); // batch size 1024, bit-parallel size 0.

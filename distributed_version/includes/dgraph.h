@@ -174,7 +174,7 @@ public:
 };
 
 // Constructor from a input file.
-DistGraph::DistGraph(const char *input_filename)
+inline DistGraph::DistGraph(const char *input_filename)
 {
     std::ifstream fin(input_filename);
     if (!fin.is_open()) {
