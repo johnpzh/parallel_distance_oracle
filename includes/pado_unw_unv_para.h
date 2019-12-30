@@ -1883,6 +1883,10 @@ void ParaVertexCentricPLL<BATCH_SIZE>::store_index_to_file(
 		fprintf(stderr, "Error: cannot open file %s\n", filename);
 		exit(EXIT_FAILURE);
 	}
+
+	std::string txt_filename = std::string(filename) + ".txt";//test
+	ofstream txt_out(txt_filename.c_str());
+
 	// Store into file the number of vertices and the number of bit-parallel roots.
 	uint64_t labels_count = 0;
 	fout.write((char *) &num_v_, sizeof(num_v_));
@@ -1923,12 +1927,24 @@ void ParaVertexCentricPLL<BATCH_SIZE>::store_index_to_file(
 		sort(ordered_labels.begin(), ordered_labels.end());
 		// Store into file
 		fout.write((char *) &size_labels, sizeof(size_labels));
+
+//        {//test
+//            txt_out << v_id << ":";
+//        }
+
 		for (idi l_i = 0; l_i < size_labels; ++l_i) {
 			idi l = ordered_labels[l_i].first;
 			weighti d = ordered_labels[l_i].second;
 			fout.write((char *) &l, sizeof(l));
 			fout.write((char *) &d, sizeof(d));
+
+            {//test
+                txt_out << v_id << " " << v_rank << ": " << l << " " << (idi) d << std::endl;
+            }
 		}
+//        {//test
+//            txt_out << std::endl;
+//        }
 	}
 	
 	printf("Label_size: %'lu mean: %f\n", labels_count, static_cast<double>(labels_count) / num_v_);

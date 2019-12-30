@@ -385,11 +385,11 @@ DistBVCPLL(
 
     //printf("b_i_bound: %u\n", b_i_bound);//test
     for (VertexID b_i = 0; b_i < b_i_bound; ++b_i) {
-#ifdef DEBUG_MESSAGES_ON
+//#ifdef DEBUG_MESSAGES_ON
         if (0 == host_id) {
             printf("b_i: %u\n", b_i);//test
         }
-#endif
+//#endif
 
         batch_process(
                 G,

@@ -33,9 +33,12 @@
 //#include "pado.20190207.seq_3-level-label_DQ.h"
 //#include "pado.20190208.vec_3-level-label_DQ.h"
 
+//#include "pado_unw_unv_para.201912291420.debug_wrong_label_size.h"
+#include "pado_unw_unv_para.201912292210.ShortIndex.indicator.atomic_flag.h"
+
 #include "pado_unw_unv_unp.h"
 #include "pado_unw_vec_unp.h"
-#include "pado_unw_unv_para.h"
+//#include "pado_unw_unv_para.h"
 #include "pado_unw_vec_para.h"
 #include "pado_weighted_unv_unp.h"
 #include "pado_weighted_vec_unp.h"
@@ -190,37 +193,47 @@ int main(int argc, char *argv[])
 				Graph G(input_file.c_str());
 				vector<idi> rank = G.make_rank();
 				G.id_transfer(rank);
-				for (NUM_THREADS = 1; NUM_THREADS <= 16; NUM_THREADS *= 2) {
-					omp_set_num_threads(NUM_THREADS);
-					ParaVertexCentricPLL<1024> *VCPLL = new ParaVertexCentricPLL<1024>(G);
-					VCPLL->store_index_to_file(output_index.c_str(), rank);
-					delete VCPLL;
-					puts("");
-				}
-				{
-					NUM_THREADS = 20;
-					omp_set_num_threads(NUM_THREADS);
-					ParaVertexCentricPLL<1024> *VCPLL = new ParaVertexCentricPLL<1024>(G);
-					VCPLL->store_index_to_file(output_index.c_str(), rank);
-					delete VCPLL;
-					puts("");
-				}
-				{
-					NUM_THREADS = 32;
-					omp_set_num_threads(NUM_THREADS);
-					ParaVertexCentricPLL<1024> *VCPLL = new ParaVertexCentricPLL<1024>(G);
-					VCPLL->store_index_to_file(output_index.c_str(), rank);
-					delete VCPLL;
-					puts("");
-				}
-				{
-					NUM_THREADS = 40;
-					omp_set_num_threads(NUM_THREADS);
-					ParaVertexCentricPLL<1024> *VCPLL = new ParaVertexCentricPLL<1024>(G);
-					VCPLL->store_index_to_file(output_index.c_str(), rank);
-					delete VCPLL;
-					puts("");
-				}
+//				for (NUM_THREADS = 1; NUM_THREADS <= 16; NUM_THREADS *= 2) {
+//					omp_set_num_threads(NUM_THREADS);
+//					ParaVertexCentricPLL<1024> *VCPLL = new ParaVertexCentricPLL<1024>(G);
+//					VCPLL->store_index_to_file(output_index.c_str(), rank);
+//					delete VCPLL;
+//					puts("");
+//				}
+//				{
+//					NUM_THREADS = 20;
+//					omp_set_num_threads(NUM_THREADS);
+//					ParaVertexCentricPLL<1024> *VCPLL = new ParaVertexCentricPLL<1024>(G);
+//					VCPLL->store_index_to_file(output_index.c_str(), rank);
+//					delete VCPLL;
+//					puts("");
+//				}
+//				{
+//					NUM_THREADS = 32;
+//					omp_set_num_threads(NUM_THREADS);
+//					ParaVertexCentricPLL<1024> *VCPLL = new ParaVertexCentricPLL<1024>(G);
+//					VCPLL->store_index_to_file(output_index.c_str(), rank);
+//					delete VCPLL;
+//					puts("");
+//				}
+//				{
+//					NUM_THREADS = 40;
+//					omp_set_num_threads(NUM_THREADS);
+//					ParaVertexCentricPLL<1024> *VCPLL = new ParaVertexCentricPLL<1024>(G);
+//					VCPLL->store_index_to_file(output_index.c_str(), rank);
+//					delete VCPLL;
+//					puts("");
+//				}
+                {
+                    NUM_THREADS = 40;
+                    omp_set_num_threads(NUM_THREADS);
+                    for (int run = 0; run < 10; ++run) {
+                        ParaVertexCentricPLL<1024> *VCPLL = new ParaVertexCentricPLL<1024>(G);
+                        VCPLL->store_index_to_file(output_index.c_str(), rank);
+                        delete VCPLL;
+                        puts("");
+                    }
+                }
 			}
 		} else {
 			// Vectorization
