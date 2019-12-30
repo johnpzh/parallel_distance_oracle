@@ -1032,14 +1032,6 @@ inline void ParaVertexCentricPLL<BATCH_SIZE>::push_labels(
                     continue;
                 }
             }
-
-//            {//test
-//                // Check v_tail's indicator
-//                if (!SI_v_tail.indicator[label_root_id]) {
-//                    printf("L%u: B%u short_index[%u].indicator[%u]: %u which should be 1.\n", __LINE__,
-//                           roots_start / BATCH_SIZE, v_tail, label_real_id, (idi) SI_v_tail.indicator[label_root_id]);
-//                }
-//            }
             // Add into once_candidated_queue
             if (!once_candidated[v_tail]) {
                 // If v_tail is not in the once_candidated_queue yet, add it in
@@ -1082,18 +1074,6 @@ inline void ParaVertexCentricPLL<BATCH_SIZE>::push_labels(
             if (!SI_v_tail.is_candidate[label_root_id]) {
                 if (CAS(&SI_v_tail.is_candidate[label_root_id], (uint8_t) 0, (uint8_t) 1)) {
                     TS_enqueue(SI_v_tail.candidates_que, SI_v_tail.end_candidates_que, label_root_id);
-//                    {
-//                        SI_v_tail.indicator.set(label_root_id);
-//                    }
-//                    {//test
-//                        // Check v_tail's indicator
-//                        if (!SI_v_tail.indicator[label_root_id]) {
-//                            printf("L%u: T%u: B%u: l_i: %u iter: %u "
-//                                   "short_index[%u].indicator[%u]: %u which should be 1.\n",
-//                                   __LINE__, omp_get_thread_num(), roots_start / BATCH_SIZE, l_i, iter,
-//                                   v_tail, label_real_id, (idi) SI_v_tail.indicator[label_root_id]);
-//                        }
-//                    }
                 }
             }
 
@@ -1151,36 +1131,12 @@ inline bool ParaVertexCentricPLL<BATCH_SIZE>::distance_query(
 //			_mm_prefetch(&dist_matrix[cand_root_id][0], _MM_HINT_T0);
             for (idi v_i = v_start_index; v_i < v_bound_index; ++v_i) {
                 idi v = Lv.vertices[v_i] + id_offset; // v is a label hub of v_id
-                {//test
-                    if (v == cand_real_id) {
-                        printf("T%u: "
-                               "In distance_query: v_id %u had got (%u, %u) in B%u, but is being pushed (%u, %u) in B%u again.\n",
-                               omp_get_thread_num(),
-                               v_id,
-                               v, dist, Lv.batches[b_i].batch_id,
-                               cand_real_id, iter, roots_start / BATCH_SIZE);
-//                        printf("tmp_short_index[%u].indicator[%u]: %u "
-//                               "now_short_index[%u].indicator[%u]: %u\n",
-//                                v_id, cand_real_id,
-//                               (idi) tmp_short_index[v_id].indicator[cand_root_id],
-//                               v_id, cand_real_id,
-//                               (idi) now_short_index[v_id].indicator[cand_root_id]);
-                    }
-                }
                 if (v >= cand_real_id) {
                     // Vertex cand_real_id cannot have labels whose ranks are lower than it,
                     // in which case dist_matrix[cand_root_id][v] does not exit.
                     continue;
                 }
                 inti d_tmp = dist + dist_matrix[cand_root_id][v];
-                {//test
-                    if (v == cand_real_id) {
-                        printf("d_tmp: %u dist: %u dist_matrix[%u][%u]: %u\n",
-                               d_tmp,
-                               dist,
-                               cand_real_id, v, dist_matrix[cand_root_id][v]);
-                    }
-                }
                 if (d_tmp <= iter) {
 //					distance_query_time += WallTimer::get_time_mark();
 //					++normal_hit_count;
@@ -1527,15 +1483,6 @@ inline void ParaVertexCentricPLL<BATCH_SIZE>::batch_process(
                 inti bound_cand_i = short_index[v_id].end_candidates_que;
                 for (inti cand_i = 0; cand_i < bound_cand_i; ++cand_i) {
                     inti cand_root_id = short_index[v_id].candidates_que[cand_i];
-//                    {//test
-//                        // Check v_id's indicator
-//                        if (!short_index[v_id].indicator[cand_root_id]) {
-//                            printf("L%u: T%u: B%u: iter: %u "
-//                                   "short_index[%u].indicator[%u]: %u which should be 1.\n",
-//                                   __LINE__, omp_get_thread_num(), b_id, iter,
-//                                   v_id, cand_root_id + roots_start, (idi) short_index[v_id].indicator[cand_root_id]);
-//                        }
-//                    }
                     short_index[v_id].is_candidate[cand_root_id] = 0; // Reset is_candidate
                     // Only insert cand_root_id into v_id's label if its distance to v_id is shorter than existing distance
                     if (distance_query(
@@ -1566,45 +1513,6 @@ inline void ParaVertexCentricPLL<BATCH_SIZE>::batch_process(
                                 L,
                                 dist_matrix,
                                 iter);
-                        {//test
-////                            // Check v_id's indicator
-//                            if (!short_index[v_id].indicator[cand_root_id]) {
-//                                printf("L:%u T%u: B%u iter: %u "
-//                                       "short_index[%u].indicator[%u]: %u which should be 1.\n",
-//                                       __LINE__, omp_get_thread_num(), b_id, iter,
-//                                       v_id, cand_root_id + roots_start,
-//                                       (idi) short_index[v_id].indicator[cand_root_id]);
-//                            }
-
-                            // Traverse all v_id's labels and check if cand_root_id is there
-                            const IndexType &Lv = L[v_id];
-                            inti b_i_bound = Lv.batches.size();
-                            _mm_prefetch(&Lv.batches[0], _MM_HINT_T0);
-                            _mm_prefetch(&Lv.distances[0], _MM_HINT_T0);
-                            _mm_prefetch(&Lv.vertices[0], _MM_HINT_T0);
-                            _mm_prefetch(&dist_matrix[cand_root_id][0], _MM_HINT_T0);
-                            for (inti b_i = 0; b_i < b_i_bound; ++b_i) {
-                                idi id_offset = Lv.batches[b_i].batch_id * BATCH_SIZE;
-                                idi dist_start_index = Lv.batches[b_i].start_index;
-                                idi dist_bound_index = dist_start_index + Lv.batches[b_i].size;
-                                // Traverse dist_matrix
-                                for (idi dist_i = dist_start_index; dist_i < dist_bound_index; ++dist_i) {
-                                    inti dist = Lv.distances[dist_i].dist;
-                                    idi v_start_index = Lv.distances[dist_i].start_index;
-                                    idi v_bound_index = v_start_index + Lv.distances[dist_i].size;
-                                    for (idi v_i = v_start_index; v_i < v_bound_index; ++v_i) {
-                                        idi v = Lv.vertices[v_i] + id_offset; // v is a label hub of v_id
-                                        if (v == cand_root_id + roots_start) {
-                                            printf("! T%u: "
-                                                   "v_id %u already got (%u, %u), rather than (%u, %u)\n",
-                                                   omp_get_thread_num(),
-                                                   v_id, v, dist, cand_root_id + roots_start, iter);
-//                                            exit(-1);
-                                        }
-                                    }
-                                }
-                            }
-                        }
                     }
                 }
                 short_index[v_id].end_candidates_que = 0;
