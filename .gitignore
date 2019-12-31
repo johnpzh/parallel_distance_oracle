@@ -42,4 +42,7 @@ build/
 # CLion
 .idea/
 
+# Mac OS
+.DS_Store
+
 \.clion\.source\.upload\.marker

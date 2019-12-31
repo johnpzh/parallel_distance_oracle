@@ -34,7 +34,8 @@
 //#include "pado.20190208.vec_3-level-label_DQ.h"
 
 //#include "pado_unw_unv_para.201912291420.debug_wrong_label_size.h"
-#include "pado_unw_unv_para.201912292210.ShortIndex.indicator.atomic_flag.h"
+//#include "pado_unw_unv_para.201912292210.ShortIndex.indicator.atomic_flag.h"
+#include "pado_unw_unv_para.201912311607.parallel_bp_labeling.h"
 
 #include "pado_unw_unv_unp.h"
 #include "pado_unw_vec_unp.h"
