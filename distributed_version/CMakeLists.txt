@@ -33,3 +33,5 @@ target_link_libraries(dpado PRIVATE "${MPI_CXX_LIBRARIES}")
 #target_link_libraries(sssp PRIVATE ${MPI_CXX_LIBRARIES})
 
 # OpenMP
+target_compile_options(dpado PRIVATE "${OpenMP_CXX_FLAGS}")
+target_link_libraries(dpado PRIVATE OpenMP::OpenMP_CXX)

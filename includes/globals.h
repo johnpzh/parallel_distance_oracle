@@ -14,8 +14,10 @@
 #include <limits.h>
 #include <sys/time.h>
 #include <string>
-//#include <vector>
+#include <vector>
 #include <string.h>
+#include <cmath>
+#include <omp.h>
 
 using std::string;
 //using std::vector;
@@ -119,7 +121,126 @@ public:
 };
 // End Class WallTimer
 
+// Parallel Prefix Sum
+inline idi prefix_sum_for_offsets(
+        std::vector<idi> &offsets)
+{
+    idi size_offsets = offsets.size();
+    if (1 == size_offsets) {
+        idi tmp = offsets[0];
+        offsets[0] = 0;
+        return tmp;
+    } else if (size_offsets < 2048) {
+        idi offset_sum = 0;
+        idi size = size_offsets;
+        for (idi i = 0; i < size; ++i) {
+            idi tmp = offsets[i];
+            offsets[i] = offset_sum;
+            offset_sum += tmp;
+        }
+        return offset_sum;
+    } else {
+        // Parallel Prefix Sum, based on Guy E. Blelloch's Prefix Sums and Their Applications
+        idi last_element = offsets[size_offsets - 1];
+        //	idi size = 1 << ((idi) log2(size_offsets - 1) + 1);
+        idi size = 1 << ((idi) log2(size_offsets));
+        //	std::vector<idi> nodes(size, 0);
+        idi tmp_element = offsets[size - 1];
+        //#pragma omp parallel for
+        //	for (idi i = 0; i < size_offsets; ++i) {
+        //		nodes[i] = offsets[i];
+        //	}
 
+        // Up-Sweep (Reduce) Phase
+        idi log2size = log2(size);
+        for (idi d = 0; d < log2size; ++d) {
+            idi by = 1 << (d + 1);
+#pragma omp parallel for
+            for (idi k = 0; k < size; k += by) {
+                offsets[k + (1 << (d + 1)) - 1] += offsets[k + (1 << d) - 1];
+            }
+        }
+
+        // Down-Sweep Phase
+        offsets[size - 1] = 0;
+        for (idi d = log2(size) - 1; d != (idi) -1; --d) {
+            idi by = 1 << (d + 1);
+#pragma omp parallel for
+            for (idi k = 0; k < size; k += by) {
+                idi t = offsets[k + (1 << d) - 1];
+                offsets[k + (1 << d) - 1] = offsets[k + (1 << (d + 1)) - 1];
+                offsets[k + (1 << (d + 1)) - 1] += t;
+            }
+        }
+
+        //#pragma omp parallel for
+        //	for (idi i = 0; i < size_offsets; ++i) {
+        //		offsets[i] = nodes[i];
+        //	}
+        if (size != size_offsets) {
+            idi tmp_sum = offsets[size - 1] + tmp_element;
+            for (idi i = size; i < size_offsets; ++i) {
+                idi t = offsets[i];
+                offsets[i] = tmp_sum;
+                tmp_sum += t;
+            }
+        }
+
+        return offsets[size_offsets - 1] + last_element;
+    }
+}
+
+// Parallelly collect elements of tmp_queue into the queue.
+template<typename T>
+inline void collect_into_queue(
+//					std::vector<idi> &tmp_queue,
+        std::vector <T> &tmp_queue,
+        std::vector <idi> &offsets_tmp_queue, // the locations in tmp_queue for writing from tmp_queue
+        std::vector <idi> &offsets_queue, // the locations in queue for writing into queue.
+        idi num_elements, // total number of elements which need to be added from tmp_queue to queue
+//					std::vector<idi> &queue,
+        std::vector <T> &queue,
+        idi &end_queue)
+{
+    if (0 == num_elements) {
+        return;
+    }
+    idi i_bound = offsets_tmp_queue.size();
+#pragma omp parallel for
+    for (idi i = 0; i < i_bound; ++i) {
+        idi i_q_start = end_queue + offsets_queue[i];
+        idi i_q_bound;
+        if (i_bound - 1 != i) {
+            i_q_bound = end_queue + offsets_queue[i + 1];
+        } else {
+            i_q_bound = end_queue + num_elements;
+        }
+        if (i_q_start == i_q_bound) {
+// If the group has no elements to be added, then continue to the next group
+            continue;
+        }
+        idi end_tmp = offsets_tmp_queue[i];
+        for (idi i_q = i_q_start; i_q < i_q_bound; ++i_q) {
+            queue[i_q] = tmp_queue[end_tmp++];
+        }
+    }
+    end_queue += num_elements;
+}
+
+template<typename T, typename Int>
+inline void TS_enqueue(
+        std::vector<T> &queue,
+        Int &end_queue,
+        const T &e)
+{
+    volatile Int old_i = end_queue;
+    volatile Int new_i = old_i + 1;
+    while (!CAS(&end_queue, old_i, new_i)) {
+        old_i = end_queue;
+        new_i = old_i + 1;
+    }
+    queue[old_i] = e;
+}
 
 } // namespace PADO
 
