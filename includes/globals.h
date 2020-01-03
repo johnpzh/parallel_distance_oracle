@@ -122,52 +122,53 @@ public:
 // End Class WallTimer
 
 // Parallel Prefix Sum
-inline idi prefix_sum_for_offsets(
-        std::vector<idi> &offsets)
+template<typename Int>
+inline Int prefix_sum_for_offsets(
+        std::vector<Int> &offsets)
 {
-    idi size_offsets = offsets.size();
+    size_t size_offsets = offsets.size();
     if (1 == size_offsets) {
-        idi tmp = offsets[0];
+        Int tmp = offsets[0];
         offsets[0] = 0;
         return tmp;
     } else if (size_offsets < 2048) {
-        idi offset_sum = 0;
-        idi size = size_offsets;
-        for (idi i = 0; i < size; ++i) {
-            idi tmp = offsets[i];
+        Int offset_sum = 0;
+        size_t size = size_offsets;
+        for (size_t i = 0; i < size; ++i) {
+            Int tmp = offsets[i];
             offsets[i] = offset_sum;
             offset_sum += tmp;
         }
         return offset_sum;
     } else {
         // Parallel Prefix Sum, based on Guy E. Blelloch's Prefix Sums and Their Applications
-        idi last_element = offsets[size_offsets - 1];
+        Int last_element = offsets[size_offsets - 1];
         //	idi size = 1 << ((idi) log2(size_offsets - 1) + 1);
-        idi size = 1 << ((idi) log2(size_offsets));
+        size_t size = 1 << ((size_t) log2(size_offsets));
         //	std::vector<idi> nodes(size, 0);
-        idi tmp_element = offsets[size - 1];
+        Int tmp_element = offsets[size - 1];
         //#pragma omp parallel for
         //	for (idi i = 0; i < size_offsets; ++i) {
         //		nodes[i] = offsets[i];
         //	}
 
         // Up-Sweep (Reduce) Phase
-        idi log2size = log2(size);
-        for (idi d = 0; d < log2size; ++d) {
-            idi by = 1 << (d + 1);
+        Int log2size = log2(size);
+        for (Int d = 0; d < log2size; ++d) {
+            Int by = 1 << (d + 1);
 #pragma omp parallel for
-            for (idi k = 0; k < size; k += by) {
+            for (size_t k = 0; k < size; k += by) {
                 offsets[k + (1 << (d + 1)) - 1] += offsets[k + (1 << d) - 1];
             }
         }
 
         // Down-Sweep Phase
         offsets[size - 1] = 0;
-        for (idi d = log2(size) - 1; d != (idi) -1; --d) {
-            idi by = 1 << (d + 1);
+        for (Int d = log2size - 1; d != (Int) -1; --d) {
+            Int by = 1 << (d + 1);
 #pragma omp parallel for
-            for (idi k = 0; k < size; k += by) {
-                idi t = offsets[k + (1 << d) - 1];
+            for (size_t k = 0; k < size; k += by) {
+                Int t = offsets[k + (1 << d) - 1];
                 offsets[k + (1 << d) - 1] = offsets[k + (1 << (d + 1)) - 1];
                 offsets[k + (1 << (d + 1)) - 1] += t;
             }
@@ -178,9 +179,9 @@ inline idi prefix_sum_for_offsets(
         //		offsets[i] = nodes[i];
         //	}
         if (size != size_offsets) {
-            idi tmp_sum = offsets[size - 1] + tmp_element;
-            for (idi i = size; i < size_offsets; ++i) {
-                idi t = offsets[i];
+            Int tmp_sum = offsets[size - 1] + tmp_element;
+            for (size_t i = size; i < size_offsets; ++i) {
+                Int t = offsets[i];
                 offsets[i] = tmp_sum;
                 tmp_sum += t;
             }
@@ -189,27 +190,95 @@ inline idi prefix_sum_for_offsets(
         return offsets[size_offsets - 1] + last_element;
     }
 }
+//// Parallel Prefix Sum
+//inline idi prefix_sum_for_offsets(
+//        std::vector<idi> &offsets)
+//{
+//    idi size_offsets = offsets.size();
+//    if (1 == size_offsets) {
+//        idi tmp = offsets[0];
+//        offsets[0] = 0;
+//        return tmp;
+//    } else if (size_offsets < 2048) {
+//        idi offset_sum = 0;
+//        idi size = size_offsets;
+//        for (idi i = 0; i < size; ++i) {
+//            idi tmp = offsets[i];
+//            offsets[i] = offset_sum;
+//            offset_sum += tmp;
+//        }
+//        return offset_sum;
+//    } else {
+//        // Parallel Prefix Sum, based on Guy E. Blelloch's Prefix Sums and Their Applications
+//        idi last_element = offsets[size_offsets - 1];
+//        //	idi size = 1 << ((idi) log2(size_offsets - 1) + 1);
+//        idi size = 1 << ((idi) log2(size_offsets));
+//        //	std::vector<idi> nodes(size, 0);
+//        idi tmp_element = offsets[size - 1];
+//        //#pragma omp parallel for
+//        //	for (idi i = 0; i < size_offsets; ++i) {
+//        //		nodes[i] = offsets[i];
+//        //	}
+//
+//        // Up-Sweep (Reduce) Phase
+//        idi log2size = log2(size);
+//        for (idi d = 0; d < log2size; ++d) {
+//            idi by = 1 << (d + 1);
+//#pragma omp parallel for
+//            for (idi k = 0; k < size; k += by) {
+//                offsets[k + (1 << (d + 1)) - 1] += offsets[k + (1 << d) - 1];
+//            }
+//        }
+//
+//        // Down-Sweep Phase
+//        offsets[size - 1] = 0;
+//        for (idi d = log2(size) - 1; d != (idi) -1; --d) {
+//            idi by = 1 << (d + 1);
+//#pragma omp parallel for
+//            for (idi k = 0; k < size; k += by) {
+//                idi t = offsets[k + (1 << d) - 1];
+//                offsets[k + (1 << d) - 1] = offsets[k + (1 << (d + 1)) - 1];
+//                offsets[k + (1 << (d + 1)) - 1] += t;
+//            }
+//        }
+//
+//        //#pragma omp parallel for
+//        //	for (idi i = 0; i < size_offsets; ++i) {
+//        //		offsets[i] = nodes[i];
+//        //	}
+//        if (size != size_offsets) {
+//            idi tmp_sum = offsets[size - 1] + tmp_element;
+//            for (idi i = size; i < size_offsets; ++i) {
+//                idi t = offsets[i];
+//                offsets[i] = tmp_sum;
+//                tmp_sum += t;
+//            }
+//        }
+//
+//        return offsets[size_offsets - 1] + last_element;
+//    }
+//}
 
 // Parallelly collect elements of tmp_queue into the queue.
-template<typename T>
+template<typename T, typename Int>
 inline void collect_into_queue(
 //					std::vector<idi> &tmp_queue,
-        std::vector <T> &tmp_queue,
-        std::vector <idi> &offsets_tmp_queue, // the locations in tmp_queue for writing from tmp_queue
-        std::vector <idi> &offsets_queue, // the locations in queue for writing into queue.
-        idi num_elements, // total number of elements which need to be added from tmp_queue to queue
+        std::vector<T> &tmp_queue,
+        std::vector<Int> &offsets_tmp_queue, // the locations for reading tmp_queue
+        std::vector<Int> &offsets_queue, // the locations for writing queue.
+        const Int num_elements, // total number of elements which need to be added from tmp_queue to queue
 //					std::vector<idi> &queue,
-        std::vector <T> &queue,
-        idi &end_queue)
+        std::vector<T> &queue,
+        Int &end_queue)
 {
     if (0 == num_elements) {
         return;
     }
-    idi i_bound = offsets_tmp_queue.size();
+    size_t i_bound = offsets_tmp_queue.size();
 #pragma omp parallel for
-    for (idi i = 0; i < i_bound; ++i) {
-        idi i_q_start = end_queue + offsets_queue[i];
-        idi i_q_bound;
+    for (size_t i = 0; i < i_bound; ++i) {
+        Int i_q_start = end_queue + offsets_queue[i];
+        Int i_q_bound;
         if (i_bound - 1 != i) {
             i_q_bound = end_queue + offsets_queue[i + 1];
         } else {
@@ -219,8 +288,8 @@ inline void collect_into_queue(
 // If the group has no elements to be added, then continue to the next group
             continue;
         }
-        idi end_tmp = offsets_tmp_queue[i];
-        for (idi i_q = i_q_start; i_q < i_q_bound; ++i_q) {
+        Int end_tmp = offsets_tmp_queue[i];
+        for (Int i_q = i_q_start; i_q < i_q_bound; ++i_q) {
             queue[i_q] = tmp_queue[end_tmp++];
         }
     }
