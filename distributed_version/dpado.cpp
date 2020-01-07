@@ -11,7 +11,9 @@
 #include "dgraph.h"
 //#include "dpado.h"
 
-#include "dpado.202001011226.openmp.h"
+//#include "dpado.202001011226.openmp.h"
+#include "dpado.202001060737.multiple_rounds_for_memory.h"
+//#include "dpado.202001071517.push_back_ShortIndex.h"
 
 using namespace PADO;
 
@@ -26,16 +28,34 @@ void dpado(char *argv[])
 	for (int i = 0; i < num_runs; ++i) {
 //        DistBVCPLL<1024, 50> *dist_bvcpll = new DistBVCPLL<1024, 50>(G); // batch size 1024, bit-parallel size 50.
 //        delete dist_bvcpll;
-		double mem_for_graph;
-		double memtotal;
-		{// Get the memory foot print.
-			double memfree;
-			Utils::system_memory(memtotal, memfree);
-			mem_for_graph = memtotal - memfree;
-		}
-		{// OpenMP Version
-		    NUM_THREADS = 20;
-		    omp_set_num_threads(NUM_THREADS);
+//		double mem_for_graph;
+//		double memtotal;
+//		{// Get the memory foot print.
+//			double memfree;
+//			Utils::system_memory(memtotal, memfree);
+//			mem_for_graph = memtotal - memfree;
+//		}
+//        {
+//            NUM_THREADS = 20;
+//            omp_set_num_threads(NUM_THREADS);
+//            DistBVCPLL<128> *dist_bvcpll = new DistBVCPLL<128>(G); // batch size 128, bit-parallel size 50.
+//            delete dist_bvcpll;
+//        }
+//        {
+//            NUM_THREADS = 20;
+//            omp_set_num_threads(NUM_THREADS);
+//            DistBVCPLL<256> *dist_bvcpll = new DistBVCPLL<256>(G); // batch size 128, bit-parallel size 50.
+//            delete dist_bvcpll;
+//        }
+//        {
+//            NUM_THREADS = 20;
+//            omp_set_num_threads(NUM_THREADS);
+//            DistBVCPLL<512> *dist_bvcpll = new DistBVCPLL<512>(G); // batch size 128, bit-parallel size 50.
+//            delete dist_bvcpll;
+//        }
+        {// OpenMP Version
+            NUM_THREADS = 24;
+            omp_set_num_threads(NUM_THREADS);
 			DistBVCPLL<1024> *dist_bvcpll = new DistBVCPLL<1024>(G); // batch size 1024, bit-parallel size 50.
 //			DistBVCPLL<1024> dist_bvcpll(G); // batch size 1024, bit-parallel size 50.
             delete dist_bvcpll;
