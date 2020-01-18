@@ -7,13 +7,19 @@
 #include <stdlib.h>
 #include <string>
 #include <fstream>
+#include <numeric>
+#include <algorithm>
 #include "dglobals.h"
 #include "dgraph.h"
 //#include "dpado.h"
 
 //#include "dpado.202001011226.openmp.h"
-#include "dpado.202001060737.multiple_rounds_for_memory.h"
+//#include "dpado.202001060737.multiple_rounds_for_memory.h"
 //#include "dpado.202001071517.push_back_ShortIndex.h"
+//#include "dpado.202001080943.clean_up_labels.h"
+//#include "dpado.202001130915.no_batch_id.h"
+//#include "dpado.202001141642.batch_number_limit.h"
+#include "dpado.202001172040.local_minimum_reduction.h"
 
 using namespace PADO;
 
@@ -24,7 +30,7 @@ void dpado(char *argv[])
 	printf("host_id: %u num_masters: %u /%u %.2f%% num_edges_local %lu /%lu %.2f%%\n",
 	        G.host_id, G.num_masters, G.num_v, 100.0 * G.num_masters / G.num_v, G.num_edges_local, 2 * G.num_e, 100.0 * G.num_edges_local / (2 * G.num_e));//test
 
-    int num_runs = 1;
+    int num_runs = 4;
 	for (int i = 0; i < num_runs; ++i) {
 //        DistBVCPLL<1024, 50> *dist_bvcpll = new DistBVCPLL<1024, 50>(G); // batch size 1024, bit-parallel size 50.
 //        delete dist_bvcpll;
@@ -54,8 +60,9 @@ void dpado(char *argv[])
 //            delete dist_bvcpll;
 //        }
         {// OpenMP Version
-            NUM_THREADS = 24;
+            NUM_THREADS = 28;
             omp_set_num_threads(NUM_THREADS);
+
 			DistBVCPLL<1024> *dist_bvcpll = new DistBVCPLL<1024>(G); // batch size 1024, bit-parallel size 50.
 //			DistBVCPLL<1024> dist_bvcpll(G); // batch size 1024, bit-parallel size 50.
             delete dist_bvcpll;

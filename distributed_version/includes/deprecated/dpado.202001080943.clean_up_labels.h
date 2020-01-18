@@ -60,13 +60,23 @@ private:
         std::vector<DistanceIndexType> distances; // Distance info
         std::vector<VertexID> vertices; // Vertices in the label, presented as temporary ID
 
-        size_t size() const
+        size_t get_size_in_bytes() const
         {
             return sizeof(bp_dist) +
                     sizeof(bp_sets) +
                     batches.size() * sizeof(Batch) +
                     distances.size() * sizeof(DistanceIndexType) +
                     vertices.size() * sizeof(VertexID);
+        }
+
+        void clean_all_indices()
+        {
+            std::vector<Batch>().swap(batches);
+            std::vector<DistanceIndexType>().swap(distances);
+            std::vector<VertexID>().swap(vertices);
+//            batches.swap(std::vector<Batch>());
+//            distances.swap(std::vector<DistanceIndexType>());
+//            vertices.swap(std::vector<VertexID>());
         }
 
     }; //__attribute__((aligned(64)));
@@ -365,12 +375,16 @@ private:
 //        assert(root >= 0 && root < num_hosts);
 //        return (root + hop + num_hosts) % num_hosts;
 //    }
+    void dump_labels(
+            const DistGraph &G,
+            const VertexID roots_start,
+            const VertexID roots_size);
 
-    size_t get_index_size()
+    size_t get_index_size() const
     {
         size_t bytes = 0;
         for (VertexID v_i = 0; v_i < num_masters; ++v_i) {
-            bytes += L[v_i].size();
+            bytes += L[v_i].get_size_in_bytes();
         }
         return bytes;
     }
@@ -506,6 +520,11 @@ DistBVCPLL(
                 once_candidated_queue,
                 end_once_candidated_queue,
                 once_candidated);
+
+        dump_labels(
+                G,
+                b_i * BATCH_SIZE,
+                BATCH_SIZE);
 //        exit(EXIT_SUCCESS); //test
     }
     if (remainer != 0) {
@@ -534,6 +553,11 @@ DistBVCPLL(
                 once_candidated_queue,
                 end_once_candidated_queue,
                 once_candidated);
+
+        dump_labels(
+                G,
+                b_i_bound * BATCH_SIZE,
+                remainer);
     }
     time_labeling += WallTimer::get_time_mark();
     //cache_miss.measure_stop();
@@ -3850,6 +3874,22 @@ batch_process(
 //            printf("host_id: %u resetting finished.\n", host_id);
 //        }
 //    }
+}
+
+template <VertexID BATCH_SIZE>
+inline void DistBVCPLL<BATCH_SIZE>::dump_labels(
+        const DistGraph &G,
+        const VertexID roots_start,
+        const VertexID roots_size)
+{
+    const VertexID roots_bound = roots_start + roots_size;
+    for (VertexID v_global = roots_start; v_global < roots_bound; ++v_global) {
+        if (G.get_master_host_id(v_global) != host_id) {
+            continue;
+        }
+        VertexID v_local = G.get_local_vertex_id(v_global);
+        L[v_local].clean_all_indices();
+    }
 }
 
 //// Sequential Version

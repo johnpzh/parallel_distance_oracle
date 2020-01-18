@@ -95,6 +95,7 @@ public:
     std::vector<VertexID> vertices_idx; // vertices indices
     std::vector<VertexID> out_edges; // out edges
     std::vector<VertexID> local_out_degrees; // out degrees based on local edges.
+    std::vector<bool> is_local_minimum; // flags of local minimum set
 
     DistGraph() = default;
     ~DistGraph() = default;
@@ -371,6 +372,9 @@ inline DistGraph::DistGraph(const char *input_filename)
         /////////////////////////////////////////////////
     }
 
+    {// local minimum set
+        is_local_minimum.resize(num_masters, true);
+    }
 //	printf("@%u host_id: %u received\n", __LINE__, host_id);//test
     // Build up local graph structure
     num_edges_local = num_edges_recv;
@@ -383,8 +387,16 @@ inline DistGraph::DistGraph(const char *input_filename)
         local_out_degrees[v_i] = bound_e_i;
         std::sort(edgelist_recv[v_i].rbegin(), edgelist_recv[v_i].rend()); // sort neighbors by ranks from low to high
         for (EdgeID e_i = 0; e_i < bound_e_i; ++e_i) {
-            out_edges[loc + e_i] = edgelist_recv[v_i][e_i];
-            ++test_in_degrees[get_local_vertex_id(edgelist_recv[v_i][e_i])];
+            VertexID tail = edgelist_recv[v_i][e_i];
+            out_edges[loc + e_i] = tail;
+            {// local minimum set
+                VertexID tail_local_id = get_local_vertex_id(tail);
+                if (is_local_minimum[tail_local_id] && tail < v_i) {
+                    // Tail is not a local minimum if it is high-ranked than any one of its neighbors.
+                    is_local_minimum[tail_local_id] = false;
+                }
+            }
+            ++test_in_degrees[get_local_vertex_id(tail)];
         }
         loc += bound_e_i;
     }
