@@ -480,15 +480,19 @@ void eliminate_vertices(char *argv[])
                     continue;
                 }
                 for (PADO::VertexID v_i = 0; v_i < size_r; ++v_i) {
-                    fv_in >> v_dump;
-                    is_redundant[v_dump] = 1;
+                    if (fv_in >> v_dump) {
+                        is_redundant[v_dump] = 1;
+                    } else {
+                        // In case the log is not complete on the last line.
+                        break;
+                    }
                 }
             }
         }
         std::vector<PADO::VertexID> redundants_queue(num_v);
         PADO::VertexID end_redundants_queue = 0;
 
-        for (PADO::VertexID a_v = start_v + 1; a_v < num_v; ++a_v) {
+        for (PADO::VertexID a_v = start_v; a_v < num_v; ++a_v) {
 //        for (PADO::VertexID a_v = 0; a_v < num_v; ++a_v) {
             if (is_redundant[a_v]) {
                 continue;
