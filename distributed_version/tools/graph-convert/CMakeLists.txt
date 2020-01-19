@@ -22,6 +22,27 @@ target_include_directories(
         "${PROJECT_SOURCE_DIR}/distributed_version/includes"
         "${PROJECT_SOURCE_DIR}/includes")
 
+target_compile_options(
+        remove_equivalent_vertices
+        PRIVATE
+#        -xCORE-AVX512
+        -march=native
+#        -ftree-vectorizer-verbose=5
+#        -fopt-info-vec-missed
+#        -fopt-info-vec-all
+#        -fopt-info-vec-optimized
+#        -march=skylake-avx512
+#        -march=broadwell
+#        -mavx512f
+#        -mavx512cd
+#        -mavx512bw
+#        -mavx512dq
+#        -mavx512vl
+#        -mavx2
+#        -mavx
+)
+
+
 # OpenMP
 target_compile_options(edgelist2binary PRIVATE "${OpenMP_CXX_FLAGS}")
 target_link_libraries(edgelist2binary PRIVATE OpenMP::OpenMP_CXX)
