@@ -488,7 +488,7 @@ void eliminate_vertices(char *argv[])
         std::vector<PADO::VertexID> redundants_queue(num_v);
         PADO::VertexID end_redundants_queue = 0;
 
-        for (PADO::VertexID a_v = start_v; a_v < num_v; ++a_v) {
+        for (PADO::VertexID a_v = start_v + 1; a_v < num_v; ++a_v) {
 //        for (PADO::VertexID a_v = 0; a_v < num_v; ++a_v) {
             if (is_redundant[a_v]) {
                 continue;
