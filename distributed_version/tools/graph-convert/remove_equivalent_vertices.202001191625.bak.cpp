@@ -21,6 +21,293 @@
 #include "globals.h"
 #include <omp.h>
 
+//bool are_equivalent(
+//        const PADO::VertexID a_v,
+//        const PADO::VertexID b_v,
+//        const std::vector<std::vector<PADO::VertexID> > &adjacency_list)
+//{
+//    if (adjacency_list[a_v].size() != adjacency_list[b_v].size()) {
+//        return false;
+//    }
+//    std::set<PADO::VertexID> a_set;
+//    std::set<PADO::VertexID> b_set;
+//
+//    // A
+//    a_set.insert(a_v);
+//    for (PADO::VertexID vn : adjacency_list[a_v]) {
+//        a_set.insert(vn);
+//    }
+//
+//    // B
+//    b_set.insert(b_v);
+//    for (PADO::VertexID vn : adjacency_list[b_v]) {
+//        b_set.insert(vn);
+//    }
+//
+//    return a_set == b_set;
+//}
+
+//void eliminate_vertices(char *input_filename, char *output_filename)
+//{
+//    double time_running = -PADO::WallTimer::get_time_mark();
+//
+//    std::ifstream fin(input_filename);
+//    if (!fin.is_open()) {
+//        fprintf(stderr,
+//                "Error: cannot open file %s\n", input_filename);
+//        exit(EXIT_FAILURE);
+//    }
+//
+//    std::ofstream fout(output_filename);
+//    if(!fout.is_open()) {
+//        fprintf(stderr,
+//                "Error: cannot create file %s\n", output_filename);
+//        exit(EXIT_FAILURE);
+//    }
+//
+//    std::vector<bool> is_redundant;
+//    {
+//        // Read the graph.
+//        // Get the num_v at first.
+//        PADO::VertexID num_v = 0;
+//        PADO::EdgeID num_e = 0;
+//        std::string line;
+//        while (std::getline(fin, line)) {
+//            if (line[0] == '#' || line[0] == '%' || line[0] == '+' || line[0] == '-') {
+//                continue;
+//            }
+//            std::istringstream iss(line);
+//            PADO::VertexID head;
+//            PADO::VertexID tail;
+//            iss >> head >> tail;
+//            num_v = std::max(num_v, std::max(head, tail) + 1);
+//            ++num_e;
+//        }
+//        printf("intput: num_v: ");
+//        std::cout << num_v;
+//        printf(" num_e: ");
+//        std::cout << num_e << std::endl;
+//
+//        // Read the graph again, get the adjacency_list.
+//        fin.clear();
+//        fin.seekg(0);
+//        std::vector<std::vector<PADO::VertexID> > adjacency_list(num_v);
+//        while (std::getline(fin, line)) {
+//            if (line[0] == '#' || line[0] == '%' || line[0] == '+' || line[0] == '-') {
+//                continue;
+//            }
+//            std::istringstream iss(line);
+//            PADO::VertexID head;
+//            PADO::VertexID tail;
+//            iss >> head >> tail;
+//            adjacency_list[head].push_back(tail);
+//            adjacency_list[tail].push_back(head);
+//        }
+//
+//        // Check every vertex if it is redundant.
+//        is_redundant.resize(num_v, false);
+//        for (PADO::VertexID a_v = 0; a_v < num_v; ++a_v) {
+//            if (is_redundant[a_v]) {
+//                continue;
+//            }
+//            // Prepare a_v's set;
+//            std::set<PADO::VertexID> a_set;
+//            a_set.insert(a_v);
+//            for (PADO::VertexID vn : adjacency_list[a_v]) {
+//                a_set.insert(vn);
+//            }
+////#pragma omp parallel for
+//            for (PADO::VertexID b_v = a_v + 1; b_v < num_v; ++b_v) {
+//                if (is_redundant[b_v] || adjacency_list[a_v].size() != adjacency_list[b_v].size()) {
+//                    continue;
+//                }
+//                // Check b_v itself.
+//                if (a_set.find(b_v) == a_set.end()) {
+//                    continue;
+//                }
+//                // Check b_v's neighbors.
+//                bool all_equal = true;
+//                for (const PADO::VertexID vn : adjacency_list[b_v]) {
+////                PADO::VertexID b_outdegree = adjacency_list[b_v].size();
+////                for (PADO::VertexID v_i = 0; v_i < b_outdegree; ++v_i) {
+////                    PADO::VertexID vn = adjacency_list[b_v][v_i];
+//                    if (a_set.find(vn) == a_set.end()) {
+//                        all_equal = false;
+//                        break;
+//                    }
+//                }
+//                if (all_equal) {
+//                    is_redundant[b_v] = true;
+//                }
+//            }
+//        }
+//    }
+//
+//    {
+//        // Read the graph again, do the reduction.
+//        std::vector< std::pair<PADO::VertexID, PADO::VertexID> > edge_list;
+//        PADO::VertexID num_v = 0;
+//        PADO::EdgeID num_e = 0;
+//        fin.clear();
+//        fin.seekg(0);
+//        std::string line;
+//        while (std::getline(fin, line)) {
+//            if (line[0] == '#' || line[0] == '%' || line[0] == '+' || line[0] == '-') {
+//                continue;
+//            }
+//            std::istringstream iss(line);
+//            PADO::VertexID head;
+//            PADO::VertexID tail;
+//            iss >> head >> tail;
+//            if (is_redundant[head] || is_redundant[tail]) {
+//                continue;
+//            }
+//            num_v = std::max(num_v, std::max(head, tail) + 1);
+//            ++num_e;
+//            edge_list.emplace_back(head, tail);
+//        }
+//        std::cout << "output: num_v: " << num_v << " num_e: " << num_e << std::endl;
+//
+//        // Write into the binary file.
+//        fout.write(reinterpret_cast<char *>(&num_v), sizeof(num_v));
+//        fout.write(reinterpret_cast<char *>(&num_e), sizeof(num_e));
+//        for (const auto &edge : edge_list) {
+//            PADO::VertexID head = edge.first;
+//            PADO::VertexID tail = edge.second;
+//            fout.write(reinterpret_cast<char *>(&head), sizeof(head));
+//            fout.write(reinterpret_cast<char *>(&tail), sizeof(tail));
+//        }
+//    }
+//
+//    time_running += PADO::WallTimer::get_time_mark();
+//    printf("running_time(s.): %f\n", time_running);
+//}
+
+//// 20200118-2319
+//void eliminate_vertices(char *input_filename, char *output_filename)
+//{
+//    double time_running = -PADO::WallTimer::get_time_mark();
+//
+//    std::ifstream fin(input_filename);
+//    if (!fin.is_open()) {
+//        fprintf(stderr,
+//                "Error: cannot open file %s\n", input_filename);
+//        exit(EXIT_FAILURE);
+//    }
+//
+//    std::ofstream fout(output_filename);
+//    if(!fout.is_open()) {
+//        fprintf(stderr,
+//                "Error: cannot create file %s\n", output_filename);
+//        exit(EXIT_FAILURE);
+//    }
+//
+//    std::vector<uint8_t> is_redundant;
+//    {
+//        // Read the graph.
+//        // Get the num_v at first.
+//        PADO::VertexID num_v = 0;
+//        PADO::EdgeID num_e = 0;
+//        std::string line;
+//        while (std::getline(fin, line)) {
+//            if (line[0] == '#' || line[0] == '%' || line[0] == '+' || line[0] == '-') {
+//                continue;
+//            }
+//            std::istringstream iss(line);
+//            PADO::VertexID head;
+//            PADO::VertexID tail;
+//            iss >> head >> tail;
+//            num_v = std::max(num_v, std::max(head, tail) + 1);
+//            ++num_e;
+//        }
+//        printf("intput: num_v: ");
+//        std::cout << num_v;
+//        printf(" num_e: ");
+//        std::cout << num_e << std::endl;
+//
+//        // Read the graph again, get the adjacency_list.
+//        fin.clear();
+//        fin.seekg(0);
+//        std::vector< std::set<PADO::VertexID> > adjacency_list(num_v);
+//        for (PADO::VertexID v_id = 0; v_id < num_v; ++v_id) {
+//            adjacency_list[v_id].insert(v_id);
+//        }
+//        while (std::getline(fin, line)) {
+//            if (line[0] == '#' || line[0] == '%' || line[0] == '+' || line[0] == '-') {
+//                continue;
+//            }
+//            std::istringstream iss(line);
+//            PADO::VertexID head;
+//            PADO::VertexID tail;
+//            iss >> head >> tail;
+//            adjacency_list[head].insert(tail);
+//            adjacency_list[tail].insert(head);
+//        }
+//
+//        // Check every vertex if it is redundant.
+//        is_redundant.resize(num_v, 0);
+//        for (PADO::VertexID a_v = 0; a_v < num_v; ++a_v) {
+//            if (is_redundant[a_v]) {
+//                continue;
+//            }
+//            const auto &a_set = adjacency_list[a_v];
+//#pragma omp parallel for
+//            for (PADO::VertexID b_v = a_v + 1; b_v < num_v; ++b_v) {
+//                if (is_redundant[b_v]) {
+//                    continue;
+//                }
+//                const auto &b_set = adjacency_list[b_v];
+//                if (a_set.size() != b_set.size()) {
+//                    continue;
+//                }
+//                if (a_set == b_set) {
+//                    is_redundant[b_v] = 1;
+//                }
+//            }
+//        }
+//    }
+//
+//    printf("Writing...\n");
+//    {
+//        // Read the graph again, do the reduction.
+//        std::vector< std::pair<PADO::VertexID, PADO::VertexID> > edge_list;
+//        PADO::VertexID num_v = 0;
+//        PADO::EdgeID num_e = 0;
+//        fin.clear();
+//        fin.seekg(0);
+//        std::string line;
+//        while (std::getline(fin, line)) {
+//            if (line[0] == '#' || line[0] == '%' || line[0] == '+' || line[0] == '-') {
+//                continue;
+//            }
+//            std::istringstream iss(line);
+//            PADO::VertexID head;
+//            PADO::VertexID tail;
+//            iss >> head >> tail;
+//            if (is_redundant[head] || is_redundant[tail]) {
+//                continue;
+//            }
+//            num_v = std::max(num_v, std::max(head, tail) + 1);
+//            ++num_e;
+//            edge_list.emplace_back(head, tail);
+//        }
+//        std::cout << "output: num_v: " << num_v << " num_e: " << num_e << std::endl;
+//
+//        // Write into the binary file.
+//        fout.write(reinterpret_cast<char *>(&num_v), sizeof(num_v));
+//        fout.write(reinterpret_cast<char *>(&num_e), sizeof(num_e));
+//        for (const auto &edge : edge_list) {
+//            PADO::VertexID head = edge.first;
+//            PADO::VertexID tail = edge.second;
+//            fout.write(reinterpret_cast<char *>(&head), sizeof(head));
+//            fout.write(reinterpret_cast<char *>(&tail), sizeof(tail));
+//        }
+//    }
+//
+//    time_running += PADO::WallTimer::get_time_mark();
+//    printf("running_time(s.): %f\n", time_running);
+//}
+
 inline bool are_equivalent(
         const std::vector<PADO::VertexID> &a_list,
         const std::vector<PADO::VertexID> &b_list)
@@ -120,9 +407,8 @@ void eliminate_vertices(char *argv[])
     std::ifstream fv_in(log_filename);
     std::fstream fv_out(log_filename, std::ios::app);
 
-    PADO::VertexID num_v_old;
     std::vector<uint8_t> is_redundant;
-    {// Reduction
+    {
         // Read the graph.
         // Get the num_v at first.
         PADO::VertexID num_v = 0;
@@ -139,7 +425,6 @@ void eliminate_vertices(char *argv[])
             num_v = std::max(num_v, std::max(head, tail) + 1);
             ++num_e;
         }
-        num_v_old = num_v;
         printf("intput: num_v: ");
         std::cout << num_v;
         printf(" num_e: ");
@@ -149,8 +434,10 @@ void eliminate_vertices(char *argv[])
         fin.clear();
         fin.seekg(0);
         std::vector< std::vector<PADO::VertexID> > adjacency_list(num_v);
+//        std::vector< std::set<PADO::VertexID> > adjacency_list(num_v);
         for (PADO::VertexID v_id = 0; v_id < num_v; ++v_id) {
             adjacency_list[v_id].push_back(v_id);
+//            adjacency_list[v_id].insert(v_id);
         }
         while (std::getline(fin, line)) {
             if (line[0] == '#' || line[0] == '%' || line[0] == '+' || line[0] == '-') {
@@ -162,6 +449,8 @@ void eliminate_vertices(char *argv[])
             iss >> head >> tail;
             adjacency_list[head].push_back(tail);
             adjacency_list[tail].push_back(head);
+//            adjacency_list[head].insert(tail);
+//            adjacency_list[tail].insert(head);
         }
         {// sort out edges
 #pragma omp parallel for
@@ -297,17 +586,6 @@ void eliminate_vertices(char *argv[])
         printf("time_check(s.): %f\n", time_check);
     }
 
-    std::vector<PADO::VertexID> new_ids(num_v_old);
-    {// Map vertices to new id, therefore shrink the number of vertices.
-        PADO::VertexID new_id = 0;
-        for (PADO::VertexID v_id = 0; v_id < num_v_old; ++v_id) {
-            if (is_redundant[v_id]) {
-                continue;
-            }
-            new_ids[v_id] = new_id++;
-        }
-    }
-
     printf("Writing...\n");
     {
         // Read the graph again, do the reduction.
@@ -328,14 +606,9 @@ void eliminate_vertices(char *argv[])
             if (is_redundant[head] || is_redundant[tail]) {
                 continue;
             }
-            PADO::VertexID head_new = new_ids[head];
-            PADO::VertexID tail_new = new_ids[tail];
-            num_v = std::max(num_v, std::max(head_new, tail_new) + 1);
+            num_v = std::max(num_v, std::max(head, tail) + 1);
             ++num_e;
-            edge_list.emplace_back(head_new, tail_new);
-//            num_v = std::max(num_v, std::max(head, tail) + 1);
-//            ++num_e;
-//            edge_list.emplace_back(head, tail);
+            edge_list.emplace_back(head, tail);
         }
         std::cout << "output: num_v: " << num_v << " num_e: " << num_e << std::endl;
 
