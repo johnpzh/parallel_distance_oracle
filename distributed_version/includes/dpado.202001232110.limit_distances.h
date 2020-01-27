@@ -306,6 +306,21 @@ private:
 //            const std::vector<BPLabelType> &bp_labels_table,
 //            const std::vector<uint8_t> &used_bp_roots,
 //            UnweightedDist iter);
+    inline void schedule_label_inserting_para(
+            const DistGraph &G,
+            const VertexID roots_start,
+            const VertexID roots_size,
+            std::vector<ShortIndex> &short_index,
+            const std::vector< std::vector<UnweightedDist> > &dist_table,
+            const std::vector<VertexID> &got_candidates_queue,
+            const VertexID start_got_candidates_queue,
+            const VertexID size_got_candidates_queue,
+            std::vector<uint8_t> &got_candidates,
+            std::vector<VertexID> &active_queue,
+            VertexID &end_active_queue,
+            std::vector<uint8_t> &is_active,
+            std::vector< std::pair<VertexID, VertexID> > &buffer_send,
+            const VertexID iter);
     inline bool distance_query(
             VertexID cand_root_id,
             VertexID v_id,
@@ -415,6 +430,7 @@ private:
 //	TotalInstructsExe bp_labeling_ins_count;
 //	TotalInstructsExe bp_checking_ins_count;
 //	TotalInstructsExe dist_query_ins_count;
+//    uint64_t caller_line = 0;
     // End test
 
 
@@ -498,13 +514,13 @@ DistBVCPLL(
 //                break;
 //            }
 //        }
-        {
-//#ifdef DEBUG_MESSAGES_ON
-            if (0 == host_id) {
-                printf("b_i: %u\n", b_i);//test
-            }
-//#endif
-        }
+////        {
+//////#ifdef DEBUG_MESSAGES_ON
+//            if (0 == host_id) {
+//                printf("b_i: %u\n", b_i);//test
+//            }
+//////#endif
+////        }
 
         batch_process(
                 G,
@@ -529,13 +545,13 @@ DistBVCPLL(
 //        exit(EXIT_SUCCESS); //test
     }
     if (remainer != 0) {
-        {
-//#ifdef DEBUG_MESSAGES_ON
-            if (0 == host_id) {
-                printf("b_i: %u\n", b_i_bound);//test
-            }
-//#endif
-        }
+//        {
+////#ifdef DEBUG_MESSAGES_ON
+//            if (0 == host_id) {
+//                printf("b_i: %u\n", b_i_bound);//test
+//            }
+////#endif
+//        }
         batch_process(
                 G,
 //                b_i_bound,
@@ -563,7 +579,7 @@ DistBVCPLL(
     // Test
     setlocale(LC_NUMERIC, "");
     if (0 == host_id) {
-        printf("BATCH_SIZE: %u\n", BATCH_SIZE);
+        printf("BATCH_SIZE: %u ", BATCH_SIZE);
         printf("BP_Size: %u\n", BITPARALLEL_SIZE);
     }
 
@@ -708,8 +724,10 @@ DistBVCPLL(
     MPI_Barrier(MPI_COMM_WORLD);
     if (0 == host_id) {
         printf("num_hosts: %d "
+               "num_threads: %d "
                "Global_labeling_time: %.2f seconds\n",
                num_hosts,
+               NUM_THREADS,
                global_time_labeling);
     }
     // End test
@@ -1087,6 +1105,11 @@ bit_parallel_labeling(
         VertexID global_num_actives = 1;
         UnweightedDist d = 0;
         while (global_num_actives) {
+            {// Limit the distance
+                if (d > 7) {
+                    break;
+                }
+            }
 //#ifdef DEBUG_MESSAGES_ON
 //            {//test
 //                if (0 == host_id) {
@@ -1730,6 +1753,13 @@ initialization(
         for (VertexID r_global = roots_start; r_global < roots_bound; ++r_global) {
             if (G.get_master_host_id(r_global) == host_id && !used_bp_roots[r_global]) {
                 roots_master_local.push_back(G.get_local_vertex_id(r_global));
+//                {//test
+//                    if (1024 == roots_start && 7 == host_id && 31600 == *roots_master_local.rbegin()) {
+//                        printf("S0.0 host_id: %d "
+//                               "31600 YES!\n",
+//                               host_id);
+//                    }
+//                }
             }
         }
         size_roots_master_local = roots_master_local.size();
@@ -2099,13 +2129,73 @@ initialization(
             for (VertexID i_r = 0; i_r < size_roots_master_local; ++i_r) {
                 VertexID r_local = roots_master_local[i_r];
                 active_queue[i_r] = r_local;
+//                {//test
+//                    if (1024 == roots_start && 7 == host_id && 31600 == r_local) {
+//                        printf("S0.0 host_id: %d "
+//                               "31600 YES!\n",
+//                               host_id);
+//                    }
+//                    if (1024 == roots_start && 7 == host_id && 0 == i_r) {
+//                        printf("S0.0 host_id: %d "
+//                               "active_queue[%u]: %u\n",
+//                               host_id,
+//                               i_r,
+//                               active_queue[i_r]);
+//                    }
+//                }
             }
             end_active_queue = size_roots_master_local;
         } else {
             for (VertexID r_local : roots_master_local) {
                 active_queue[end_active_queue++] = r_local;
+//                {//test
+//                    if (1024 == roots_start && 7 == host_id && 31600 == r_local) {
+//                        printf("S0.0 host_id: %d "
+//                               "31600 YES!\n",
+//                               host_id);
+//                    }
+//                }
+            }
+            {
+
             }
         }
+//        {//test
+//            if (1024 == roots_start && 7 == host_id) {
+//                for (VertexID i_r = 0; i_r < end_active_queue; ++i_r) {
+//                    VertexID r_local = active_queue[i_r];
+//                    if (r_local == 31600) {
+//                        printf("S0.0 host_id: %d "
+//                               "L:%u "
+//                               "i_r: %u "
+//                               "end_active_queue: %u "
+//                               "roots_master_local.size(): %lu "
+//                               "size_roots_master_local: %u "
+//                               "active_queue[%u]: %u "
+//                               "roots_master_local[%u]: %u "
+//                               "31600 YES!\n",
+//                               host_id,
+//                               __LINE__,
+//                               i_r,
+//                               end_active_queue,
+//                               roots_master_local.size(),
+//                               size_roots_master_local,
+//                               i_r, active_queue[i_r],
+//                               i_r, roots_master_local[i_r]);
+//                    }
+//                }
+//                printf("S0.0 host_id: %d "
+//                       "L[31600].distances.size(): %lu "
+//                       "L[21956].distances.size(): %lu "
+//                       "L[30711].distances.size(): %lu "
+//                       "L[31113].distances.size(): %lu\n",
+//                       host_id,
+//                       L[31600].distances.size(),
+//                       L[21956].distances.size(),
+//                       L[30711].distances.size(),
+//                       L[31113].distances.size());
+//            }
+//        }
         // Get the global number of active vertices;
 //        message_time -= WallTimer::get_time_mark();
         MPI_Allreduce(&end_active_queue,
@@ -2440,12 +2530,28 @@ schedule_label_pushing_para(
                                                 //.first: Vertex ID
                                                 //.second: size of labels
     std::vector<VertexID> buffer_send_labels;
+//    {//test
+//        if (1024 == roots_start && 7 == host_id) {
+//            printf("S1.0 host_id: %d local_size: %u\n", host_id, local_size);
+//        }
+//    }
     if (local_size) {
         const VertexID start_active_queue = global_start;
         const VertexID size_active_queue = global_size <= local_size ?
                                             global_size :
                                             local_size;
         const VertexID bound_active_queue = start_active_queue + size_active_queue;
+
+//        {//test
+//            if (1024 == roots_start && 7 == host_id) {
+//                printf("S1.0 host_id: %d "
+//                       "start_active_queue: %u "
+//                       "size_active_queue: %u\n",
+//                       host_id,
+//                       start_active_queue,
+//                       size_active_queue);
+//            }
+//        }
 
         buffer_send_indices.resize(size_active_queue);
         // Prepare offset for inserting
@@ -2455,9 +2561,27 @@ schedule_label_pushing_para(
             VertexID v_head_local = active_queue[i_q];
             is_active[v_head_local] = 0; // reset is_active
             const IndexType &Lv = L[v_head_local];
+//            {//
+//                if (1024 == roots_start && 7 == host_id) {
+//                    printf("S1.0 host_id: %d "
+//                           "i_q: %u "
+//                           "L[%u].distances.size(): %lu \n",
+//                           host_id,
+//                           i_q,
+//                           v_head_local, Lv.distances.size());
+//                }
+//            }
             offsets_buffer_locs[i_q - start_active_queue] = Lv.distances.rbegin()->size;
         }
         EdgeID size_buffer_send_labels = PADO::prefix_sum_for_offsets(offsets_buffer_locs);
+//        {//test
+//            if (1024 == roots_start && 7 == host_id) {
+//                printf("S1.0 host_id: %d "
+//                       "size_buffer_send_labels: %lu \n",
+//                       host_id,
+//                       size_buffer_send_labels);
+//            }
+//        }
         try {
             buffer_send_labels.resize(size_buffer_send_labels);
         }
@@ -2478,6 +2602,15 @@ schedule_label_pushing_para(
                    memfree / 1024);
             exit(1);
         }
+
+//        {//test
+//            if (1024 == roots_start && 7 == host_id) {
+//                printf("S1.0 host_id: %d "
+//                       "buffer_send_labels.size(): %lu \n",
+//                       host_id,
+//                       buffer_send_labels.size());
+//            }
+//        }
 
         // Build buffer_send_labels by parallel inserting
 #pragma omp parallel for
@@ -2500,6 +2633,11 @@ schedule_label_pushing_para(
             }
         }
     }
+//    {//test
+//        if (1024 == roots_start && 7 == host_id) {
+//            printf("S1.1 host_id: %d local_size: %u\n", host_id, local_size);
+//        }
+//    }
 
 
 ////////////////////////////////////////////////
@@ -2563,11 +2701,28 @@ schedule_label_pushing_para(
 ////////////////////////////////////////////////
 
     for (int root = 0; root < num_hosts; ++root) {
+//        {//test
+//            if (1024 == roots_start) {
+//                printf("S2 root: %u "
+//                       "host_id: %d "
+//                       "buffer_send_indices.size(): %lu\n",
+//                       root,
+//                       host_id,
+//                       buffer_send_indices.size());
+//            }
+//            caller_line = roots_start;
+//        }
         // Get the indices
         std::vector<std::pair<VertexID, VertexID> > indices_buffer;
+
         one_host_bcasts_buffer_to_buffer(root,
                                          buffer_send_indices,
                                          indices_buffer);
+//        {//test
+//            if (1024 == roots_start && 0 == host_id) {
+//                printf("S3 indices_buffer: %lu\n", indices_buffer.size());
+//            }
+//        }
         if (indices_buffer.empty()) {
             continue;
         }
@@ -2577,6 +2732,14 @@ schedule_label_pushing_para(
                                          buffer_send_labels,
                                          labels_buffer);
 
+//        {//test
+//            if (1024 == roots_start && 0 == host_id) {
+//                printf("indices_buffer.size(): %lu "
+//                       "labels_buffer.size(): %lu\n",
+//                       indices_buffer.size(),
+//                       labels_buffer.size());
+//            }
+//        }
         VertexID size_indices_buffer = indices_buffer.size();
         // Prepare the offsets for reading indices_buffer
         std::vector<EdgeID> starts_locs_index(size_indices_buffer);
@@ -2629,6 +2792,14 @@ schedule_label_pushing_para(
 #pragma omp parallel for
         for (VertexID i_i = 0; i_i < size_indices_buffer; ++i_i) {
             VertexID v_head_global = indices_buffer[i_i].first;
+//            {//test
+//                if (1024 == roots_start && 0 == host_id) {
+//                    printf("i_i: %u "
+//                           "v_head_global: %u\n",
+//                           i_i,
+//                           v_head_global);
+//                }
+//            }
             EdgeID start_index = starts_locs_index[i_i];
             EdgeID bound_index = i_i != size_indices_buffer - 1 ?
                                  starts_locs_index[i_i + 1] : total_recved_labels;
@@ -3075,6 +3246,182 @@ local_push_labels_seq(
 //    }
 //}
 
+template <VertexID BATCH_SIZE>
+inline void DistBVCPLL<BATCH_SIZE>::
+schedule_label_inserting_para(
+        const DistGraph &G,
+        const VertexID roots_start,
+        const VertexID roots_size,
+        std::vector<ShortIndex> &short_index,
+        const std::vector< std::vector<UnweightedDist> > &dist_table,
+        const std::vector<VertexID> &got_candidates_queue,
+        const VertexID start_got_candidates_queue,
+        const VertexID size_got_candidates_queue,
+        std::vector<uint8_t> &got_candidates,
+        std::vector<VertexID> &active_queue,
+        VertexID &end_active_queue,
+        std::vector<uint8_t> &is_active,
+        std::vector< std::pair<VertexID, VertexID> > &buffer_send,
+        const VertexID iter)
+{
+    const VertexID bound_got_candidates_queue = start_got_candidates_queue + size_got_candidates_queue;
+    std::vector<VertexID> offsets_tmp_active_queue;
+    std::vector<VertexID> tmp_active_queue;
+    std::vector<VertexID> sizes_tmp_active_queue;
+    std::vector<EdgeID> offsets_tmp_buffer_send;
+    std::vector< std::pair<VertexID, VertexID> > tmp_buffer_send;
+    std::vector<EdgeID> sizes_tmp_buffer_send;
+    EdgeID total_send_labels;
+
+    try {
+        offsets_tmp_active_queue.resize(size_got_candidates_queue);
+#pragma omp parallel for
+        for (VertexID i_q = 0; i_q < size_got_candidates_queue; ++i_q) {
+            offsets_tmp_active_queue[i_q] = i_q;
+        }
+        tmp_active_queue.resize(size_got_candidates_queue);
+        sizes_tmp_active_queue.resize(size_got_candidates_queue,
+                                      0); // Size will only be 0 or 1, but it will become offsets eventually.
+
+        // Prepare for parallel buffer_send
+//                std::vector<EdgeID> offsets_tmp_buffer_send(size_got_candidates_queue);
+        offsets_tmp_buffer_send.resize(size_got_candidates_queue);
+#pragma omp parallel for
+        for (VertexID i_q = start_got_candidates_queue; i_q < bound_got_candidates_queue; ++i_q) {
+            VertexID v_id_local = got_candidates_queue[i_q];
+            VertexID v_global_id = G.get_global_vertex_id(v_id_local);
+            VertexID tmp_i_q = i_q - start_got_candidates_queue;
+            if (v_global_id >= roots_start && v_global_id < roots_start + roots_size) {
+                // If v_global_id is root, its new labels should be put into buffer_send
+                offsets_tmp_buffer_send[tmp_i_q] = short_index[v_id_local].end_candidates_que;
+            } else {
+                offsets_tmp_buffer_send[tmp_i_q] = 0;
+            }
+        }
+        total_send_labels = PADO::prefix_sum_for_offsets(offsets_tmp_buffer_send);
+        tmp_buffer_send.resize(total_send_labels);
+        sizes_tmp_buffer_send.resize(size_got_candidates_queue, 0);
+    }
+    catch (const std::bad_alloc &) {
+        double memtotal = 0;
+        double memfree = 0;
+        PADO::Utils::system_memory(memtotal, memfree);
+        printf("L%u_tmp_buffer_send: bad_alloc "
+               "host_id: %d "
+               "iter: %u "
+               "size_got_candidates_queue: %u "
+               "total_send_labels: %u "
+               "L.size(): %.2fGB "
+               "memtotal: %.2fGB "
+               "memfree: %.2fGB\n",
+               __LINE__,
+               host_id,
+               iter,
+               size_got_candidates_queue,
+               total_send_labels,
+               get_index_size() * 1.0 / (1 << 30),
+               memtotal / 1024,
+               memfree / 1024);
+        exit(1);
+    }
+
+#pragma omp parallel for
+    for (VertexID i_queue = start_got_candidates_queue; i_queue < bound_got_candidates_queue; ++i_queue) {
+        VertexID v_id_local = got_candidates_queue[i_queue];
+        VertexID inserted_count = 0; //recording number of v_id's truly inserted candidates
+        got_candidates[v_id_local] = 0; // reset got_candidates
+        // Traverse v_id's all candidates
+        VertexID tmp_i_queue = i_queue - start_got_candidates_queue;
+        VertexID bound_cand_i = short_index[v_id_local].end_candidates_que;
+        for (VertexID cand_i = 0; cand_i < bound_cand_i; ++cand_i) {
+            VertexID cand_root_id = short_index[v_id_local].candidates_que[cand_i];
+            short_index[v_id_local].is_candidate[cand_root_id] = 0;
+            // Only insert cand_root_id into v_id's label if its distance to v_id is shorter than existing distance
+            if (distance_query(
+                    cand_root_id,
+                    v_id_local,
+                    roots_start,
+                    //                        L,
+                    dist_table,
+                    iter)) {
+                if (!is_active[v_id_local]) {
+                    is_active[v_id_local] = 1;
+//                                active_queue[end_active_queue++] = v_id_local;
+                    tmp_active_queue[tmp_i_queue + sizes_tmp_active_queue[tmp_i_queue]++] = v_id_local;
+                }
+                ++inserted_count;
+                // The candidate cand_root_id needs to be added into v_id's label
+                insert_label_only_para(
+                        cand_root_id,
+                        v_id_local,
+                        roots_start,
+                        roots_size,
+                        G,
+                        tmp_buffer_send,
+                        sizes_tmp_buffer_send[tmp_i_queue],
+                        offsets_tmp_buffer_send[tmp_i_queue]);
+//                                    buffer_send);
+            }
+        }
+        short_index[v_id_local].end_candidates_que = 0;
+        if (0 != inserted_count) {
+            // Update other arrays in L[v_id] if new labels were inserted in this iteration
+            update_label_indices(
+                    v_id_local,
+                    inserted_count,
+                    //                        L,
+//                                short_index,
+//                                b_id,
+                    iter);
+        }
+    }
+
+    {// Collect elements from tmp_active_queue to active_queue
+        VertexID total_new = PADO::prefix_sum_for_offsets(sizes_tmp_active_queue);
+        PADO::collect_into_queue(
+                tmp_active_queue,
+                offsets_tmp_active_queue,
+                sizes_tmp_active_queue,
+                total_new,
+                active_queue,
+                end_active_queue);
+    }
+    {// Collect elements from tmp_buffer_send to buffer_send
+        EdgeID old_size_buffer_send = buffer_send.size();
+        EdgeID total_new = PADO::prefix_sum_for_offsets(sizes_tmp_buffer_send);
+        try {
+            buffer_send.resize(total_new + old_size_buffer_send);
+        }
+        catch (const std::bad_alloc &) {
+            double memtotal = 0;
+            double memfree = 0;
+            PADO::Utils::system_memory(memtotal, memfree);
+            printf("L%u_buffer_send: bad_alloc "
+                   "iter: %u "
+                   "host_id: %d "
+                   "L.size(): %.2fGB "
+                   "memtotal: %.2fGB "
+                   "memfree: %.2fGB\n",
+                   __LINE__,
+                   iter,
+                   host_id,
+                   get_index_size() * 1.0 / (1 << 30),
+                   memtotal / 1024,
+                   memfree / 1024);
+            exit(1);
+        }
+//        EdgeID zero_size = 0;
+        PADO::collect_into_queue(
+                tmp_buffer_send,
+                offsets_tmp_buffer_send,
+                sizes_tmp_buffer_send,
+                total_new,
+                buffer_send,
+                old_size_buffer_send);
+//                zero_size);
+    }
+}
+
 // Function for distance query;
 // traverse vertex v_id's labels;
 // return false if shorter distance exists already, return true if the cand_root_id can be added into v_id's label.
@@ -3390,6 +3737,12 @@ batch_process(
 
     while (global_num_actives) {
         ++iter;
+        {// Limit the distance
+            if (iter >7 ) {
+                end_active_queue = 0;
+                break;
+            }
+        }
         //#ifdef DEBUG_MESSAGES_ON
 //        {//test
 ////            if (0 == host_id) {
@@ -3417,7 +3770,7 @@ batch_process(
         {
 //            scatter_time -= WallTimer::get_time_mark();
             // Divide the pushing into many-time runs.
-            const VertexID chunk_size = 1 << 13;
+            const VertexID chunk_size = 1 << 14;
             VertexID remainder = global_num_actives % chunk_size;
             VertexID bound_global_i = global_num_actives - remainder;
 //            VertexID remainder = end_active_queue % chunk_size;
@@ -3429,6 +3782,12 @@ batch_process(
                 } else {
                     local_size = 0;
                 }
+//                {//test
+//                    if (1024 == roots_start && 7 == host_id) {
+//                        printf("S0 host_id: %d global_i: %u bound_global_i: %u local_size: %u\n",
+//                                host_id, global_i, bound_global_i, local_size);
+//                    }
+//                }
                 schedule_label_pushing_para(
                         G,
                         roots_start,
@@ -3514,168 +3873,213 @@ batch_process(
             exit(1);
 		}
 
+//        {//test
+//            if (0 == host_id) {
+//                printf("host_id: %u pushing finished...\n", host_id);
+//            }
+//        }
+
         // Traverse vertices in the got_candidates_queue to insert labels
 		{
 //		    gather_time -= WallTimer::get_time_mark();
             std::vector< std::pair<VertexID, VertexID> > buffer_send; // For sync elements in the dist_table
                 // pair.first: root id
                 // pair.second: label (global) id of the root
-//            if (true) {
             if (end_got_candidates_queue >= THRESHOLD_PARALLEL) {
-                // Prepare for parallel active_queue
-                // Don't need offsets_tmp_active_queue here, because the index i_queue is the offset already.
-                // Actually we still need offsets_tmp_active_queue, because collect_into_queue() needs it.
-                std::vector<VertexID> offsets_tmp_active_queue;
-                std::vector<VertexID> tmp_active_queue;
-                std::vector<VertexID> sizes_tmp_active_queue;
-                std::vector<EdgeID> offsets_tmp_buffer_send;
-                std::vector< std::pair<VertexID, VertexID> > tmp_buffer_send;
-                std::vector<EdgeID> sizes_tmp_buffer_send;
-                EdgeID total_send_labels;
-
-                try {
-                    offsets_tmp_active_queue.resize(end_got_candidates_queue);
-#pragma omp parallel for
-                    for (VertexID i_q = 0; i_q < end_got_candidates_queue; ++i_q) {
-                        offsets_tmp_active_queue[i_q] = i_q;
-                    }
-                    tmp_active_queue.resize(end_got_candidates_queue);
-                    sizes_tmp_active_queue.resize(end_got_candidates_queue,
-                                                  0); // Size will only be 0 or 1, but it will become offsets eventually.
-
-                    // Prepare for parallel buffer_send
-//                std::vector<EdgeID> offsets_tmp_buffer_send(end_got_candidates_queue);
-                    offsets_tmp_buffer_send.resize(end_got_candidates_queue);
-#pragma omp parallel for
-                    for (VertexID i_q = 0; i_q < end_got_candidates_queue; ++i_q) {
-                        VertexID v_id_local = got_candidates_queue[i_q];
-                        VertexID v_global_id = G.get_global_vertex_id(v_id_local);
-                        if (v_global_id >= roots_start && v_global_id < roots_start + roots_size) {
-                            // If v_global_id is root, its new labels should be put into buffer_send
-                            offsets_tmp_buffer_send[i_q] = short_index[v_id_local].end_candidates_que;
-                        } else {
-                            offsets_tmp_buffer_send[i_q] = 0;
-                        }
-                    }
-                    total_send_labels = PADO::prefix_sum_for_offsets(offsets_tmp_buffer_send);
-                    tmp_buffer_send.resize(total_send_labels);
-                    sizes_tmp_buffer_send.resize(end_got_candidates_queue, 0);
-                }
-                catch (const std::bad_alloc &) {
-                    double memtotal = 0;
-                    double memfree = 0;
-                    PADO::Utils::system_memory(memtotal, memfree);
-                    printf("L%u_tmp_buffer_send: bad_alloc "
-                           "host_id: %d "
-                           "iter: %u "
-                           "end_got_candidates_queue: %u "
-                           "total_send_labels: %u "
-                           "L.size(): %.2fGB "
-                           "memtotal: %.2fGB "
-                           "memfree: %.2fGB\n",
-                           __LINE__,
-                           host_id,
-                           iter,
-                           end_got_candidates_queue,
-                           total_send_labels,
-                           get_index_size() * 1.0 / (1 << 30),
-                           memtotal / 1024,
-                           memfree / 1024);
-                    exit(1);
-                }
-
-#pragma omp parallel for
-                for (VertexID i_queue = 0; i_queue < end_got_candidates_queue; ++i_queue) {
-                    VertexID v_id_local = got_candidates_queue[i_queue];
-                    VertexID inserted_count = 0; //recording number of v_id's truly inserted candidates
-                    got_candidates[v_id_local] = 0; // reset got_candidates
-                    // Traverse v_id's all candidates
-                    VertexID bound_cand_i = short_index[v_id_local].end_candidates_que;
-                    for (VertexID cand_i = 0; cand_i < bound_cand_i; ++cand_i) {
-                        VertexID cand_root_id = short_index[v_id_local].candidates_que[cand_i];
-                        short_index[v_id_local].is_candidate[cand_root_id] = 0;
-                        // Only insert cand_root_id into v_id's label if its distance to v_id is shorter than existing distance
-                        if (distance_query(
-                                cand_root_id,
-                                v_id_local,
-                                roots_start,
-                                //                        L,
-                                dist_table,
-                                iter)) {
-                            if (!is_active[v_id_local]) {
-                                is_active[v_id_local] = 1;
-//                                active_queue[end_active_queue++] = v_id_local;
-                                tmp_active_queue[i_queue + sizes_tmp_active_queue[i_queue]++] = v_id_local;
-                            }
-                            ++inserted_count;
-                            // The candidate cand_root_id needs to be added into v_id's label
-                            insert_label_only_para(
-                                    cand_root_id,
-                                    v_id_local,
-                                    roots_start,
-                                    roots_size,
-                                    G,
-                                    tmp_buffer_send,
-                                    sizes_tmp_buffer_send[i_queue],
-                                    offsets_tmp_buffer_send[i_queue]);
-//                                    buffer_send);
-                        }
-                    }
-                    short_index[v_id_local].end_candidates_que = 0;
-                    if (0 != inserted_count) {
-                        // Update other arrays in L[v_id] if new labels were inserted in this iteration
-                        update_label_indices(
-                                v_id_local,
-                                inserted_count,
-                                //                        L,
-//                                short_index,
-//                                b_id,
-                                iter);
-                    }
-                }
-
-                {// Collect elements from tmp_active_queue to active_queue
-                    VertexID total_new = PADO::prefix_sum_for_offsets(sizes_tmp_active_queue);
-                    PADO::collect_into_queue(
-                            tmp_active_queue,
-                            offsets_tmp_active_queue,
-                            sizes_tmp_active_queue,
-                            total_new,
+                const VertexID chunk_size = 1 << 16;
+                VertexID remainder = end_got_candidates_queue % chunk_size;
+                VertexID bound_i_q = end_got_candidates_queue - remainder;
+                for (VertexID i_q = 0; i_q < bound_i_q; i_q += chunk_size) {
+                    schedule_label_inserting_para(
+                            G,
+                            roots_start,
+                            roots_size,
+                            short_index,
+                            dist_table,
+                            got_candidates_queue,
+                            i_q,
+                            chunk_size,
+                            got_candidates,
                             active_queue,
-                            end_active_queue);
-                }
-                {// Collect elements from tmp_buffer_send to buffer_send
-                    EdgeID total_new = PADO::prefix_sum_for_offsets(sizes_tmp_buffer_send);
-                    try {
-                        buffer_send.resize(total_new);
-                    }
-                    catch (const std::bad_alloc &) {
-                        double memtotal = 0;
-                        double memfree = 0;
-                        PADO::Utils::system_memory(memtotal, memfree);
-                        printf("L%u_buffer_send: bad_alloc "
-                               "iter: %u "
-                               "host_id: %d "
-                               "L.size(): %.2fGB "
-                               "memtotal: %.2fGB "
-                               "memfree: %.2fGB\n",
-                               __LINE__,
-                               iter,
-                               host_id,
-                               get_index_size() * 1.0 / (1 << 30),
-                               memtotal / 1024,
-                               memfree / 1024);
-                        exit(1);
-                    }
-                    EdgeID zero_size = 0;
-                    PADO::collect_into_queue(
-                            tmp_buffer_send,
-                            offsets_tmp_buffer_send,
-                            sizes_tmp_buffer_send,
-                            total_new,
+                            end_active_queue,
+                            is_active,
                             buffer_send,
-                            zero_size);
+                            iter);
                 }
+                if (remainder) {
+                    schedule_label_inserting_para(
+                            G,
+                            roots_start,
+                            roots_size,
+                            short_index,
+                            dist_table,
+                            got_candidates_queue,
+                            bound_i_q,
+                            remainder,
+                            got_candidates,
+                            active_queue,
+                            end_active_queue,
+                            is_active,
+                            buffer_send,
+                            iter);
+                }
+
+////// Backup
+//                // Prepare for parallel active_queue
+//                // Don't need offsets_tmp_active_queue here, because the index i_queue is the offset already.
+//                // Actually we still need offsets_tmp_active_queue, because collect_into_queue() needs it.
+//                std::vector<VertexID> offsets_tmp_active_queue;
+//                std::vector<VertexID> tmp_active_queue;
+//                std::vector<VertexID> sizes_tmp_active_queue;
+//                std::vector<EdgeID> offsets_tmp_buffer_send;
+//                std::vector< std::pair<VertexID, VertexID> > tmp_buffer_send;
+//                std::vector<EdgeID> sizes_tmp_buffer_send;
+//                EdgeID total_send_labels;
+//
+//                try {
+//                    offsets_tmp_active_queue.resize(end_got_candidates_queue);
+//#pragma omp parallel for
+//                    for (VertexID i_q = 0; i_q < end_got_candidates_queue; ++i_q) {
+//                        offsets_tmp_active_queue[i_q] = i_q;
+//                    }
+//                    tmp_active_queue.resize(end_got_candidates_queue);
+//                    sizes_tmp_active_queue.resize(end_got_candidates_queue,
+//                                                  0); // Size will only be 0 or 1, but it will become offsets eventually.
+//
+//                    // Prepare for parallel buffer_send
+////                std::vector<EdgeID> offsets_tmp_buffer_send(end_got_candidates_queue);
+//                    offsets_tmp_buffer_send.resize(end_got_candidates_queue);
+//#pragma omp parallel for
+//                    for (VertexID i_q = 0; i_q < end_got_candidates_queue; ++i_q) {
+//                        VertexID v_id_local = got_candidates_queue[i_q];
+//                        VertexID v_global_id = G.get_global_vertex_id(v_id_local);
+//                        if (v_global_id >= roots_start && v_global_id < roots_start + roots_size) {
+//                            // If v_global_id is root, its new labels should be put into buffer_send
+//                            offsets_tmp_buffer_send[i_q] = short_index[v_id_local].end_candidates_que;
+//                        } else {
+//                            offsets_tmp_buffer_send[i_q] = 0;
+//                        }
+//                    }
+//                    total_send_labels = PADO::prefix_sum_for_offsets(offsets_tmp_buffer_send);
+//                    tmp_buffer_send.resize(total_send_labels);
+//                    sizes_tmp_buffer_send.resize(end_got_candidates_queue, 0);
+//                }
+//                catch (const std::bad_alloc &) {
+//                    double memtotal = 0;
+//                    double memfree = 0;
+//                    PADO::Utils::system_memory(memtotal, memfree);
+//                    printf("L%u_tmp_buffer_send: bad_alloc "
+//                           "host_id: %d "
+//                           "iter: %u "
+//                           "end_got_candidates_queue: %u "
+//                           "total_send_labels: %u "
+//                           "L.size(): %.2fGB "
+//                           "memtotal: %.2fGB "
+//                           "memfree: %.2fGB\n",
+//                           __LINE__,
+//                           host_id,
+//                           iter,
+//                           end_got_candidates_queue,
+//                           total_send_labels,
+//                           get_index_size() * 1.0 / (1 << 30),
+//                           memtotal / 1024,
+//                           memfree / 1024);
+//                    exit(1);
+//                }
+//
+//#pragma omp parallel for
+//                for (VertexID i_queue = 0; i_queue < end_got_candidates_queue; ++i_queue) {
+//                    VertexID v_id_local = got_candidates_queue[i_queue];
+//                    VertexID inserted_count = 0; //recording number of v_id's truly inserted candidates
+//                    got_candidates[v_id_local] = 0; // reset got_candidates
+//                    // Traverse v_id's all candidates
+//                    VertexID bound_cand_i = short_index[v_id_local].end_candidates_que;
+//                    for (VertexID cand_i = 0; cand_i < bound_cand_i; ++cand_i) {
+//                        VertexID cand_root_id = short_index[v_id_local].candidates_que[cand_i];
+//                        short_index[v_id_local].is_candidate[cand_root_id] = 0;
+//                        // Only insert cand_root_id into v_id's label if its distance to v_id is shorter than existing distance
+//                        if (distance_query(
+//                                cand_root_id,
+//                                v_id_local,
+//                                roots_start,
+//                                //                        L,
+//                                dist_table,
+//                                iter)) {
+//                            if (!is_active[v_id_local]) {
+//                                is_active[v_id_local] = 1;
+////                                active_queue[end_active_queue++] = v_id_local;
+//                                tmp_active_queue[i_queue + sizes_tmp_active_queue[i_queue]++] = v_id_local;
+//                            }
+//                            ++inserted_count;
+//                            // The candidate cand_root_id needs to be added into v_id's label
+//                            insert_label_only_para(
+//                                    cand_root_id,
+//                                    v_id_local,
+//                                    roots_start,
+//                                    roots_size,
+//                                    G,
+//                                    tmp_buffer_send,
+//                                    sizes_tmp_buffer_send[i_queue],
+//                                    offsets_tmp_buffer_send[i_queue]);
+////                                    buffer_send);
+//                        }
+//                    }
+//                    short_index[v_id_local].end_candidates_que = 0;
+//                    if (0 != inserted_count) {
+//                        // Update other arrays in L[v_id] if new labels were inserted in this iteration
+//                        update_label_indices(
+//                                v_id_local,
+//                                inserted_count,
+//                                //                        L,
+////                                short_index,
+////                                b_id,
+//                                iter);
+//                    }
+//                }
+//
+//                {// Collect elements from tmp_active_queue to active_queue
+//                    VertexID total_new = PADO::prefix_sum_for_offsets(sizes_tmp_active_queue);
+//                    PADO::collect_into_queue(
+//                            tmp_active_queue,
+//                            offsets_tmp_active_queue,
+//                            sizes_tmp_active_queue,
+//                            total_new,
+//                            active_queue,
+//                            end_active_queue);
+//                }
+//                {// Collect elements from tmp_buffer_send to buffer_send
+//                    EdgeID total_new = PADO::prefix_sum_for_offsets(sizes_tmp_buffer_send);
+//                    try {
+//                        buffer_send.resize(total_new);
+//                    }
+//                    catch (const std::bad_alloc &) {
+//                        double memtotal = 0;
+//                        double memfree = 0;
+//                        PADO::Utils::system_memory(memtotal, memfree);
+//                        printf("L%u_buffer_send: bad_alloc "
+//                               "iter: %u "
+//                               "host_id: %d "
+//                               "L.size(): %.2fGB "
+//                               "memtotal: %.2fGB "
+//                               "memfree: %.2fGB\n",
+//                               __LINE__,
+//                               iter,
+//                               host_id,
+//                               get_index_size() * 1.0 / (1 << 30),
+//                               memtotal / 1024,
+//                               memfree / 1024);
+//                        exit(1);
+//                    }
+//                    EdgeID zero_size = 0;
+//                    PADO::collect_into_queue(
+//                            tmp_buffer_send,
+//                            offsets_tmp_buffer_send,
+//                            sizes_tmp_buffer_send,
+//                            total_new,
+//                            buffer_send,
+//                            zero_size);
+//                }
+
             } else {
                 for (VertexID i_queue = 0; i_queue < end_got_candidates_queue; ++i_queue) {
                     VertexID v_id_local = got_candidates_queue[i_queue];
@@ -4367,15 +4771,34 @@ one_host_bcasts_buffer_to_buffer(
         std::vector<E_T> &buffer_recv)
 {
     const size_t ETypeSize = sizeof(E_T);
-    uint64_t size_buffer_send = buffer_send.size();
+    volatile uint64_t size_buffer_send = 0;
+    if (host_id == root) {
+        size_buffer_send = buffer_send.size();
+    }
     // Sync the size_buffer_send.
 //    message_time -= WallTimer::get_time_mark();
-    MPI_Bcast(&size_buffer_send,
+//    {//test
+//        if (0 == root && size_buffer_send == 16 && 1024 == caller_line) {
+////        if (0 == root && size_buffer_send == 16 && 0 == host_id) {
+//            printf("before: host_id: %d size_buffer_send: %lu\n",
+//                    host_id,
+//                    size_buffer_send);
+//        }
+//    }
+    MPI_Bcast((void *) &size_buffer_send,
               1,
               MPI_UINT64_T,
               root,
               MPI_COMM_WORLD);
 //    message_time += WallTimer::get_time_mark();
+//    {//test
+////        if (0 == root && size_buffer_send == 16 && 0 == host_id) {
+//        if (0 == root && size_buffer_send == 16 && 1024 == caller_line) {
+//            printf("after: host_id: %d size_buffer_send: %lu\n",
+//                    host_id,
+//                    size_buffer_send);
+//        }
+//    }
     try {
         buffer_recv.resize(size_buffer_send);
     }

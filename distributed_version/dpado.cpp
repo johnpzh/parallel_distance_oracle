@@ -19,18 +19,27 @@
 //#include "dpado.202001080943.clean_up_labels.h"
 //#include "dpado.202001130915.no_batch_id.h"
 //#include "dpado.202001141642.batch_number_limit.h"
-#include "dpado.202001172040.local_minimum_reduction.h"
+//#include "dpado.202001172040.local_minimum_reduction.h"
+//#include "dpado.202001231035.multiple_rounds_for_checking.h"
+//#include "dpado.202001231600.no_bp_and_limit_batches.h"
+#include "dpado.202001232110.limit_distances.h"
 
 using namespace PADO;
 
 
-void dpado(char *argv[])
+void dpado(int argc, char *argv[])
 {
+    if (argc >= 3) {
+        NUM_THREADS = strtoull(argv[2], nullptr, 0);
+    } else {
+        NUM_THREADS = omp_get_max_threads();
+    }
+    omp_set_num_threads(NUM_THREADS);
     DistGraph G(argv[1]);
-	printf("host_id: %u num_masters: %u /%u %.2f%% num_edges_local %lu /%lu %.2f%%\n",
-	        G.host_id, G.num_masters, G.num_v, 100.0 * G.num_masters / G.num_v, G.num_edges_local, 2 * G.num_e, 100.0 * G.num_edges_local / (2 * G.num_e));//test
+	printf("host_id: %u num_threads: %u num_masters: %u /%u %.2f%% num_edges_local %lu /%lu %.2f%%\n",
+	        G.host_id, NUM_THREADS, G.num_masters, G.num_v, 100.0 * G.num_masters / G.num_v, G.num_edges_local, 2 * G.num_e, 100.0 * G.num_edges_local / (2 * G.num_e));//test
 
-    int num_runs = 4;
+    int num_runs = 1;
 	for (int i = 0; i < num_runs; ++i) {
 //        DistBVCPLL<1024, 50> *dist_bvcpll = new DistBVCPLL<1024, 50>(G); // batch size 1024, bit-parallel size 50.
 //        delete dist_bvcpll;
@@ -60,9 +69,12 @@ void dpado(char *argv[])
 //            delete dist_bvcpll;
 //        }
         {// OpenMP Version
-            NUM_THREADS = 28;
-            omp_set_num_threads(NUM_THREADS);
-
+//            if (argc >= 3) {
+//                NUM_THREADS = strtoull(argv[2], nullptr, 0);
+//            } else {
+//                NUM_THREADS = omp_get_max_threads();
+//            }
+//            omp_set_num_threads(NUM_THREADS);
 			DistBVCPLL<1024> *dist_bvcpll = new DistBVCPLL<1024>(G); // batch size 1024, bit-parallel size 50.
 //			DistBVCPLL<1024> dist_bvcpll(G); // batch size 1024, bit-parallel size 50.
             delete dist_bvcpll;
@@ -120,8 +132,14 @@ void dpado(char *argv[])
 //		}
 	}
 
-    /*
+    /* DBLP:
      * Global_num_labels: 67727254 average: 213.596065
+     *
+     * DBLP.local_minimum_set_reduction:
+     * Global_num_labels: 36248487 average: 114.319328
+     *
+     * DBLP.local_minimum_set_reduction+equivalent_vertices_reduction:
+     * Global_num_labels: 22057971 average: 85.834025
      */
 
 }
@@ -281,7 +299,7 @@ void dpado(char *argv[])
 void usage_print()
 {
     fprintf(stderr,
-            "Usage: ./dpado <input_file>\n");
+            "Usage: ./dpado <input_file> [num_threads]\n");
 }
 
 int main(int argc, char *argv[])
@@ -299,7 +317,7 @@ int main(int argc, char *argv[])
 //    printf("input_file: %s\n", input_file.c_str());
     MPI_Instance mpi_instance(argc, argv);
 
-    dpado(argv);
+    dpado(argc, argv);
 //    test_system();
 //    test_recv();
 //    test_dynamic_receive();
