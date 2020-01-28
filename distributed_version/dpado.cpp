@@ -22,7 +22,8 @@
 //#include "dpado.202001172040.local_minimum_reduction.h"
 //#include "dpado.202001231035.multiple_rounds_for_checking.h"
 //#include "dpado.202001231600.no_bp_and_limit_batches.h"
-#include "dpado.202001232110.limit_distances.h"
+//#include "dpado.202001232110.limit_distances.h"
+#include "dpado.202001272104.batch_id_back.h"
 
 using namespace PADO;
 
@@ -32,6 +33,7 @@ void dpado(int argc, char *argv[])
     if (argc >= 3) {
         NUM_THREADS = strtoull(argv[2], nullptr, 0);
     } else {
+        printf("No input for number of threads. Set as %d.\n", omp_get_max_threads());
         NUM_THREADS = omp_get_max_threads();
     }
     omp_set_num_threads(NUM_THREADS);
