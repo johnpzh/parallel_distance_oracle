@@ -15,7 +15,8 @@ namespace PADO {
 typedef uint32_t VertexID;
 typedef uint64_t EdgeID;
 typedef uint8_t UnweightedDist;
-const UnweightedDist MAX_UNWEIGHTED_DIST = UCHAR_MAX;
+const UnweightedDist MAX_UNWEIGHTED_DIST = 127;
+//const UnweightedDist MAX_UNWEIGHTED_DIST = UCHAR_MAX;
 
 // Get the file size
 unsigned long get_file_size(const char *filename)

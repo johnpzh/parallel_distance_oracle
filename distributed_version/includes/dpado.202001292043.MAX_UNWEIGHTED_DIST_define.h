@@ -512,14 +512,9 @@ DistBVCPLL(
 
     //printf("b_i_bound: %u\n", b_i_bound);//test
     for (VertexID b_i = 0; b_i < b_i_bound; ++b_i) {
-//        {// Batch number limit
-//            if (10 == b_i) {
-//                remainer = 0;
-//                break;
-//            }
-//        }
 //        {
 ////#ifdef DEBUG_MESSAGES_ON
+//            if (b_i % 4000 == 0 && 0 == host_id) {
             if (0 == host_id) {
                 printf("b_i: %u\n", b_i);//test
             }
@@ -584,7 +579,7 @@ DistBVCPLL(
     setlocale(LC_NUMERIC, "");
     if (0 == host_id) {
         printf("BATCH_SIZE: %u ", BATCH_SIZE);
-        printf("BP_Size: %u\n", BITPARALLEL_SIZE);
+        printf("BP_Size: %u THRESHOLD_PARALLEL: %u\n", BITPARALLEL_SIZE, THRESHOLD_PARALLEL);
     }
 
     {// Total Number of Labels
@@ -702,22 +697,24 @@ DistBVCPLL(
 //	printf("BP_Checking: "); bp_checking_ins_count.print();
 //	printf("distance_query: "); dist_query_ins_count.print();
 
-//    printf("num_hosts: %u host_id: %u\n"
-//           "Local_labeling_time: %.2f seconds\n"
-//           "bp_labeling_time: %.2f %.2f%%\n"
-//           "initializing_time: %.2f %.2f%%\n"
-//           "scatter_time: %.2f %.2f%%\n"
-//           "gather_time: %.2f %.2f%%\n"
-//           "clearup_time: %.2f %.2f%%\n"
-//           "message_time: %.2f %.2f%%\n",
-//           num_hosts, host_id,
-//           time_labeling,
-//           bp_labeling_time, 100.0 * bp_labeling_time / time_labeling,
-//           initializing_time, 100.0 * initializing_time / time_labeling,
-//           scatter_time, 100.0 * scatter_time / time_labeling,
-//           gather_time, 100.0 * gather_time / time_labeling,
-//           clearup_time, 100.0 * clearup_time / time_labeling,
-//           message_time, 100.0 * message_time / time_labeling);
+//    if (0 == host_id) {
+//        printf("num_hosts: %u host_id: %u\n"
+//               "Local_labeling_time: %.2f seconds\n"
+//               "bp_labeling_time: %.2f %.2f%%\n"
+//               "initializing_time: %.2f %.2f%%\n"
+//               "scatter_time: %.2f %.2f%%\n"
+//               "gather_time: %.2f %.2f%%\n"
+//               "clearup_time: %.2f %.2f%%\n"
+//               "message_time: %.2f %.2f%%\n",
+//               num_hosts, host_id,
+//               time_labeling,
+//               bp_labeling_time, 100.0 * bp_labeling_time / time_labeling,
+//               initializing_time, 100.0 * initializing_time / time_labeling,
+//               scatter_time, 100.0 * scatter_time / time_labeling,
+//               gather_time, 100.0 * gather_time / time_labeling,
+//               clearup_time, 100.0 * clearup_time / time_labeling,
+//               message_time, 100.0 * message_time / time_labeling);
+//    }
     double global_time_labeling;
     MPI_Allreduce(&time_labeling,
             &global_time_labeling,
@@ -1109,11 +1106,11 @@ bit_parallel_labeling(
         VertexID global_num_actives = 1;
         UnweightedDist d = 0;
         while (global_num_actives) {
-            {// Limit the distance
-                if (d > 7) {
-                    break;
-                }
-            }
+//            {// Limit the distance
+//                if (d > 7) {
+//                    break;
+//                }
+//            }
 //#ifdef DEBUG_MESSAGES_ON
 //            {//test
 //                if (0 == host_id) {
@@ -1310,13 +1307,14 @@ bit_parallel_labeling(
             tmp_que.swap(que);
             end_que = end_tmp_que;
             end_tmp_que = 0;
+//            message_time -= WallTimer::get_time_mark();
             MPI_Allreduce(&end_que,
                       &global_num_actives,
                       1,
                       V_ID_Type,
                       MPI_MAX,
                       MPI_COMM_WORLD);
-
+//            message_time += WallTimer::get_time_mark();
 //            }
             ++d;
         }
@@ -3177,7 +3175,7 @@ schedule_label_inserting_para(
                "host_id: %d "
                "iter: %u "
                "size_got_candidates_queue: %u "
-               "total_send_labels: %u "
+               "total_send_labels: %lu "
                "L.size(): %.2fGB "
                "memtotal: %.2fGB "
                "memfree: %.2fGB\n",
@@ -3546,7 +3544,7 @@ reset_at_end(
         if (!G.is_local_minimum[v_local_id]) {
             continue;
         }
-        L[v_local_id].clean_all_indices();
+//        L[v_local_id].clean_all_indices();
     }
 }
 
@@ -3604,24 +3602,24 @@ batch_process(
 
     while (global_num_actives) {
         ++iter;
-        {// Limit the distance
-            if (iter >7 ) {
-                if (end_active_queue >= THRESHOLD_PARALLEL) {
-#pragma omp parallel for
-                    for (VertexID i_q = 0; i_q < end_active_queue; ++i_q) {
-                        VertexID v_id_local = active_queue[i_q];
-                        is_active[v_id_local] = 0;
-                    }
-                } else {
-                    for (VertexID i_q = 0; i_q < end_active_queue; ++i_q) {
-                        VertexID v_id_local = active_queue[i_q];
-                        is_active[v_id_local] = 0;
-                    }
-                }
-                end_active_queue = 0;
-                break;
-            }
-        }
+//        {// Limit the distance
+//            if (iter > 2 ) {
+//                if (end_active_queue >= THRESHOLD_PARALLEL) {
+//#pragma omp parallel for
+//                    for (VertexID i_q = 0; i_q < end_active_queue; ++i_q) {
+//                        VertexID v_id_local = active_queue[i_q];
+//                        is_active[v_id_local] = 0;
+//                    }
+//                } else {
+//                    for (VertexID i_q = 0; i_q < end_active_queue; ++i_q) {
+//                        VertexID v_id_local = active_queue[i_q];
+//                        is_active[v_id_local] = 0;
+//                    }
+//                }
+//                end_active_queue = 0;
+//                break;
+//            }
+//        }
         //#ifdef DEBUG_MESSAGES_ON
 //        {//test
 ////            if (0 == host_id) {
@@ -3648,77 +3646,34 @@ batch_process(
 		try
         {
 //            scatter_time -= WallTimer::get_time_mark();
-            // Divide the pushing into many-time runs, to reduce the peak memory footprint.
-            const VertexID chunk_size = 1 << 20;
-            VertexID remainder = global_num_actives % chunk_size;
-            VertexID bound_global_i = global_num_actives - remainder;
-//            VertexID remainder = end_active_queue % chunk_size;
-//            VertexID bound_active_queue = end_active_queue - remainder;
-            VertexID local_size;
-            for (VertexID global_i = 0; global_i < bound_global_i; global_i += chunk_size) {
-                if (global_i < end_active_queue) {
-                    local_size = end_active_queue - global_i;
-                } else {
-                    local_size = 0;
-                }
-//                {//test
-//                    if (1024 == roots_start && 7 == host_id) {
-//                        printf("S0 host_id: %d global_i: %u bound_global_i: %u local_size: %u\n",
-//                                host_id, global_i, bound_global_i, local_size);
-//                    }
+////// Multiple pushing
+//            // Divide the pushing into many-time runs, to reduce the peak memory footprint.
+//            const VertexID chunk_size = 1 << 20;
+//            VertexID remainder = global_num_actives % chunk_size;
+//            VertexID bound_global_i = global_num_actives - remainder;
+////            VertexID remainder = end_active_queue % chunk_size;
+////            VertexID bound_active_queue = end_active_queue - remainder;
+//            VertexID local_size;
+//            for (VertexID global_i = 0; global_i < bound_global_i; global_i += chunk_size) {
+//                if (global_i < end_active_queue) {
+//                    local_size = end_active_queue - global_i;
+//                } else {
+//                    local_size = 0;
 //                }
-                schedule_label_pushing_para(
-                        G,
-                        roots_start,
-                        used_bp_roots,
-                        active_queue,
-                        global_i,
-                        chunk_size,
-                        local_size,
-                        got_candidates_queue,
-                        end_got_candidates_queue,
-                        short_index,
-                        bp_labels_table,
-                        got_candidates,
-                        is_active,
-                        once_candidated_queue,
-                        end_once_candidated_queue,
-                        once_candidated,
-                        iter);
-            }
-            if (remainder) {
-                if (bound_global_i < end_active_queue) {
-                    local_size = end_active_queue - bound_global_i;
-                } else {
-                    local_size = 0;
-                }
-                schedule_label_pushing_para(
-                        G,
-                        roots_start,
-                        used_bp_roots,
-                        active_queue,
-                        bound_global_i,
-                        remainder,
-                        local_size,
-                        got_candidates_queue,
-                        end_got_candidates_queue,
-                        short_index,
-                        bp_labels_table,
-                        got_candidates,
-                        is_active,
-                        once_candidated_queue,
-                        end_once_candidated_queue,
-                        once_candidated,
-                        iter);
-            }
-//
+////                {//test
+////                    if (1024 == roots_start && 7 == host_id) {
+////                        printf("S0 host_id: %d global_i: %u bound_global_i: %u local_size: %u\n",
+////                                host_id, global_i, bound_global_i, local_size);
+////                    }
+////                }
 //                schedule_label_pushing_para(
 //                        G,
 //                        roots_start,
 //                        used_bp_roots,
 //                        active_queue,
-//                        0,
-//                        end_active_queue,
+//                        global_i,
+//                        chunk_size,
+//                        local_size,
 //                        got_candidates_queue,
 //                        end_got_candidates_queue,
 //                        short_index,
@@ -3729,6 +3684,51 @@ batch_process(
 //                        end_once_candidated_queue,
 //                        once_candidated,
 //                        iter);
+//            }
+//            if (remainder) {
+//                if (bound_global_i < end_active_queue) {
+//                    local_size = end_active_queue - bound_global_i;
+//                } else {
+//                    local_size = 0;
+//                }
+//                schedule_label_pushing_para(
+//                        G,
+//                        roots_start,
+//                        used_bp_roots,
+//                        active_queue,
+//                        bound_global_i,
+//                        remainder,
+//                        local_size,
+//                        got_candidates_queue,
+//                        end_got_candidates_queue,
+//                        short_index,
+//                        bp_labels_table,
+//                        got_candidates,
+//                        is_active,
+//                        once_candidated_queue,
+//                        end_once_candidated_queue,
+//                        once_candidated,
+//                        iter);
+//            }
+//// Single pushing
+                schedule_label_pushing_para(
+                        G,
+                        roots_start,
+                        used_bp_roots,
+                        active_queue,
+                        0,
+                        global_num_actives,
+                        end_active_queue,
+                        got_candidates_queue,
+                        end_got_candidates_queue,
+                        short_index,
+                        bp_labels_table,
+                        got_candidates,
+                        is_active,
+                        once_candidated_queue,
+                        end_once_candidated_queue,
+                        once_candidated,
+                        iter);
             end_active_queue = 0;
 //            scatter_time += WallTimer::get_time_mark();
         }
@@ -3765,43 +3765,61 @@ batch_process(
                 // pair.first: root id
                 // pair.second: label (global) id of the root
             if (end_got_candidates_queue >= THRESHOLD_PARALLEL) {
-                const VertexID chunk_size = 1 << 16;
-                VertexID remainder = end_got_candidates_queue % chunk_size;
-                VertexID bound_i_q = end_got_candidates_queue - remainder;
-                for (VertexID i_q = 0; i_q < bound_i_q; i_q += chunk_size) {
-                    schedule_label_inserting_para(
-                            G,
-                            roots_start,
-                            roots_size,
-                            short_index,
-                            dist_table,
-                            got_candidates_queue,
-                            i_q,
-                            chunk_size,
-                            got_candidates,
-                            active_queue,
-                            end_active_queue,
-                            is_active,
-                            buffer_send,
-                            iter);
-                }
-                if (remainder) {
-                    schedule_label_inserting_para(
-                            G,
-                            roots_start,
-                            roots_size,
-                            short_index,
-                            dist_table,
-                            got_candidates_queue,
-                            bound_i_q,
-                            remainder,
-                            got_candidates,
-                            active_queue,
-                            end_active_queue,
-                            is_active,
-                            buffer_send,
-                            iter);
-                }
+////// Multiple checking/inserting
+//                const VertexID chunk_size = 1 << 20;
+//                VertexID remainder = end_got_candidates_queue % chunk_size;
+//                VertexID bound_i_q = end_got_candidates_queue - remainder;
+//                for (VertexID i_q = 0; i_q < bound_i_q; i_q += chunk_size) {
+//                    schedule_label_inserting_para(
+//                            G,
+//                            roots_start,
+//                            roots_size,
+//                            short_index,
+//                            dist_table,
+//                            got_candidates_queue,
+//                            i_q,
+//                            chunk_size,
+//                            got_candidates,
+//                            active_queue,
+//                            end_active_queue,
+//                            is_active,
+//                            buffer_send,
+//                            iter);
+//                }
+//                if (remainder) {
+//                    schedule_label_inserting_para(
+//                            G,
+//                            roots_start,
+//                            roots_size,
+//                            short_index,
+//                            dist_table,
+//                            got_candidates_queue,
+//                            bound_i_q,
+//                            remainder,
+//                            got_candidates,
+//                            active_queue,
+//                            end_active_queue,
+//                            is_active,
+//                            buffer_send,
+//                            iter);
+//                }
+
+//// Single checking/inserting
+            schedule_label_inserting_para(
+                    G,
+                    roots_start,
+                    roots_size,
+                    short_index,
+                    dist_table,
+                    got_candidates_queue,
+                    0,
+                    end_got_candidates_queue,
+                    got_candidates,
+                    active_queue,
+                    end_active_queue,
+                    is_active,
+                    buffer_send,
+                    iter);
 
 ////// Backup
 //                // Prepare for parallel active_queue
@@ -4086,6 +4104,7 @@ batch_process(
             }
 
             // Sync the global_num_actives
+//            message_time -= WallTimer::get_time_mark();
             MPI_Allreduce(&end_active_queue,
                     &global_num_actives,
                     1,
@@ -4093,6 +4112,7 @@ batch_process(
                     MPI_MAX,
 //                    MPI_SUM,
                     MPI_COMM_WORLD);
+//            message_time += WallTimer::get_time_mark();
 //            gather_time += WallTimer::get_time_mark();
 		}
 //        {//test

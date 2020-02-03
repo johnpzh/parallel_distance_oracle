@@ -23,7 +23,10 @@
 //#include "dpado.202001231035.multiple_rounds_for_checking.h"
 //#include "dpado.202001231600.no_bp_and_limit_batches.h"
 //#include "dpado.202001232110.limit_distances.h"
-#include "dpado.202001272104.batch_id_back.h"
+//#include "dpado.202001272104.batch_id_back.h"
+//#include "dpado.202001280935.single_push_and_check.h"
+#include "dpado.202001292043.MAX_UNWEIGHTED_DIST_define.h"
+//#include "dpado.202001310955.no_bp_labeling.h"
 
 using namespace PADO;
 

@@ -3713,7 +3713,7 @@ batch_process(
                 // pair.second: label (global) id of the root
 //            if (true) {
             if (end_got_candidates_queue >= THRESHOLD_PARALLEL) {
-                const VertexID chunk_size = 1 << 12;
+                const VertexID chunk_size = 1 << 5;
                 VertexID remainder = end_got_candidates_queue % chunk_size;
                 VertexID bound_i_q = end_got_candidates_queue - remainder;
                 for (VertexID i_q = 0; i_q < bound_i_q; i_q += chunk_size) {

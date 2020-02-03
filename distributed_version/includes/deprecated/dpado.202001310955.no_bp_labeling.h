@@ -434,7 +434,7 @@ private:
 //	TotalInstructsExe bp_labeling_ins_count;
 //	TotalInstructsExe bp_checking_ins_count;
 //	TotalInstructsExe dist_query_ins_count;
-//    uint64_t caller_line = 0;
+    uint64_t caller_line = 0;
     // End test
 
 
@@ -480,8 +480,8 @@ DistBVCPLL(
     double time_labeling = -WallTimer::get_time_mark();
 
 //    bp_labeling_time -= WallTimer::get_time_mark();
-    bit_parallel_labeling(G,
-            used_bp_roots);
+//    bit_parallel_labeling(G,
+//            used_bp_roots);
 //    bp_labeling_time += WallTimer::get_time_mark();
     {//test
 //#ifdef DEBUG_MESSAGES_ON
@@ -512,14 +512,9 @@ DistBVCPLL(
 
     //printf("b_i_bound: %u\n", b_i_bound);//test
     for (VertexID b_i = 0; b_i < b_i_bound; ++b_i) {
-//        {// Batch number limit
-//            if (10 == b_i) {
-//                remainer = 0;
-//                break;
-//            }
-//        }
 //        {
 ////#ifdef DEBUG_MESSAGES_ON
+//            if (b_i % 4000 == 0 && 0 == host_id) {
             if (0 == host_id) {
                 printf("b_i: %u\n", b_i);//test
             }
@@ -549,13 +544,13 @@ DistBVCPLL(
 //        exit(EXIT_SUCCESS); //test
     }
     if (remainer != 0) {
-        {
-//#ifdef DEBUG_MESSAGES_ON
-            if (0 == host_id) {
-                printf("b_i: %u\n", b_i_bound);//test
-            }
-//#endif
-        }
+//        {
+////#ifdef DEBUG_MESSAGES_ON
+//            if (0 == host_id) {
+//                printf("b_i: %u\n", b_i_bound);//test
+//            }
+////#endif
+//        }
         batch_process(
                 G,
 //                b_i_bound,
@@ -584,7 +579,7 @@ DistBVCPLL(
     setlocale(LC_NUMERIC, "");
     if (0 == host_id) {
         printf("BATCH_SIZE: %u ", BATCH_SIZE);
-        printf("BP_Size: %u\n", BITPARALLEL_SIZE);
+        printf("BP_Size: %u THRESHOLD_PARALLEL: %u\n", BITPARALLEL_SIZE, THRESHOLD_PARALLEL);
     }
 
     {// Total Number of Labels
@@ -702,22 +697,24 @@ DistBVCPLL(
 //	printf("BP_Checking: "); bp_checking_ins_count.print();
 //	printf("distance_query: "); dist_query_ins_count.print();
 
-//    printf("num_hosts: %u host_id: %u\n"
-//           "Local_labeling_time: %.2f seconds\n"
-//           "bp_labeling_time: %.2f %.2f%%\n"
-//           "initializing_time: %.2f %.2f%%\n"
-//           "scatter_time: %.2f %.2f%%\n"
-//           "gather_time: %.2f %.2f%%\n"
-//           "clearup_time: %.2f %.2f%%\n"
-//           "message_time: %.2f %.2f%%\n",
-//           num_hosts, host_id,
-//           time_labeling,
-//           bp_labeling_time, 100.0 * bp_labeling_time / time_labeling,
-//           initializing_time, 100.0 * initializing_time / time_labeling,
-//           scatter_time, 100.0 * scatter_time / time_labeling,
-//           gather_time, 100.0 * gather_time / time_labeling,
-//           clearup_time, 100.0 * clearup_time / time_labeling,
-//           message_time, 100.0 * message_time / time_labeling);
+//    if (0 == host_id) {
+//        printf("num_hosts: %u host_id: %u\n"
+//               "Local_labeling_time: %.2f seconds\n"
+//               "bp_labeling_time: %.2f %.2f%%\n"
+//               "initializing_time: %.2f %.2f%%\n"
+//               "scatter_time: %.2f %.2f%%\n"
+//               "gather_time: %.2f %.2f%%\n"
+//               "clearup_time: %.2f %.2f%%\n"
+//               "message_time: %.2f %.2f%%\n",
+//               num_hosts, host_id,
+//               time_labeling,
+//               bp_labeling_time, 100.0 * bp_labeling_time / time_labeling,
+//               initializing_time, 100.0 * initializing_time / time_labeling,
+//               scatter_time, 100.0 * scatter_time / time_labeling,
+//               gather_time, 100.0 * gather_time / time_labeling,
+//               clearup_time, 100.0 * clearup_time / time_labeling,
+//               message_time, 100.0 * message_time / time_labeling);
+//    }
     double global_time_labeling;
     MPI_Allreduce(&time_labeling,
             &global_time_labeling,
@@ -1109,11 +1106,11 @@ bit_parallel_labeling(
         VertexID global_num_actives = 1;
         UnweightedDist d = 0;
         while (global_num_actives) {
-            {// Limit the distance
-                if (d > 7) {
-                    break;
-                }
-            }
+//            {// Limit the distance
+//                if (d > 7) {
+//                    break;
+//                }
+//            }
 //#ifdef DEBUG_MESSAGES_ON
 //            {//test
 //                if (0 == host_id) {
@@ -1310,13 +1307,14 @@ bit_parallel_labeling(
             tmp_que.swap(que);
             end_que = end_tmp_que;
             end_tmp_que = 0;
+//            message_time -= WallTimer::get_time_mark();
             MPI_Allreduce(&end_que,
                       &global_num_actives,
                       1,
                       V_ID_Type,
                       MPI_MAX,
                       MPI_COMM_WORLD);
-
+//            message_time += WallTimer::get_time_mark();
 //            }
             ++d;
         }
@@ -2029,101 +2027,106 @@ initialization(
         exit(1);
     }
 
-	// Build the Bit-Parallel Labels Table
-	try
     {
-//        struct MsgBPLabel {
-//            VertexID r_root_id;
-//            UnweightedDist bp_dist[BITPARALLEL_SIZE];
-//            uint64_t bp_sets[BITPARALLEL_SIZE][2];
+        if (bp_labels_table.size() != 0) {
+            ;
+        }
+    }
+//	// Build the Bit-Parallel Labels Table
+//	try
+//    {
+////        struct MsgBPLabel {
+////            VertexID r_root_id;
+////            UnweightedDist bp_dist[BITPARALLEL_SIZE];
+////            uint64_t bp_sets[BITPARALLEL_SIZE][2];
+////
+////            MsgBPLabel() = default;
+////            MsgBPLabel(VertexID r, const UnweightedDist dist[], const uint64_t sets[][2])
+////                    : r_root_id(r)
+////            {
+////                memcpy(bp_dist, dist, sizeof(bp_dist));
+////                memcpy(bp_sets, sets, sizeof(bp_sets));
+////            }
+////        };
+////        std::vector<MPI_Request> requests_send(num_hosts - 1);
+//        std::vector<MsgBPLabel> buffer_send;
 //
-//            MsgBPLabel() = default;
-//            MsgBPLabel(VertexID r, const UnweightedDist dist[], const uint64_t sets[][2])
-//                    : r_root_id(r)
-//            {
-//                memcpy(bp_dist, dist, sizeof(bp_dist));
-//                memcpy(bp_sets, sets, sizeof(bp_sets));
+//        std::vector<VertexID> roots_queue;
+//        for (VertexID r_global = roots_start; r_global < roots_bound; ++r_global) {
+//            if (G.get_master_host_id(r_global) != host_id) {
+//                continue;
 //            }
-//        };
-//        std::vector<MPI_Request> requests_send(num_hosts - 1);
-        std::vector<MsgBPLabel> buffer_send;
-
-        std::vector<VertexID> roots_queue;
-        for (VertexID r_global = roots_start; r_global < roots_bound; ++r_global) {
-            if (G.get_master_host_id(r_global) != host_id) {
-                continue;
-            }
-            roots_queue.push_back(r_global);
-        }
-        VertexID  size_roots_queue = roots_queue.size();
-        if (size_roots_queue >= THRESHOLD_PARALLEL) {
-            buffer_send.resize(size_roots_queue);
-#pragma omp parallel for
-            for (VertexID i_r = 0; i_r < size_roots_queue; ++i_r) {
-                VertexID r_global = roots_queue[i_r];
-                VertexID r_local = G.get_local_vertex_id(r_global);
-                VertexID r_root = r_global - roots_start;
-                // Prepare for sending
+//            roots_queue.push_back(r_global);
+//        }
+//        VertexID  size_roots_queue = roots_queue.size();
+//        if (size_roots_queue >= THRESHOLD_PARALLEL) {
+//            buffer_send.resize(size_roots_queue);
+//#pragma omp parallel for
+//            for (VertexID i_r = 0; i_r < size_roots_queue; ++i_r) {
+//                VertexID r_global = roots_queue[i_r];
+//                VertexID r_local = G.get_local_vertex_id(r_global);
+//                VertexID r_root = r_global - roots_start;
+//                // Prepare for sending
+////                buffer_send.emplace_back(r_root, L[r_local].bp_dist, L[r_local].bp_sets);
+//                buffer_send[i_r] = MsgBPLabel(r_root, L[r_local].bp_dist, L[r_local].bp_sets);
+//            }
+//        } else {
+////            for (VertexID r_global = roots_start; r_global < roots_bound; ++r_global) {
+////                if (G.get_master_host_id(r_global) != host_id) {
+////                    continue;
+////                }
+//            for (VertexID r_global : roots_queue) {
+//                VertexID r_local = G.get_local_vertex_id(r_global);
+//                VertexID r_root = r_global - roots_start;
+//                // Local roots
+////            memcpy(bp_labels_table[r_root].bp_dist, L[r_local].bp_dist, sizeof(bp_labels_table[r_root].bp_dist));
+////            memcpy(bp_labels_table[r_root].bp_sets, L[r_local].bp_sets, sizeof(bp_labels_table[r_root].bp_sets));
+//                // Prepare for sending
 //                buffer_send.emplace_back(r_root, L[r_local].bp_dist, L[r_local].bp_sets);
-                buffer_send[i_r] = MsgBPLabel(r_root, L[r_local].bp_dist, L[r_local].bp_sets);
-            }
-        } else {
-//            for (VertexID r_global = roots_start; r_global < roots_bound; ++r_global) {
-//                if (G.get_master_host_id(r_global) != host_id) {
-//                    continue;
+//            }
+//        }
+//
+//        for (int root = 0; root < num_hosts; ++root) {
+//            std::vector<MsgBPLabel> buffer_recv;
+//            one_host_bcasts_buffer_to_buffer(root,
+//                                             buffer_send,
+//                                             buffer_recv);
+//            if (buffer_recv.empty()) {
+//                continue;
+//            }
+//            VertexID size_buffer_recv = buffer_recv.size();
+//            if (size_buffer_recv >= THRESHOLD_PARALLEL) {
+//#pragma omp parallel for
+//                for (VertexID i_m = 0; i_m < size_buffer_recv; ++i_m) {
+//                    const MsgBPLabel &m = buffer_recv[i_m];
+//                    VertexID r_root = m.r_root_id;
+//                    memcpy(bp_labels_table[r_root].bp_dist, m.bp_dist, sizeof(bp_labels_table[r_root].bp_dist));
+//                    memcpy(bp_labels_table[r_root].bp_sets, m.bp_sets, sizeof(bp_labels_table[r_root].bp_sets));
 //                }
-            for (VertexID r_global : roots_queue) {
-                VertexID r_local = G.get_local_vertex_id(r_global);
-                VertexID r_root = r_global - roots_start;
-                // Local roots
-//            memcpy(bp_labels_table[r_root].bp_dist, L[r_local].bp_dist, sizeof(bp_labels_table[r_root].bp_dist));
-//            memcpy(bp_labels_table[r_root].bp_sets, L[r_local].bp_sets, sizeof(bp_labels_table[r_root].bp_sets));
-                // Prepare for sending
-                buffer_send.emplace_back(r_root, L[r_local].bp_dist, L[r_local].bp_sets);
-            }
-        }
-
-        for (int root = 0; root < num_hosts; ++root) {
-            std::vector<MsgBPLabel> buffer_recv;
-            one_host_bcasts_buffer_to_buffer(root,
-                                             buffer_send,
-                                             buffer_recv);
-            if (buffer_recv.empty()) {
-                continue;
-            }
-            VertexID size_buffer_recv = buffer_recv.size();
-            if (size_buffer_recv >= THRESHOLD_PARALLEL) {
-#pragma omp parallel for
-                for (VertexID i_m = 0; i_m < size_buffer_recv; ++i_m) {
-                    const MsgBPLabel &m = buffer_recv[i_m];
-                    VertexID r_root = m.r_root_id;
-                    memcpy(bp_labels_table[r_root].bp_dist, m.bp_dist, sizeof(bp_labels_table[r_root].bp_dist));
-                    memcpy(bp_labels_table[r_root].bp_sets, m.bp_sets, sizeof(bp_labels_table[r_root].bp_sets));
-                }
-            } else {
-                for (const MsgBPLabel &m : buffer_recv) {
-                    VertexID r_root = m.r_root_id;
-                    memcpy(bp_labels_table[r_root].bp_dist, m.bp_dist, sizeof(bp_labels_table[r_root].bp_dist));
-                    memcpy(bp_labels_table[r_root].bp_sets, m.bp_sets, sizeof(bp_labels_table[r_root].bp_sets));
-                }
-            }
-        }
-    }
-    catch (const std::bad_alloc &) {
-        double memtotal = 0;
-        double memfree = 0;
-        PADO::Utils::system_memory(memtotal, memfree);
-        printf("initialization_bp_labels_table: bad_alloc "
-               "host_id: %d "
-               "L.size(): %.2fGB "
-               "memtotal: %.2fGB "
-               "memfree: %.2fGB\n",
-               host_id,
-               get_index_size() * 1.0 / (1 << 30),
-               memtotal / 1024,
-               memfree / 1024);
-        exit(1);
-    }
+//            } else {
+//                for (const MsgBPLabel &m : buffer_recv) {
+//                    VertexID r_root = m.r_root_id;
+//                    memcpy(bp_labels_table[r_root].bp_dist, m.bp_dist, sizeof(bp_labels_table[r_root].bp_dist));
+//                    memcpy(bp_labels_table[r_root].bp_sets, m.bp_sets, sizeof(bp_labels_table[r_root].bp_sets));
+//                }
+//            }
+//        }
+//    }
+//    catch (const std::bad_alloc &) {
+//        double memtotal = 0;
+//        double memfree = 0;
+//        PADO::Utils::system_memory(memtotal, memfree);
+//        printf("initialization_bp_labels_table: bad_alloc "
+//               "host_id: %d "
+//               "L.size(): %.2fGB "
+//               "memtotal: %.2fGB "
+//               "memfree: %.2fGB\n",
+//               host_id,
+//               get_index_size() * 1.0 / (1 << 30),
+//               memtotal / 1024,
+//               memfree / 1024);
+//        exit(1);
+//    }
 
     // Active_queue
     VertexID global_num_actives = 0; // global number of active vertices.
@@ -2539,6 +2542,14 @@ schedule_label_pushing_para(
         }
     }
 
+//    {
+//        if (1024 == roots_start) {
+//            printf("host_id: %d "
+//                   "in pushing\n",
+//                   host_id);
+//        }
+//    }
+
 
 ////////////////////////////////////////////////
 ////
@@ -2600,13 +2611,40 @@ schedule_label_pushing_para(
 ////
 ////////////////////////////////////////////////
 
+
+
+
     for (int root = 0; root < num_hosts; ++root) {
         // Get the indices
         std::vector<std::pair<VertexID, VertexID> > indices_buffer;
 
+        {
+            if (1024 == roots_start && 6 == root) {
+                printf("host_id: %u "
+                       "root: %d "
+                       "buffer_send_indices.size(): %lu "
+                       "buffer_send_labels.size(): %lu \n",
+                       host_id,
+                       root,
+                       buffer_send_indices.size(),
+                       buffer_send_labels.size());
+            }
+            caller_line = __LINE__;
+        }
         one_host_bcasts_buffer_to_buffer(root,
                                          buffer_send_indices,
                                          indices_buffer);
+        {
+            if (1024 == roots_start && 6 == root) {
+                printf("host_id: %u "
+                       "root: %d "
+                       "indices_buffer.size(): %lu \n",
+                       host_id,
+                       root,
+                       indices_buffer.size());
+            }
+            caller_line = __LINE__;
+        }
         if (indices_buffer.empty()) {
             continue;
         }
@@ -2615,6 +2653,16 @@ schedule_label_pushing_para(
         one_host_bcasts_buffer_to_buffer(root,
                                          buffer_send_labels,
                                          labels_buffer);
+        {
+            if (1024 == roots_start && 6 == root) {
+                printf("host_id: %u "
+                       "root: %d "
+                       "labels_buffer.size(): %lu \n",
+                       host_id,
+                       root,
+                       labels_buffer.size());
+            }
+        }
         VertexID size_indices_buffer = indices_buffer.size();
         // Prepare the offsets for reading indices_buffer
         std::vector<EdgeID> starts_locs_index(size_indices_buffer);
@@ -2745,6 +2793,12 @@ local_push_labels_para(
         const std::vector<uint8_t> &used_bp_roots,
         const UnweightedDist iter)
 {
+    {
+        if (bp_labels_table.size() != 0) {
+            ;
+        }
+    }
+
     // Traverse v_head's every neighbor v_tail
     EdgeID e_i_start = G.vertices_idx[v_head_global];
     EdgeID e_i_bound = e_i_start + G.local_out_degrees[v_head_global];
@@ -2757,7 +2811,7 @@ local_push_labels_para(
             return;
         }
         VertexID v_tail_local = G.get_local_vertex_id(v_tail_global);
-        const IndexType &L_tail = L[v_tail_local];
+//        const IndexType &L_tail = L[v_tail_local];
         ShortIndex &SI_v_tail = short_index[v_tail_local];
         // Traverse v_head's last inserted labels
         for (VertexID l_i = start_index; l_i < bound_index; ++l_i) {
@@ -2790,29 +2844,30 @@ local_push_labels_para(
 //                once_candidated_queue[end_once_candidated_queue++] = v_tail_local;
             }
 
-            // Bit Parallel Checking: if label_global_id to v_tail_global has shorter distance already
-//            const IndexType &L_label = L[label_global_id];
-//            _mm_prefetch(&L_label.bp_dist[0], _MM_HINT_T0);
-//            _mm_prefetch(&L_label.bp_sets[0][0], _MM_HINT_T0);
-            const BPLabelType &L_label = bp_labels_table[label_root_id];
-            bool no_need_add = false;
-            for (VertexID i = 0; i < BITPARALLEL_SIZE; ++i) {
-                VertexID td = L_label.bp_dist[i] + L_tail.bp_dist[i];
-                if (td - 2 <= iter) {
-                    td +=
-                            (L_label.bp_sets[i][0] & L_tail.bp_sets[i][0]) ? -2 :
-                            ((L_label.bp_sets[i][0] & L_tail.bp_sets[i][1]) |
-                             (L_label.bp_sets[i][1] & L_tail.bp_sets[i][0]))
-                            ? -1 : 0;
-                    if (td <= iter) {
-                        no_need_add = true;
-                        break;
-                    }
-                }
-            }
-            if (no_need_add) {
-                continue;
-            }
+//            // Bit Parallel Checking: if label_global_id to v_tail_global has shorter distance already
+////            const IndexType &L_label = L[label_global_id];
+////            _mm_prefetch(&L_label.bp_dist[0], _MM_HINT_T0);
+////            _mm_prefetch(&L_label.bp_sets[0][0], _MM_HINT_T0);
+//            const BPLabelType &L_label = bp_labels_table[label_root_id];
+//            bool no_need_add = false;
+//            for (VertexID i = 0; i < BITPARALLEL_SIZE; ++i) {
+//                VertexID td = L_label.bp_dist[i] + L_tail.bp_dist[i];
+//                if (td - 2 <= iter) {
+//                    td +=
+//                            (L_label.bp_sets[i][0] & L_tail.bp_sets[i][0]) ? -2 :
+//                            ((L_label.bp_sets[i][0] & L_tail.bp_sets[i][1]) |
+//                             (L_label.bp_sets[i][1] & L_tail.bp_sets[i][0]))
+//                            ? -1 : 0;
+//                    if (td <= iter) {
+//                        no_need_add = true;
+//                        break;
+//                    }
+//                }
+//            }
+//            if (no_need_add) {
+//                continue;
+//            }
+
 //            if (SI_v_tail.is_candidate[label_root_id]) {
 //                continue;
 //            }
@@ -2838,9 +2893,9 @@ local_push_labels_para(
         }
     }
 
-//    {
-//        assert(iter >= iter);
-//    }
+    {
+        assert(iter >= iter);
+    }
 }
 // Function: pushes v_head's labels to v_head's every (master) neighbor
 template <VertexID BATCH_SIZE>
@@ -3177,7 +3232,7 @@ schedule_label_inserting_para(
                "host_id: %d "
                "iter: %u "
                "size_got_candidates_queue: %u "
-               "total_send_labels: %u "
+               "total_send_labels: %lu "
                "L.size(): %.2fGB "
                "memtotal: %.2fGB "
                "memfree: %.2fGB\n",
@@ -3534,11 +3589,11 @@ reset_at_end(
         }
         recved_dist_table[r_root_id].clear();
     }
-    // Reset bit-parallel labels table
-    for (VertexID r_root_id = 0; r_root_id < BATCH_SIZE; ++r_root_id) {
-        memset(bp_labels_table[r_root_id].bp_dist, 0, sizeof(bp_labels_table[r_root_id].bp_dist));
-        memset(bp_labels_table[r_root_id].bp_sets, 0, sizeof(bp_labels_table[r_root_id].bp_sets));
-    }
+//    // Reset bit-parallel labels table
+//    for (VertexID r_root_id = 0; r_root_id < BATCH_SIZE; ++r_root_id) {
+//        memset(bp_labels_table[r_root_id].bp_dist, 0, sizeof(bp_labels_table[r_root_id].bp_dist));
+//        memset(bp_labels_table[r_root_id].bp_sets, 0, sizeof(bp_labels_table[r_root_id].bp_sets));
+//    }
 
     // Remove labels of local minimum set
     for (VertexID v_i = 0; v_i < end_once_candidated_queue; ++v_i) {
@@ -3546,7 +3601,7 @@ reset_at_end(
         if (!G.is_local_minimum[v_local_id]) {
             continue;
         }
-        L[v_local_id].clean_all_indices();
+//        L[v_local_id].clean_all_indices();
     }
 }
 
@@ -3595,17 +3650,21 @@ batch_process(
                                     used_bp_roots);
 //    initializing_time += WallTimer::get_time_mark();
     UnweightedDist iter = 0; // The iterator, also the distance for current iteration
-//    {//test
-//        if (0 == host_id) {
-//            printf("host_id: %u initialization finished.\n", host_id);
-//        }
-//    }
+    {//test
+        if (0 == host_id) {
+            printf("host_id: %u "
+                   "b_i: %u "
+                   "initialization finished.\n",
+                   host_id,
+                   roots_start / BATCH_SIZE);
+        }
+    }
 
 
     while (global_num_actives) {
         ++iter;
         {// Limit the distance
-            if (iter >7 ) {
+            if (iter > 2 ) {
                 if (end_active_queue >= THRESHOLD_PARALLEL) {
 #pragma omp parallel for
                     for (VertexID i_q = 0; i_q < end_active_queue; ++i_q) {
@@ -3648,77 +3707,34 @@ batch_process(
 		try
         {
 //            scatter_time -= WallTimer::get_time_mark();
-            // Divide the pushing into many-time runs, to reduce the peak memory footprint.
-            const VertexID chunk_size = 1 << 20;
-            VertexID remainder = global_num_actives % chunk_size;
-            VertexID bound_global_i = global_num_actives - remainder;
-//            VertexID remainder = end_active_queue % chunk_size;
-//            VertexID bound_active_queue = end_active_queue - remainder;
-            VertexID local_size;
-            for (VertexID global_i = 0; global_i < bound_global_i; global_i += chunk_size) {
-                if (global_i < end_active_queue) {
-                    local_size = end_active_queue - global_i;
-                } else {
-                    local_size = 0;
-                }
-//                {//test
-//                    if (1024 == roots_start && 7 == host_id) {
-//                        printf("S0 host_id: %d global_i: %u bound_global_i: %u local_size: %u\n",
-//                                host_id, global_i, bound_global_i, local_size);
-//                    }
+////// Multiple pushing
+//            // Divide the pushing into many-time runs, to reduce the peak memory footprint.
+//            const VertexID chunk_size = 1 << 20;
+//            VertexID remainder = global_num_actives % chunk_size;
+//            VertexID bound_global_i = global_num_actives - remainder;
+////            VertexID remainder = end_active_queue % chunk_size;
+////            VertexID bound_active_queue = end_active_queue - remainder;
+//            VertexID local_size;
+//            for (VertexID global_i = 0; global_i < bound_global_i; global_i += chunk_size) {
+//                if (global_i < end_active_queue) {
+//                    local_size = end_active_queue - global_i;
+//                } else {
+//                    local_size = 0;
 //                }
-                schedule_label_pushing_para(
-                        G,
-                        roots_start,
-                        used_bp_roots,
-                        active_queue,
-                        global_i,
-                        chunk_size,
-                        local_size,
-                        got_candidates_queue,
-                        end_got_candidates_queue,
-                        short_index,
-                        bp_labels_table,
-                        got_candidates,
-                        is_active,
-                        once_candidated_queue,
-                        end_once_candidated_queue,
-                        once_candidated,
-                        iter);
-            }
-            if (remainder) {
-                if (bound_global_i < end_active_queue) {
-                    local_size = end_active_queue - bound_global_i;
-                } else {
-                    local_size = 0;
-                }
-                schedule_label_pushing_para(
-                        G,
-                        roots_start,
-                        used_bp_roots,
-                        active_queue,
-                        bound_global_i,
-                        remainder,
-                        local_size,
-                        got_candidates_queue,
-                        end_got_candidates_queue,
-                        short_index,
-                        bp_labels_table,
-                        got_candidates,
-                        is_active,
-                        once_candidated_queue,
-                        end_once_candidated_queue,
-                        once_candidated,
-                        iter);
-            }
-//
+////                {//test
+////                    if (1024 == roots_start && 7 == host_id) {
+////                        printf("S0 host_id: %d global_i: %u bound_global_i: %u local_size: %u\n",
+////                                host_id, global_i, bound_global_i, local_size);
+////                    }
+////                }
 //                schedule_label_pushing_para(
 //                        G,
 //                        roots_start,
 //                        used_bp_roots,
 //                        active_queue,
-//                        0,
-//                        end_active_queue,
+//                        global_i,
+//                        chunk_size,
+//                        local_size,
 //                        got_candidates_queue,
 //                        end_got_candidates_queue,
 //                        short_index,
@@ -3729,6 +3745,51 @@ batch_process(
 //                        end_once_candidated_queue,
 //                        once_candidated,
 //                        iter);
+//            }
+//            if (remainder) {
+//                if (bound_global_i < end_active_queue) {
+//                    local_size = end_active_queue - bound_global_i;
+//                } else {
+//                    local_size = 0;
+//                }
+//                schedule_label_pushing_para(
+//                        G,
+//                        roots_start,
+//                        used_bp_roots,
+//                        active_queue,
+//                        bound_global_i,
+//                        remainder,
+//                        local_size,
+//                        got_candidates_queue,
+//                        end_got_candidates_queue,
+//                        short_index,
+//                        bp_labels_table,
+//                        got_candidates,
+//                        is_active,
+//                        once_candidated_queue,
+//                        end_once_candidated_queue,
+//                        once_candidated,
+//                        iter);
+//            }
+//// Single pushing
+                schedule_label_pushing_para(
+                        G,
+                        roots_start,
+                        used_bp_roots,
+                        active_queue,
+                        0,
+                        global_num_actives,
+                        end_active_queue,
+                        got_candidates_queue,
+                        end_got_candidates_queue,
+                        short_index,
+                        bp_labels_table,
+                        got_candidates,
+                        is_active,
+                        once_candidated_queue,
+                        end_once_candidated_queue,
+                        once_candidated,
+                        iter);
             end_active_queue = 0;
 //            scatter_time += WallTimer::get_time_mark();
         }
@@ -3752,11 +3813,11 @@ batch_process(
             exit(1);
 		}
 
-//        {//test
-//            if (0 == host_id) {
-//                printf("host_id: %u pushing finished...\n", host_id);
-//            }
-//        }
+        {//test
+            if (0 == host_id) {
+                printf("host_id: %u pushing finished...\n", host_id);
+            }
+        }
 
         // Traverse vertices in the got_candidates_queue to insert labels
 		{
@@ -3765,43 +3826,61 @@ batch_process(
                 // pair.first: root id
                 // pair.second: label (global) id of the root
             if (end_got_candidates_queue >= THRESHOLD_PARALLEL) {
-                const VertexID chunk_size = 1 << 16;
-                VertexID remainder = end_got_candidates_queue % chunk_size;
-                VertexID bound_i_q = end_got_candidates_queue - remainder;
-                for (VertexID i_q = 0; i_q < bound_i_q; i_q += chunk_size) {
-                    schedule_label_inserting_para(
-                            G,
-                            roots_start,
-                            roots_size,
-                            short_index,
-                            dist_table,
-                            got_candidates_queue,
-                            i_q,
-                            chunk_size,
-                            got_candidates,
-                            active_queue,
-                            end_active_queue,
-                            is_active,
-                            buffer_send,
-                            iter);
-                }
-                if (remainder) {
-                    schedule_label_inserting_para(
-                            G,
-                            roots_start,
-                            roots_size,
-                            short_index,
-                            dist_table,
-                            got_candidates_queue,
-                            bound_i_q,
-                            remainder,
-                            got_candidates,
-                            active_queue,
-                            end_active_queue,
-                            is_active,
-                            buffer_send,
-                            iter);
-                }
+////// Multiple checking/inserting
+//                const VertexID chunk_size = 1 << 20;
+//                VertexID remainder = end_got_candidates_queue % chunk_size;
+//                VertexID bound_i_q = end_got_candidates_queue - remainder;
+//                for (VertexID i_q = 0; i_q < bound_i_q; i_q += chunk_size) {
+//                    schedule_label_inserting_para(
+//                            G,
+//                            roots_start,
+//                            roots_size,
+//                            short_index,
+//                            dist_table,
+//                            got_candidates_queue,
+//                            i_q,
+//                            chunk_size,
+//                            got_candidates,
+//                            active_queue,
+//                            end_active_queue,
+//                            is_active,
+//                            buffer_send,
+//                            iter);
+//                }
+//                if (remainder) {
+//                    schedule_label_inserting_para(
+//                            G,
+//                            roots_start,
+//                            roots_size,
+//                            short_index,
+//                            dist_table,
+//                            got_candidates_queue,
+//                            bound_i_q,
+//                            remainder,
+//                            got_candidates,
+//                            active_queue,
+//                            end_active_queue,
+//                            is_active,
+//                            buffer_send,
+//                            iter);
+//                }
+
+//// Single checking/inserting
+            schedule_label_inserting_para(
+                    G,
+                    roots_start,
+                    roots_size,
+                    short_index,
+                    dist_table,
+                    got_candidates_queue,
+                    0,
+                    end_got_candidates_queue,
+                    got_candidates,
+                    active_queue,
+                    end_active_queue,
+                    is_active,
+                    buffer_send,
+                    iter);
 
 ////// Backup
 //                // Prepare for parallel active_queue
@@ -4086,6 +4165,7 @@ batch_process(
             }
 
             // Sync the global_num_actives
+//            message_time -= WallTimer::get_time_mark();
             MPI_Allreduce(&end_active_queue,
                     &global_num_actives,
                     1,
@@ -4093,13 +4173,17 @@ batch_process(
                     MPI_MAX,
 //                    MPI_SUM,
                     MPI_COMM_WORLD);
+//            message_time += WallTimer::get_time_mark();
 //            gather_time += WallTimer::get_time_mark();
 		}
-//        {//test
+        {//test
 //            if (0 == host_id) {
-//                printf("iter: %u inserting labels finished.\n", iter);
+                printf("host_id: %u "
+                       "iter: %u inserting labels finished.\n",
+                       host_id,
+                       iter);
 //            }
-//        }
+        }
     }
 
     // Reset the dist_table
@@ -4657,7 +4741,7 @@ one_host_bcasts_buffer_to_buffer(
     // Sync the size_buffer_send.
 //    message_time -= WallTimer::get_time_mark();
 //    {//test
-//        if (0 == root && size_buffer_send == 16 && 1024 == caller_line) {
+//        if (6 == root && 6 == host_id) {
 ////        if (0 == root && size_buffer_send == 16 && 0 == host_id) {
 //            printf("before: host_id: %d size_buffer_send: %lu\n",
 //                    host_id,
@@ -4672,10 +4756,11 @@ one_host_bcasts_buffer_to_buffer(
 //    message_time += WallTimer::get_time_mark();
 //    {//test
 ////        if (0 == root && size_buffer_send == 16 && 0 == host_id) {
-//        if (0 == root && size_buffer_send == 16 && 1024 == caller_line) {
+//        if (6 == root && 6 == host_id) {
+////        if (0 == root && size_buffer_send == 16 && 0 == host_id) {
 //            printf("after: host_id: %d size_buffer_send: %lu\n",
-//                    host_id,
-//                    size_buffer_send);
+//                   host_id,
+//                   size_buffer_send);
 //        }
 //    }
     try {
@@ -4687,10 +4772,16 @@ one_host_bcasts_buffer_to_buffer(
         PADO::Utils::system_memory(memtotal, memfree);
         printf("one_host_bcasts_buffer_to_buffer: bad_alloc "
                "host_id: %d "
+               "root: %d "
+               "caller_line: %lu "
+               "size_buffer_send: %lu "
                "L.size(): %.2fGB "
                "memtotal: %.2fGB "
                "memfree: %.2fGB\n",
                host_id,
+               root,
+               caller_line,
+               size_buffer_send,
                get_index_size() * 1.0 / (1 << 30),
                memtotal / 1024,
                memfree / 1024);
